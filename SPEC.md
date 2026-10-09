@@ -1447,10 +1447,33 @@ Mana is chemistry: what a thing is made of. Energy is physics: force, motion, he
 hold of Energy directly. It only moves it indirectly, the way pouring mana onto a particle sets it moving (*Pushing*).
 Fire mana is the substance of heat: what burns, what is hot. The heat itself, the motion in it, is Energy.
 
-For now, nothing pays in Energy: the only price of a push is mana. The machine keeps the other ledger that physics needs:
-**momentum**. Everything inside the world pushes on everything else equally and oppositely (particle and particle, particle
+A push turns mana into motion (D29), so mana pays for the Energy it puts in; nothing else pays yet (open question 5). The
+machine keeps two more ledgers that physics needs.
+
+**Momentum.** Everything inside the world pushes on everything else equally and oppositely (particle and particle, particle
 and air, air and air, particle and body), so the world's momentum changes only by what comes from outside it, and the tests
 check that every tick (`World.momentumError`).
+
+**Energy** (`src/vm/energy.ts`, `Sim.keepEnergy`). The world holds Energy as motion (of particles, the air and bodies), as
+height (weight lifted, of particles and of the ground's matter), and stored: in mana's gas pressed together, in matter
+packed past full, in what coheres pulled apart, and in the air pressed or drawn thin. Each is measured from the air at rest,
+so mana that moves into or out of the air as dense as it is brings nothing with it. Motion becomes **heat** wherever two
+things even out their speeds: in the mana's thickness, the air dragging and its own thickness, landing on the ground and
+sliding on it, rock keeping its shape, particles merging, mana settling into the air. That heat is counted where it
+happens, to the joule, and kept by how it was made (`World.heat`). Casters and orders put Energy in with every push and
+kick. So, every tick:
+
+```
+held now + heat  =  held at the start + what casters and orders put in + what the numbers got wrong
+```
+
+The last term is real, and is counted, not hidden in the heat: each step that should keep Energy is measured before and
+after, and what it got wrong is kept by step. It's the price of stepping time rather than flowing it. For a Fireball, a
+Gust or a Water Shield it's under 2% of the Energy that moves through. A Stone Wall, gathering 500 M at once, thins the air
+around its caster so hard that the air's refilling gets about 8% wrong.
+
+The density mana's pressure works from is summed with the same kernel its pushes follow (the spiky kernel), so that its
+pressure is exactly the pull of the energy its gas stores, and the ledger can count it.
 
 ### Particles
 
@@ -1703,8 +1726,10 @@ machine.
    them, and who keeps it quiet. That's lore for Quire.
 4. **The field.** Is a caster's field a ball around the weave's origin, or the particles they're keeping up with? Which body
    stat sets how far it reaches, and does it weaken with distance?
-5. **Energy's price.** Pushing costs only mana for now (§11). Whether a caster's own Energy (stamina, `condition`) pays too
-   is left for later.
+5. **Energy's price.** A push costs mana, by the kinetic energy it adds (D29), and the Energy ledger now counts every joule
+   (§11). Whether a caster's own Energy (stamina, `condition`) pays too, and whether heat should warm anything (fire mana is
+   what's hot; heat is the motion), is left for you: the ledger shows how much there'd be to pay. A Fireball's throw is
+   about 1 kJ, lifting a Stone Wall about 9 kJ.
 6. **What does an order know?** Can it read where its weave's centre is (the `ORIGIN` port), or only feel its own
    neighbourhood? Knowing the centre makes orders easy to write and strong; feel-only orders are harder, and fail on a
    ball that has thinned.

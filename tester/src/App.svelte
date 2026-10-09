@@ -11,6 +11,7 @@
   import Reference from './lib/panels/Reference.svelte'
   import Bytes from './lib/panels/Bytes.svelte'
   import Order from './lib/panels/Order.svelte'
+  import Energy from './lib/panels/Energy.svelte'
   import { files, baseName } from './lib/files.svelte.ts'
   import { session, SCENE_NAMES, PANELS, type SceneName } from './lib/session.svelte.ts'
   import { num, PART_COLORS, PART_NAMES } from './lib/format.ts'
@@ -299,6 +300,7 @@ ${name}:
           {:else if session.panel === 'body'}<Body />
           {:else if session.panel === 'weaves'}<Weaves />
           {:else if session.panel === 'order'}<Order />
+          {:else if session.panel === 'energy'}<Energy />
           {:else if session.panel === 'profile'}<Profile onjump={(f, l) => session.jump(f, l)} />
           {:else if session.panel === 'events'}<Events />
           {:else if session.panel === 'caster'}<Caster />

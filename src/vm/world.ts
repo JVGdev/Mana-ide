@@ -88,6 +88,16 @@ export class World {
   impulse: Impulses = { push: [0, 0, 0], kick: [0, 0, 0], gravity: [0, 0, 0], walls: [0, 0, 0], gather: [0, 0, 0], matter: [0, 0, 0] }
   /** Rock: pairs of particles bound together. */
   bonds: Bond[] = []
+  /**
+   * Energy that motion has turned into heat, by how: kg·(m/tick)², the kilogram being 1 M of free mana (one is 900 J).
+   * Counted where it happens, exactly: two things that even out their speeds lose what the evening out takes (D29).
+   */
+  heat: Record<string, number> = {}
+
+  /** Motion turned into heat. */
+  warm(how: string, energy: number) {
+    if (energy) this.heat[how] = (this.heat[how] ?? 0) + energy
+  }
   private nextBody = 1
   private nextParticle = 1
 
