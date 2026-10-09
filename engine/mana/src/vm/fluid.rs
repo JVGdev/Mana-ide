@@ -817,15 +817,24 @@ fn move_particles(world: &mut World, ps: &[usize], dt: f64, hooks: &FluidHooks) 
             next[k] += p.vel[k] * dt;
             let from = world.cell_of(&p.pos);
             let to = world.cell_of(&next);
-            if blocked(world, hooks, p, from, to, k == 1 && p.vel[1] < 0.0) {
+            if !blocked(world, hooks, p, from, to, k == 1 && p.vel[1] < 0.0) {
+                world.particles[i].pos = next;
+            } else if to < 0 {
+                // The world's edge.
                 let p = &mut world.particles[i];
                 world.impulse.walls[k] -= m * p.vel[k];
                 struck += 0.5 * m * p.vel[k] * p.vel[k];
                 p.vel[k] = 0.0;
                 p.touched_at = tick;
-            } else {
+            } else if let Some(heat) = strike(world, i, k, to as usize) {
+                // Into matter faster than it moves: it strikes it.
+                struck += heat;
+                world.particles[i].touched_at = tick;
+            } else if from >= 0 && full(world, from as usize) {
+                // The matter there moves away from it as fast, and it's in matter already: it moves along with it.
                 world.particles[i].pos = next;
             }
+            // Otherwise it waits at the matter's face while the matter moves off.
         }
         let body = world.body_at(&world.particles[i].pos, None);
         if let Some(body) = body
@@ -847,6 +856,60 @@ fn move_particles(world: &mut World, ps: &[usize], dt: f64, hooks: &FluidHooks) 
     }
     world.warm("striking", struck);
     world.warm("striking bodies", bodies);
+}
+
+/// Whether a cell is full enough of earth and water to stop mana.
+fn full(world: &World, c: usize) -> bool {
+    let m = &world.matter[c];
+    m[EARTH] / packed(EARTH) + m[WATER] / packed(WATER) >= physics().solid
+}
+
+/// Particle `i`, moving along axis `k` into cell `to`, which is full of matter: if it's moving into the matter faster than
+/// the matter moves, it strikes it, and the two come to one speed along `k`, as an impact does, the matter taking the
+/// impulse (what sleeps takes it as the ground does). Returns the heat, or None if the matter moves away as fast.
+fn strike(world: &mut World, i: usize, k: usize, to: usize) -> Option<f64> {
+    let pts = world.points_in(to).to_vec();
+    let mut mass = 0.0;
+    let mut mom = 0.0;
+    for &pi in &pts {
+        let pt = &world.points[pi];
+        mass += pt.mass;
+        mom += pt.mass * pt.vel[k];
+    }
+    let p = &world.particles[i];
+    let m = p.mass;
+    let vm = if mass > 0.0 { mom / mass } else { 0.0 };
+    let rel = p.vel[k] - vm;
+    if rel * p.vel[k] <= 0.0 {
+        return None;
+    }
+    let mu = if mass > 0.0 { m * mass / (m + mass) } else { m };
+    let j = mu * rel;
+    world.particles[i].vel[k] -= j / m;
+    if mass > 0.0 {
+        let wake = physics().wake_speed;
+        let mut woke = false;
+        for &pi in &pts {
+            let pt = &mut world.points[pi];
+            let dv = j / mass;
+            if pt.asleep && (pt.vel[k] + dv).abs() <= wake {
+                world.impulse.walls[k] -= pt.mass * dv;
+                continue;
+            }
+            pt.vel[k] += dv;
+            if pt.asleep {
+                pt.asleep = false;
+                pt.still = 0;
+                woke = true;
+            }
+        }
+        if woke {
+            world.points_moved();
+        }
+    } else {
+        world.impulse.walls[k] -= j;
+    }
+    Some(0.5 * mu * rel * rel)
 }
 
 /// Energy the fluid stores in where its particles are, for the Energy ledger.

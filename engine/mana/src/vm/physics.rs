@@ -21,7 +21,8 @@ pub struct Physics {
     /// Free mana in each cell of open air at the ground, when a world is made: 20 g, as heavy as real air (1.3 kg/m³).
     pub air_mana: f64,
     /// How much matter 1 M of free mana can hold up (influence), in kilograms: mana pulls the matter of its own parts in
-    /// its cell toward its own speed, at most as hard as that much matter weighs. Pulled harder, the matter slips.
+    /// its cell toward its own speed, at most as hard as that much matter weighs at the standard 9.81 m/s² (its `grip`,
+    /// a force, whatever the world's gravity is). Pulled harder, the matter slips.
     pub bind: f64,
     /// How full of earth and water a cell has to be, as a share of its room, to count as solid: to block and touch.
     pub solid: f64,
@@ -135,7 +136,7 @@ pub const PHYSICS: Physics = Physics {
     cell: 0.25,
     density: [0.3, 1000.0, 1.2, 1600.0],
     air_mana: 40.0,
-    bind: 5.0,
+    bind: 20.0,
     solid: 0.3,
     gather_radius: 2.0,
     flame_spread: 0.5,
@@ -214,4 +215,9 @@ pub fn tuned<T>(f: impl FnOnce(&mut Physics), run: impl FnOnce() -> T) -> T {
     let _restore = Restore(physics());
     tune(f);
     run()
+}
+
+/// How hard 1 M of free mana grips matter, kg·m/tick²: as hard as `bind` kilograms weigh at the standard 9.81 m/s².
+pub fn grip() -> f64 {
+    physics().bind * 9.81 / 900.0
 }

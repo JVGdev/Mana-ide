@@ -3,10 +3,10 @@
 
 use mana::vm::air::step_air;
 use mana::vm::fluid::{Change, FluidHooks, merge_and_split, step_fluid};
-use mana::vm::matter::{det, step_matter};
+use mana::vm::matter::{Grip, det, step_matter};
 use mana::vm::parts::{Parts, total};
 use mana::vm::physics::{physics, tuned};
-use mana::vm::world::{EARTH, Ingrained, Vec3, WATER, World, ground_amount, mass_of};
+use mana::vm::world::{EARTH, Ingrained, Vec3, WATER, World, ground_amount, mass_of, packed};
 
 fn g() -> f64 {
     physics().gravity
@@ -181,9 +181,78 @@ mod water {
     }
 
     #[test]
-    #[ignore = "water has no surface tension yet: how strongly Ikozu's water sticks to itself is the author's to choose"]
-    fn holds_together_pulled_at_one_end() {
-        assert!(pull_a_stream() > 0.1);
+    fn comes_apart_pulled_at_one_end_with_nothing_holding_it() {
+        // Like real water at this size: what holds it together is the mana in it (below), not its surface tension.
+        assert!(pull_a_stream() < 0.05);
+    }
+
+    #[test]
+    fn held_by_its_mana_comes_along_whole_and_the_mana_with_it_as_the_mana_pushes_it() {
+        tuned(
+            |p| p.gravity = 0.0,
+            || {
+                // The same stream, with 1 M of water mana in each of its cells, pushed along tick after tick as a caster
+                // pushes a weave: each particle, and the water it grips (sim.rs, push).
+                let mut w = World::with_ground(40, 24, 1, 0, EARTH);
+                for a in w.air.iter_mut() {
+                    *a = [0.0; 4];
+                }
+                let from = w.points.len();
+                w.fill_box([8, 12, 0], [15, 12, 0], WATER, ground_amount(WATER));
+                for p in w.points[from..].iter_mut() {
+                    p.asleep = false;
+                }
+                for i in 8..16 {
+                    w.pour_still(&mut parts(WATER, 1.0), [(i as f64 + 0.5) * w.cell, 3.125, 0.125], 1);
+                }
+                let far = |w: &World| w.points[from..].iter().map(|p| p.pos[0]).fold(f64::INFINITY, f64::min);
+                let start = far(&w);
+                for _ in 0..40 {
+                    let mut pushed = 0.0;
+                    for p in w.particles.iter_mut() {
+                        p.vel[0] += 0.002;
+                        pushed += mass_of(p) * 0.002;
+                    }
+                    for p in w.points[from..].iter_mut() {
+                        p.vel[0] += 0.002;
+                        pushed += p.mass * 0.002;
+                    }
+                    w.impulse.outside[0] += pushed;
+                    // What the mana grips: the matter in its cells.
+                    let mut grips: Vec<Grip> = Vec::new();
+                    for (i, p) in w.particles.iter().enumerate() {
+                        let cell = w.cell_of(&p.pos) as usize;
+                        match grips.iter_mut().find(|g| g.cell == cell) {
+                            Some(g) => g.particles.push(i),
+                            None => grips.push(Grip { cell, weave: 1, particles: vec![i], hand: None }),
+                        }
+                    }
+                    step_matter(&mut w, &grips);
+                    // Its own water, which doesn't block it: what's in the cells it grips (sim.rs, measure_grips).
+                    let own: Vec<(usize, f64)> =
+                        grips.iter().map(|g| (g.cell, w.matter[g.cell][WATER] / packed(WATER))).collect();
+                    let hooks = FluidHooks {
+                        grips: &grips,
+                        own_matter: Some(Box::new(move |_, c| own.iter().find(|o| o.0 == c).map_or(0.0, |o| o.1))),
+                        ..Default::default()
+                    };
+                    step_fluid(&mut w, &hooks);
+                    w.tick += 1;
+                    assert!(w.momentum_error() < 1e-6);
+                }
+                // The far end came along, and the stream is whole: no gap in it wider than a cell.
+                assert!(far(&w) - start > 0.1, "{}", far(&w) - start);
+                let mut xs: Vec<f64> = w.points[from..].iter().map(|p| p.pos[0]).collect();
+                xs.sort_by(|a, b| a.partial_cmp(b).unwrap());
+                let gap = xs.windows(2).map(|x| x[1] - x[0]).fold(0.0, f64::max);
+                assert!(gap < w.cell, "{gap}");
+                // And its mana is still in it.
+                for q in &w.particles {
+                    let c = w.cell_of(&q.pos) as usize;
+                    assert!(w.matter[c][WATER] > 0.0, "{:?}", q.pos);
+                }
+            },
+        );
     }
 
     #[test]
@@ -306,13 +375,15 @@ mod matter {
     fn stops_free_mana_held_by_nothing_at_its_face() {
         // A fireball's worth of free mana thrown at a pillar of earth stops at it, and goes no further.
         let mut w = ground();
-        earth(&mut w, [20, 8, 0], [21, 15, 0], 2600.0 / 1600.0);
+        let r = earth(&mut w, [20, 8, 0], [21, 15, 0], 2600.0 / 1600.0);
         let ids = w.pour(&mut [4.0, 0.0, 0.0, 0.0], [4.0, 3.0, 0.125], 0, [0.3, 0.0, 0.0], physics().pour);
         w.impulse.outside[0] += 4.0 * physics().mana_mass[0] * 0.3;
         run(&mut w, 40);
+        // The pillar's face: its points sit a quarter of a cell in from it.
+        let face = w.points[r].iter().map(|p| p.pos[0]).fold(f64::INFINITY, f64::min) - w.cell / 4.0;
         for id in ids {
             if let Some(q) = w.particle(id) {
-                assert!(q.pos[0] < 5.0 + 0.01, "{}", q.pos[0]);
+                assert!(q.pos[0] < face + 0.01, "{} {face}", q.pos[0]);
             }
         }
     }

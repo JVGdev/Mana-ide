@@ -56,7 +56,7 @@ mod stone_wall_ {
     use super::*;
 
     #[test]
-    #[ignore = "its grip doesn't tear rock out of the ground: how hard mana grips, how strong soil is or how the spell goes is the author's to choose"]
+    #[ignore = "the wall rises, but its heave, written for rock that moved with its mana, doesn't steer it: the spell is the author's"]
     fn lifts_the_ground_out_of_a_trench_by_hand_and_sets_it_down_in_front_of_it_where_it_stands_2d() {
         let mut s = stone_wall(2);
         let c = cast(&mut s, "StoneWall");
@@ -101,7 +101,7 @@ mod stone_wall_ {
     }
 
     #[test]
-    #[ignore = "its grip doesn't tear rock out of the ground: how hard mana grips, how strong soil is or how the spell goes is the author's to choose"]
+    #[ignore = "the wall rises, but its heave, written for rock that moved with its mana, doesn't steer it: the spell is the author's"]
     fn is_weaker_for_a_caster_with_little_earth_in_them() {
         let strength = |affinity: f64| {
             let mut s = stone_wall(2);
@@ -127,7 +127,7 @@ mod stone_wall_ {
     }
 
     #[test]
-    #[ignore = "its grip doesn't tear rock out of the ground: how hard mana grips, how strong soil is or how the spell goes is the author's to choose"]
+    #[ignore = "the wall rises, but its heave, written for rock that moved with its mana, doesn't steer it: the spell is the author's"]
     fn crumbles_as_its_order_burns_its_mana_away_holding_up_less_and_less() {
         let mut s = stone_wall(2);
         cast(&mut s, "StoneWall");

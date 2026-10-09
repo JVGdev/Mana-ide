@@ -103,9 +103,9 @@ what's left.
 - **Matter is softer than it is.** Sound crosses earth and water at 150 m/s (`matter_sound`), not the kilometres a
   second it does in rock: stepping real stiffness would take thirty times more steps. Rock bends a little under load, like
   very stiff rubber, and a column of it stands some metres before it buckles; at 50 m/s a 3.5 m column buckled (D42).
-- **Mana striking matter pushes the ground, not the matter.** Free mana stops against solid matter, and the ground takes
-  its momentum. A fireball doesn't shove the wall it hits, and a film of water doesn't turn the mana going through it
-  (PLAN step 2 asked for both).
+- **Thin matter doesn't touch mana.** Free mana strikes matter that fills its cell (D46), but passes through a cell
+  that's less than a third full as if it were empty: a film of water doesn't turn the mana going through it (PLAN step 2
+  asked for it).
 - **Bodies don't feel the air.** Mana strikes them, but the air doesn't push them: a Gust of a few grams of mana can't
   blow anyone over until bodies feel the wind it drives (PLAN step 3).
 - **What bodies do to the air comes from outside.** Gathering thins the air around the body, and pouring mana into a
@@ -161,12 +161,13 @@ what's left.
 | D37 | **The hand holds what's in it by force.** A weave in hand presses on the mana and air around it, and they on it; the hand holds it still, bears its weight, and the body behind the hand feels the rest. |
 | D38 | **Free mana is a gas, and the air holds it up.** Each part of free mana has its own mass (`mana_mass`, D40), and everything weighs its mass times g. The air weighs too, and at rest it's thicker low down. A parcel of mana pushes aside its own M's worth of air, and the air holds it up by what that weighs (Archimedes): fire, the lightest, rises; earth mana sinks a little; matter is what's heavy. Where there's no air, everything falls alike. |
 | D39 | **Friction and flame.** A pushed body slides until the ground's friction stops it (μg, its weight pressing on the ground). Flame spreads as a gas does, from more to less, evening out with its neighbours. |
-| D40 | **Mass is mana, by part.** Each part of mana weighs its own amount a M, free or condensed: fire 0.3 g, air 0.45 g, water 0.55 g, earth 0.7 g (the order is the author's; the numbers are tuning). Raw mana weighs half a gram a M, so a cell of air at 40 M is as heavy as real air. Matter is heavy because it's packed: a full cell of earth holds 35,700 M (25 kg, as dense as packed soil), and of water 28,400 M. Condensing and unmaking keep mass and momentum exactly. Matter takes room by its density, and a cell is full when its matter fills it. 1 M of free mana holds 5 kg of matter (`bind`). Gases press by the ideal gas law, by part. |
+| D40 | **Mass is mana, by part.** Each part of mana weighs its own amount a M, free or condensed: fire 0.3 g, air 0.45 g, water 0.55 g, earth 0.7 g (the order is the author's; the numbers are tuning). Raw mana weighs half a gram a M, so a cell of air at 40 M is as heavy as real air. Matter is heavy because it's packed: a full cell of earth holds 35,700 M (25 kg, as dense as packed soil), and of water 28,400 M. Condensing and unmaking keep mass and momentum exactly. Matter takes room by its density, and a cell is full when its matter fills it. 1 M of free mana holds 5 kg of matter (`bind`; 20 kg since D43). Gases press by the ideal gas law, by part. |
 | D41 | **The engine is Rust.** The machine, the world, the assembler and the tools are written in Rust: native for the tests, the bench and the CLI, and compiled to WebAssembly for the tester (and for Quire, later). The move changed nothing in the world: the same physics, numbers and order of operations, matched against the TypeScript engine to the last bit, tick by tick, before it was retired (PLAN step R). So the engine computes with JavaScript's numbers: V8's math (fdlibm), its rounding, and how it writes a number. |
 | D42 | **Matter is one material, as points.** All matter, held or not, is material points over the world's grid (MLS-MPM, two points a cell each way, the grid's own cells): the ground, a wall, a puddle. Earth is an elastic-plastic solid (Hencky strain, Drucker–Prager friction at 35°, cohesion 8 kPa); pulled apart past its cohesion it cracks and loosens, crushed past 150 kPa it packs denser. How packed it is decides what it is: packing hardens it by e^(12·(1−J_p)), so loose soil, soil and rock (2,600 kg/m³) are one material. Water is a liquid that can't be squeezed and holds a little tension (200 Pa). Matter is stiffened by the speed of sound in it, a stand-in at 150 m/s (§0). Gases (flame, air matter) stay in cells, at rest, until PLAN step 3. |
-| D43 | **Mana grips matter by force.** Free mana of a part pulls the matter of that part in its cell toward its own speed, and is pulled back equally, as hard as `bind` × g a M of it: 1 M holds 5 kg up against its weight. Past that, the matter slips. A hand grips as if it had no end of mass, and the body behind it takes the pull. Matter moves first each tick, then the mana with what it holds (`cling`), so mana stays in what it grips. A push on a held weave moves only as much of its matter as the grip can in a tick. |
+| D43 | **Mana grips matter by force.** Free mana of a part pulls the matter of that part in its cell toward its own speed, and is pulled back equally, as hard as `bind` kilograms weigh at 9.81 m/s² a M of it, whatever the world's gravity: 1 M holds 20 kg up (the author's choice, raised from 5 so that a Stone Wall's mana can tear its earth out of the ground). Past that, the matter slips. Each particle grips the matter around it on its own, so mana spreading inside what it holds is held back too. A hand grips as if it had no end of mass, and the body behind it takes the pull. Matter moves first each tick, then the mana with what it holds (`cling`), so mana stays in what it grips. A push on a held weave moves only as much of its matter as the grip can in a tick. |
 | D44 | **Matter at rest sleeps.** Points that have barely moved for half a second (15 ticks) sleep: they're not stepped, and they hold up what's on them as the ground does, taking its momentum. Anything that would move one faster than 2 mm a tick wakes it, as does mana in its cell. It's a way of not computing what doesn't change, exact in mass and momentum. |
 | D45 | **Matter's Energy is counted where it goes.** What its stretching stores is Energy (`strain`). What it loses as heat: giving way (plastic work: the stress it gave way at, times how far), and striking (each step changes motion at once, and loses half the mass times the change squared, as an impact does; the motion lost moving it to the grid and back too). What a step gets wrong is left as the ledger's error: under 3% of what moves through a spell. |
+| D46 | **Mana strikes matter as it moves.** Free mana moving into a cell full of matter faster than that matter moves strikes it: the two come to one speed along the way it was going, the matter takes the impulse (sleeping matter, as the ground), and what the impact loses is heat. Matter moving away as fast stops nothing: mana inside matter moves along with it, and mana at its face waits there. A fireball shoves the wall it hits, and a Stone Wall's mana rises inside its rising earth. Water holds together where mana holds it, not by its own surface tension, which is too weak to matter at this size (the author's answer: a spell keeps its water together). |
 | D27 | **Knowing costs.** An order is ingrained one particle at a time, at a beat for every instruction it could run, and every beat it thinks burns its particle's mana. A short order is cheap to ingrain and cheap to keep; an order that senses more costs more. |
 
 ---
@@ -246,7 +247,7 @@ These rules belong to the world, not to the machine:
    earth there, water mana of the water. How much it can hold depends on how much mana is there. Too little, and some matter
    is left behind.
 2. **Held matter is pulled along by its mana, as hard as the mana can** (D43). Pure free mana pulls the matter of its own
-   part in its cell toward its own speed, and is pulled back as hard: up to `bind` × g a M, so 1 M holds up 5 kg. Matter
+   part in its cell toward its own speed, and is pulled back as hard: 1 M holds up 20 kg (`bind`). Matter
    weighs what the mana it was made of did (D40): a full cell of earth is 25 kg, of water 15.6 kg. Earth mana that moves
    up pulls its earth up, and paying for the push is paying to lift it. Matter pulled harder than its mana can hold
    slips, and follows its own nature.
@@ -259,7 +260,7 @@ These rules belong to the world, not to the machine:
    mass, and the air holds it up by what the air it pushes aside weighs (D38): fire mana, the lightest, rises. Loose mana
    that has slowed to the speed of the air around it settles into it.
 5. **Matter blocks matter, held or not.** All matter is one material on one grid (D42): what's in the way pushes back.
-   Free mana stops against solid matter, unless it's matter its own weave holds. What rests on the ground is held up by it,
+   Free mana strikes solid matter it runs into, and pushes it (D46), unless it's matter its own weave holds. What rests on the ground is held up by it,
    and its friction keeps it from sliding. Being stopped or struck by matter, or a body, is a **touch** (D35).
 6. **Earth is as strong as it's packed** (D42). Earth bends under a load and springs back; pushed past its strength it
    takes the new shape and keeps it (molding); pulled apart past its cohesion it cracks. Loose earth slides and piles at
@@ -2152,13 +2153,22 @@ What making it organic found (D32–D39):
   paid for. Counting the heat as the energy stored before giving way less after counted it anyway: a block landing on the
   world's floor made energy, a whole fall's worth.
 - **A pulled stream of water comes apart.** Water here has no surface tension: pulled at one end it thins and parts,
-  and the far end stays where it was. Real water at this size does the same; PLAN's whip needs water that sticks to
-  itself far harder than real water does, which is the author's to choose (§12).
-- **A Stone Wall's grip doesn't tear its rock out.** Lifting a wall out of the ground means breaking it free of the soil
-  around it: its cohesion (about 8 kN along the cut), its friction (about 5 kN) and its weight (4 kN). The spell's mana
-  grips about 5 kN at 500 M and 14 kN at 1,500 M, and its pushes stop paying when the hold on `m0` runs out. The wall
-  creeps up about a millimetre a tick. Raising it is the author's: grip harder (`bind`), soften the soil, cast with more,
-  or cut the wall free first (§7).
+  and the far end stays where it was. Real water at this size does the same. What holds a stream of water together is
+  the mana in it, pushed along with it (D46).
+- **A Stone Wall's grip didn't tear its rock out.** Lifting a wall out of the ground means breaking it free of the soil
+  around it: its cohesion (about 8 kN along the cut), its friction (about 5 kN) and its weight (4 kN). At 5 kg a M the
+  spell's mana gripped about 5 kN, and the wall crept up a millimetre a tick. The author chose a harder grip: 20 kg a M.
+- **Matter that moves blocked like a wall.** Free mana stopped dead at any cell full of matter, and the ground took its
+  momentum. A Stone Wall's earth rose a cell ahead of its own mana, and then stood in the mana's way: the mana stayed
+  in the ground while the wall went up without it. Striking moving matter as an impact (D46) lets mana rise inside its
+  earth, and gives a fireball's blow to what it hits.
+- **A grip as hard as a weight vanished without weight.** Gripping as hard as `bind` kilograms weigh under the world's
+  gravity, mana in weightlessness held nothing. A grip is a force: it's weighed at 9.81 m/s².
+- **Mana spread inside what it held.** Gripped as a whole, a cell's mana was held to its matter's speed on average, while
+  its particles spread apart inside it, and out of it. Each particle grips on its own now.
+- **The Stone Wall rises, unsteered.** At 20 kg a M its earth comes out of the trench, but the heave, written for rock
+  that moved with its mana, overshoots and sheds it: after 7 s its mana holds a sixth of the earth it took. Steering a
+  wall made of matter is the spell's work (§7).
 
 ### How the spells do now
 
@@ -2167,12 +2177,12 @@ The targets, and where the four spells stand against them (2D), with ticks of 1/
 | Spell | Target | Now |
 |---|---|---|
 | Fireball | Leaves the hand within a second, reaches a pillar 9 m away with most of its mana | Let go after 0.5 s, hits after 0.73 s more, 98% of its mana together, having risen 1.2 m on the way |
-| Stone Wall | Rises in seconds, stands on its own for half a minute or more | Doesn't rise: its grip is weaker than the soil that holds its earth in (§11, *What one matter found*) |
+| Stone Wall | Rises in seconds, stands on its own for half a minute or more | Its earth comes out of the trench in 2 s, but the spell's heave doesn't steer it, and sheds most of it (§11, *What one matter found*) |
 | Water Shield | Holds its water around its caster for several seconds | Makes 11.5 M of water mana into 6 g of water, holds half of it for 42 s |
 | Gust | Knocks someone back | Drives the air, but can't move a body until bodies feel the air (PLAN step 3) |
 
-Two spells miss their targets. The Gust waits for step 3. The Stone Wall waits for the author: rising is a question of
-how hard mana grips and how strong soil is, and those are numbers to choose, not to tune around.
+Two spells miss their targets. The Gust waits for step 3. The Stone Wall waits for the author: its heave has to steer
+a wall of matter, not a rigid one.
 
 ### The numbers, and what they come from
 
@@ -2181,7 +2191,7 @@ how hard mana grips and how strong soil is, and those are numbers to choose, not
 | `mana_mass` | fire 0.3 g, water 0.55 g, air 0.45 g, earth 0.7 g a M | The author's order; raw mana as heavy, at 40 M a cell, as real air |
 | `air_mana` | 40 M a cell of air, at the ground | 20 g in (0.25 m)³: 1.3 kg/m³, real air |
 | `density` | flame 0.3, water 1,000, air 1.2, earth 1,600 kg/m³ | Hot gas, water, air, packed soil |
-| `bind` | 5 kg of matter a M of free mana | Kept from before: a wall's mana holds what it did |
+| `bind` | 20 kg of matter a M of free mana, weighed at 9.81 m/s² | The author's: hard enough for a Stone Wall's mana to tear its earth out of the ground |
 | `gravity` | 9.81 m/s², a tick 1/30 s | Real |
 | `air_sound` | 0.6 m/tick (18 m/s) | Slowed from 340 m/s to keep steps few; real in step 3 |
 | `push_energy` | 900 J a M poured | A guess, kept |
@@ -2320,11 +2330,8 @@ machine.
    few particles bunched at its edge feel as thick as its middle, and an order can't tell where the edge is: in 3D, holding
    a still ball by feel keeps little more than nothing does. Letting particles feel further than they press (say 0.5 m,
    worked out once a tick, only for orders) would fix it, at some cost in speed. So would more, smaller particles.
-7. **How strongly does water stick to itself?** Real water's surface tension holds drops of a few millimetres together, and
-   nothing at a metre: a whip or a pulled stream of real water comes apart, as it does here. A water whip that holds
-   needs Ikozu's water to stick to itself about a thousand times harder than ours (tens of newtons a metre of its
-   surface, not 0.07), and that would show elsewhere: drops as big as a fist, puddles that don't spread thin. Water has
-   no surface tension yet; the test of a pulled stream waits for this answer.
-8. **What lifts a Stone Wall?** Its mana grips its earth by D43, and the soil around holds it in by its cohesion and
-   friction (§11, *What one matter found*). Mana that grips harder (`bind`), softer soil, more mana, or a spell that cuts
-   or packs the wall free first: each is a different world, or a different spell.
+7. *Closed by D46: a spell keeps its water together, by the mana in it.* **How strongly does water stick to itself?** Real
+   water's surface tension holds drops of a few millimetres together, and nothing at a metre. A whip of water that held
+   by itself would need water a thousand times stickier than ours.
+8. *Closed by D43: mana grips harder, 20 kg a M.* **What lifts a Stone Wall?** Its mana grips its earth, and the soil
+   around holds it in by its cohesion and friction. How the spell steers what it lifts is the spell's.

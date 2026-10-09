@@ -179,18 +179,19 @@ solver, and the GPU is yours, before step 2 starts.*
 - *Bytes that aren't an instruction.* An order that ran into them stopped the whole TypeScript machine. The assembler
   never lays any out, so no spell can reach them; in Rust it's a fault (`BAD_CODE`), like running off the end.
 
-## 2. One matter *(done: SPEC D42–D45)*
+## 2. One matter *(done: SPEC D42–D46)*
 
 *Built as below, with these differences. Sound crosses matter at 150 m/s, not the 50 m/s first planned: at 50 a column of
 rock buckled under its own weight. Gases stay in cells until step 3. Matter at rest sleeps (D44). What it found, and what
 it hands on:*
 
-- *to you: water has no surface tension, so a pulled stream comes apart, as real water at this size would. A water whip
-  needs water that sticks to itself about a thousand times harder (SPEC §12, question 7); its test waits, ignored. And
-  the Stone Wall doesn't rise: its grip is weaker than the soil that holds its earth in (SPEC §11, §12 question 8). Its
-  three tests wait, ignored;*
-- *still to build: mana that strikes matter pushes the ground, not the matter (SPEC §0); a fireball doesn't shove the
-  wall, and a film of water doesn't turn the mana going through it.*
+- *your answers: mana grips harder (`bind` 20 kg a M, D43), and a spell keeps its water together by the mana in it, not
+  by surface tension (D46). Mana now strikes matter as it moves (D46): a Stone Wall's mana rises inside its earth, and a
+  fireball shoves what it hits;*
+- *to you: the Stone Wall's earth comes out of the trench, but its heave, written for rigid rock, doesn't steer it and
+  sheds most of it. Its three tests wait, ignored, for the spell;*
+- *still to build: matter thinner than solid doesn't touch mana (SPEC §0); a film of water doesn't turn the mana going
+  through it.*
 
 All matter obeys one mechanics, held by mana or not: the ground, loose earth, water, rock a wall is made of. The cell
 rules (`settle_matter`, "earth holds together") and the rigid "carried" matter go.

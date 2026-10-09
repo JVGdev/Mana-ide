@@ -823,7 +823,7 @@ fn hold(world: &mut World, g: &mut Grid, dt: f64, dims: usize, grips: &[Grip]) {
         let mut can = [0.0; 4];
         for &i in &grip.particles {
             for k in 0..4 {
-                can[k] += world.particles[i].free[k] * ph.bind * ph.gravity;
+                can[k] += world.particles[i].free[k] * super::physics::grip();
             }
         }
         for k in 0..4 {
@@ -955,80 +955,72 @@ pub fn cling(world: &mut World, grips: &[Grip], dt: f64) {
         if points.is_empty() {
             continue;
         }
+        // Each particle grips the matter of its part around it, as hard as its own mana can: so mana spreading inside
+        // what it holds is held back too, not only the mana of the cell as a whole.
         for k in 0..4 {
-            let can: f64 = grip.particles.iter().map(|&i| world.particles[i].free[k]).sum::<f64>() * ph.bind * ph.gravity;
-            if can <= 0.0 {
-                continue;
-            }
-            let mut mk = 0.0;
-            let mut pk = [0.0; 3];
-            for &i in &points {
-                let p = &world.points[i];
-                let share = p.parts[k] * ph.mana_mass[k];
-                mk += share;
-                for a in 0..3 {
-                    pk[a] += share * p.vel[a];
-                }
-            }
-            let mut ma = 0.0;
-            let mut pa = [0.0; 3];
             for &i in &grip.particles {
-                let q = &world.particles[i];
-                let m = super::world::mass_of(q);
-                ma += m;
-                for a in 0..3 {
-                    pa[a] += m * q.vel[a];
-                }
-            }
-            if mk <= 0.0 || ma <= 0.0 {
-                continue;
-            }
-            let mu = ma * mk / (ma + mk);
-            let mut j = [0.0; 3];
-            for a in 0..3 {
-                j[a] = mu * (pa[a] / ma - pk[a] / mk);
-            }
-            if dims == 2 {
-                j[2] = 0.0;
-            }
-            let size = js::hypot3(j[0], j[1], j[2]);
-            let most = can * dt;
-            if size > most {
-                for a in 0..3 {
-                    j[a] *= most / size;
-                }
-            }
-            if js::hypot3(j[0], j[1], j[2]) == 0.0 {
-                continue;
-            }
-            let mut before = 0.0;
-            let mut after = 0.0;
-            for &i in &points {
-                let p = &mut world.points[i];
-                let share = p.parts[k] * ph.mana_mass[k];
-                if share <= 0.0 {
+                let can = world.particles[i].free[k] * super::physics::grip() * dt;
+                let m = super::world::mass_of(&world.particles[i]);
+                if can <= 0.0 || m <= 0.0 {
                     continue;
                 }
-                before += 0.5 * p.mass * (p.vel[0] * p.vel[0] + p.vel[1] * p.vel[1] + p.vel[2] * p.vel[2]);
+                let mut mk = 0.0;
+                let mut pk = [0.0; 3];
+                for &pi in &points {
+                    let p = &world.points[pi];
+                    let share = p.parts[k] * ph.mana_mass[k];
+                    mk += share;
+                    for a in 0..3 {
+                        pk[a] += share * p.vel[a];
+                    }
+                }
+                if mk <= 0.0 {
+                    break;
+                }
+                let q = &world.particles[i];
+                let mu = m * mk / (m + mk);
+                let mut j = [0.0; 3];
                 for a in 0..3 {
-                    p.vel[a] += j[a] * share / mk / p.mass;
+                    j[a] = mu * (q.vel[a] - pk[a] / mk);
                 }
-                after += 0.5 * p.mass * (p.vel[0] * p.vel[0] + p.vel[1] * p.vel[1] + p.vel[2] * p.vel[2]);
-                if p.asleep && js::hypot3(p.vel[0], p.vel[1], p.vel[2]) > ph.wake_speed {
-                    p.asleep = false;
-                    p.still = 0;
+                if dims == 2 {
+                    j[2] = 0.0;
                 }
-            }
-            for &i in &grip.particles {
+                let size = js::hypot3(j[0], j[1], j[2]);
+                if size > can {
+                    for a in 0..3 {
+                        j[a] *= can / size;
+                    }
+                }
+                if js::hypot3(j[0], j[1], j[2]) == 0.0 {
+                    continue;
+                }
+                let mut before = 0.0;
+                let mut after = 0.0;
+                for &pi in &points {
+                    let p = &mut world.points[pi];
+                    let share = p.parts[k] * ph.mana_mass[k];
+                    if share <= 0.0 {
+                        continue;
+                    }
+                    before += 0.5 * p.mass * (p.vel[0] * p.vel[0] + p.vel[1] * p.vel[1] + p.vel[2] * p.vel[2]);
+                    for a in 0..3 {
+                        p.vel[a] += j[a] * share / mk / p.mass;
+                    }
+                    after += 0.5 * p.mass * (p.vel[0] * p.vel[0] + p.vel[1] * p.vel[1] + p.vel[2] * p.vel[2]);
+                    if p.asleep && js::hypot3(p.vel[0], p.vel[1], p.vel[2]) > ph.wake_speed {
+                        p.asleep = false;
+                        p.still = 0;
+                    }
+                }
                 let q = &mut world.particles[i];
-                let m = super::world::mass_of(q);
                 before += 0.5 * m * (q.vel[0] * q.vel[0] + q.vel[1] * q.vel[1] + q.vel[2] * q.vel[2]);
                 for a in 0..3 {
-                    q.vel[a] -= j[a] / ma;
+                    q.vel[a] -= j[a] / m;
                 }
                 after += 0.5 * m * (q.vel[0] * q.vel[0] + q.vel[1] * q.vel[1] + q.vel[2] * q.vel[2]);
+                heat += before - after;
             }
-            heat += before - after;
         }
     }
     world.warm("holding", heat);

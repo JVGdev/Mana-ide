@@ -12,7 +12,7 @@ use super::energy::{Ledger, Stored, heat_of, stored, sum};
 use super::fluid::{Change, FluidHooks, find_pairs, merge_and_split, step_fluid};
 use super::matter::{Grip, step_matter};
 use super::parts::{Parts, add, take, total, zero};
-use super::physics::physics;
+use super::physics::{grip, physics};
 use super::weave::{FeltKey, Weave, centre_of, stamp_of, turn_to_frame, turn_to_world};
 use super::world::{EARTH, Ingrained, Vec3, WATER, World, WorldMana, fill_of, mass_of, mass_of_parts, packed};
 use crate::asm::isa::{Mn, port_by_code};
@@ -1389,7 +1389,7 @@ impl Sim {
         let m = mass_of(&self.world.particles[pi]);
         let held_mass: f64 = held.iter().map(|h| h.1).sum();
         let p = &self.world.particles[pi];
-        let grip = (p.free[0] + p.free[1] + p.free[2] + p.free[3]) * ph.bind * ph.gravity;
+        let grip = (p.free[0] + p.free[1] + p.free[2] + p.free[3]) * grip();
         let dv_size = size2.sqrt();
         let s = if held_mass * dv_size > grip { grip / (held_mass * dv_size) } else { 1.0 };
         let moved = m + held_mass * s;
