@@ -162,9 +162,9 @@ rules (`settleMatter`, "earth holds together") and the rigid "carried" matter go
   back. But it knows only roughly where things are. Every sense past the aura (a particle's place and speed, a weave's
   middle, what's at a point) comes back off by an amount that grows with the distance (D2). Each look costs beats, and
   looking again, or checking against something already known, narrows it. That's working out the space's geometry: a
-  careless mage pushes the wrong particle, or pours into the wrong place, and a good one cross-checks. The error is
-  worked out from the tick and the place, so the same cast always goes the same way. The 4 m `reach` stat goes, and what
-  limits a mage is what their mind can afford.
+  careless mage pushes the wrong particle, or pours into the wrong place, and a good one cross-checks. Each look errs on
+  its own, worked out from the tick, the place and which look it is, so the same cast always goes the same way. The 4 m
+  `reach` stat goes, and what limits a mage is what their mind can afford.
 - **Probing** (D1): raw free mana (unfiltered) let out with an order keeps what it feels in its registers. It doesn't know
   where it is (D31), but it can count its own way by its speed: so many ticks at so much, this way. What it learned
   reaches its caster only when it comes back and touches their aura, and the caster reads it there (`WGET`). It comes
