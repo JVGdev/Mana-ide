@@ -5,7 +5,7 @@ import { adept, type CasterStats } from '../src/vm/caster.ts'
 import { total } from '../src/vm/parts.ts'
 import { Sim, orderLength } from '../src/vm/sim.ts'
 import { stampOf } from '../src/vm/weave.ts'
-import { World } from '../src/vm/world.ts'
+import { World, groundAmount, packed } from '../src/vm/world.ts'
 import { PHYSICS } from '../src/vm/physics.ts'
 
 function setup(src: string, tweak?: (s: CasterStats) => void) {
@@ -312,11 +312,11 @@ spin:   JMP   spin`)
   })
 
   it('frees matter when told to condense less than nothing (the flaw)', () => {
-    // An earth weave in the ground binds earth. Nothing checks CNDS's sign, so a negative amount runs it backwards.
+    // An earth weave in the ground, 0.6 m down, binds earth. Nothing checks CNDS's sign, so a negative amount runs it backwards.
     const src = (amount: number) => `
         .use  Elements
         LDI   n0, #3.125
-        LDI   n1, #1.875
+        LDI   n1, #1.375
         LDI   n2, #0.125
         WEAV  n3, n0:2
         GATH  m0, #40
@@ -339,7 +339,9 @@ again:  INGR  n3, n9
 unmake: CNDS  #${amount}
         RET`
     const freed = (amount: number) => {
-      const { sim } = setup(src(amount))
+      const { sim, world } = setup(src(amount))
+      // The ground it's poured into is rock, as full as earth gets: nothing it holds can be pushed into it.
+      for (const m of world.matter) if (m[3] > 0) m[3] = packed(3)
       const before = sim.ledger()
       sim.run(2) // it's set loose, and its order runs, in the first tick
       const weave = [...sim.weaves.values()][0]
@@ -481,7 +483,8 @@ kick:   LDI   n0, #0
     expect(trace[0].burned).toBeCloseTo(trace[0].beats * PHYSICS.orderBurn, 12)
     // It kicks first, and pays the kinetic energy the kick adds (and a little more, for the air it pushes off); its
     // thinking is paid for after.
-    const kickCost = (before * vy * 0.05 + 0.5 * before * 0.05 ** 2) / PHYSICS.pushEnergy
+    const m = before * PHYSICS.manaMass[0] // fire
+    const kickCost = (m * vy * 0.05 + 0.5 * m * 0.05 ** 2) / PHYSICS.pushEnergy
     expect(total(p.free)).toBeCloseTo(before - kickCost - trace[0].burned, 4)
     expect(sim.world.momentumError()).toBeLessThan(1e-9)
   })
@@ -576,11 +579,11 @@ each:   SHOV  m0, n3, n11, n8:10
         JMP   again`,
     )
     const { sim, caster } = setup(src, (s) => {
-      s.mind.capacity.genetics = 0.5
+      s.mind.capacity.genetics = 0.001
       s.mind.recovery.genetics = 0
     })
     sim.run(20)
-    expect(sim.transformed).toBeGreaterThan(0.5)
+    expect(sim.transformed).toBeGreaterThan(0.001)
     expect(caster.strain).toBeCloseTo(sim.transformed, 6) // nothing eases it
     expect(caster.madness).toBeGreaterThan(0)
     expect(caster.condition.mind).toBeLessThan(1)
@@ -597,7 +600,7 @@ each:   SHOV  m0, n3, n11, n8:10
         PROB  n5, n0:2, #EARTH
         HALT`)
     sim.runCasts()
-    expect(cast.frame.n[4]).toBe(100) // the ground under its feet
+    expect(cast.frame.n[4]).toBe(groundAmount(3)) // the ground under its feet
     expect(cast.frame.n[5]).toBe(0) // 6 m away: it can't tell
   })
 

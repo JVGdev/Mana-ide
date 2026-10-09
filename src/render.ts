@@ -8,7 +8,7 @@
 
 import type { Sim } from './vm/sim.ts'
 import { dominant, total } from './vm/parts.ts'
-import { EARTH, FIRE, WATER } from './vm/world.ts'
+import { EARTH, FIRE, WATER, fillOf } from './vm/world.ts'
 
 export function render(sim: Sim, z?: number): string {
   const w = sim.world
@@ -21,10 +21,10 @@ export function render(sim: Sim, z?: number): string {
   for (let y = 0; y < w.h; y++)
     for (let x = 0; x < w.w; x++) {
       const m = w.matter[w.index(x, y, slice)]
-      const t = total(m)
-      if (t < 5) continue
+      const t = fillOf(m) // the share of the cell it takes
+      if (t < 0.05) continue
       const k = dominant(m)
-      put(x, y, k === EARTH ? (t >= 40 ? '#' : ':') : k === WATER ? '~' : k === FIRE ? '^' : ' ')
+      put(x, y, k === EARTH ? (t >= 0.4 ? '#' : ':') : k === WATER ? '~' : k === FIRE ? '^' : ' ')
     }
   // Mana: the matter weaves hold, cell by cell, then the mana itself.
   const held = new Map<number, number[]>()
@@ -46,7 +46,7 @@ export function render(sim: Sim, z?: number): string {
     const [x, y] = w.coords(i)
     const carried = e.slice(0, 4) as [number, number, number, number]
     const free = e.slice(4) as [number, number, number, number]
-    if (total(carried) >= 5) put(x, y, dominant(carried) === WATER ? 'W' : 'H')
+    if (fillOf(carried) >= 0.05) put(x, y, dominant(carried) === WATER ? 'W' : 'H')
     else if (total(free) > 0.01) put(x, y, ['*', 'o', '=', '+'][dominant(free)])
   }
   for (const b of w.bodies) {

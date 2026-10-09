@@ -2,7 +2,7 @@
 
 import { Sim } from './vm/sim.ts'
 import { World, EARTH, type Vec } from './vm/world.ts'
-import type { Caster } from './vm/caster.ts'
+import { master, type Caster } from './vm/caster.ts'
 
 export type Scene = { sim: Sim; caster: Caster; dims: 2 | 3; ground: number }
 
@@ -25,6 +25,8 @@ export function onGround(s: Scene, x: number): Vec {
 
 export function stoneWall(dims: 2 | 3 = 2): Scene {
   const s = field(dims)
+  // Raised by hand, 400 kg of earth: a master's spell.
+  s.caster.stats = master()
   s.caster.will = { aim: onGround(s, 4), amount: 500, force: 0, maintain: false }
   if (dims === 3) {
     // A wall 4 m long is 256 cells of earth to lift, not 16: it takes a master to hold that much.

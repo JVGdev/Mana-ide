@@ -1,4 +1,4 @@
-; Stone Wall: the ground heaves up into a wall of rock.
+; Stone Wall: the ground heaves up into a wall of rock, raised by hand.
         .use  Elements, Basics, Shapes
 
 StoneWall:
@@ -9,7 +9,7 @@ StoneWall:
         IN    n19, AMOUNT
         GATH  m0, n19             ; GATHER
         CIRC  m0                  ; CIRCULATE
-        FILT  m1, m0, #EARTH      ; FILTER: earth × affinity; the residue stays in m0
+        FILT  m1, m0, #EARTH      ; FILTER: earth × affinity; the residue stays in m0, to push with
         WEAV  n20, n16:18         ; a weave on the ground at the aim
         IN    n0:2, SELF
         MOV   n3, n16
@@ -23,10 +23,84 @@ StoneWall:
         LDI   n0, #2              ; 2 m high
         LDI   n1, #4              ; 4 m long
         LDI   n2, #0.5            ; 0.5 m thick
-        CALL  wall                ; the ground laid out, and its order to rise
+        CALL  wall                ; the ground laid out in hand: it takes hold of its earth, and is rock
+        MANI  n20                 ; SEND: let go of it, and hold it up by pushing
+        WPOS  n21:23, n20
+        MOV   n24, n22
+        ADD   n24, #2.05          ; how high its middle is to go: out of the ground, and a little more
+        IN    n25:27, SELF            ; where the caster stands as it begins
+        SUB   n21, n25
+        SUB   n23, n27
+        MUL   n21, n21
+        MUL   n23, n23
+        ADD   n21, n23
+        SQRT  n21
+        SUB   n21, #0.5           ; how far from the caster it's to stand: its thickness nearer, in front of its trench
+.climb: LDI   n0, #0              ; RAISE: up, at 0.1 m a tick
+        LDI   n1, #0.1
+        LDI   n2, #0
         MOV   n4, n20
-        CALL  ingrain             ; ORDER: into every particle, before any of it moves
-        MANI  n20                 ; SEND: it rises
-        MOV   n0, n20
+        LDI   n14, #0.001
+        LDI   n15, #0.15
+        CALL  heave
+        WPOS  n8:10, n20
+        CMP   n9, n24
+        JLT   .climb
+.step:  CALL  .level               ; POSITION: back toward the caster, slowly: it pulls them as hard as they pull it
+        LDI   n0, #0
+        LDI   n2, #-0.01
+        MOV   n4, n20
+        LDI   n14, #0.001
+        LDI   n15, #0.15
+        CALL  heave
+        WPOS  n8:10, n20
+        SUB   n8, n25
+        SUB   n10, n27
+        MUL   n8, n8
+        MUL   n10, n10
+        ADD   n8, n10
+        SQRT  n8
+        CMP   n8, n21
+        JGT   .step
+        LDI   n28, #20            ; passes to come to a stop above its place
+.stop:  CALL  .level
+        LDI   n0, #0
+        LDI   n2, #0
+        MOV   n4, n20
+        LDI   n14, #0.001
+        LDI   n15, #0.15
+        CALL  heave
+        SUB   n28, #1
+        CMP   n28, #0
+        JGT   .stop
+        ORDR  n20, .stand
+        MOV   n4, n20
+        CALL  ingrain             ; ORDER: it holds itself as it stands, and stays this weave's once its caster goes
+        LDI   n28, #40            ; passes to set it down: its middle lowered 4 mm a pass, onto the ground
+.down:  SUB   n24, #0.004
+        CALL  .level
+        LDI   n0, #0
+        LDI   n2, #0
+        MOV   n4, n20
+        LDI   n14, #0.001
+        LDI   n15, #0.15
+        CALL  heave
+        SUB   n28, #1
+        CMP   n28, #0
+        JGT   .down
+        MOV   n0, n20             ; let go: the ground holds it up from then on
         HALT                      ; m0 isn't held any more: it joins the flow
 .fail:  FAIL  #1                  ; no earth there
+
+.level: WPOS  n8:10, n20          ; how fast to rise or sink to keep its middle at the height it climbed to, n24
+        MOV   n1, n24
+        SUB   n1, n9
+        MUL   n1, #0.3
+        RET
+
+.stand: IN    n5:7, VEL           ; LOCK: it keeps itself as it stands, kicking against whatever moves it across. Its
+        NEG   n5                  ; base is rough, so it rests on a few points, and would tip over with nothing holding
+        LDI   n6, #0              ; it. Up and down, the ground holds it.
+        NEG   n7
+        KICK  n5:7
+        RET

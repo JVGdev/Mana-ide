@@ -43,7 +43,17 @@ air is a gas made of matter, and heat lives in matter, mana and air alike. 5 can
 
 - `claude/organic-physics` is committed and on `main`. From here on, everything is committed straight to `main`.
 
-## 1. Mass is mana *(medium)*
+## 1. Mass is mana *(done: SPEC D40)*
+
+*Built as below, with two changes: earth packs full at soil's density (1,600 kg/m³) until step 2 tells soil from rock, or
+the ground's soil packs under a wall and the wall sinks into itself; and the Stone Wall is raised by hand, since real air
+can't hold up rock. What it found, and hands on:*
+
+- *to step 2: a wall's base is as rough as its particles' scatter, so it tips unless its order holds it (it holds half
+  its earth for 8 s, short of its target); rock's bonds fight what rests on them, which the Energy ledger shows; matter let
+  go of stops dead;*
+- *to step 3: a breath of mana weighs grams and can't knock anyone over until bodies feel the air it drives. The Gust's
+  knockback test waits for it.*
 
 - **Each part weighs its own, free or condensed** (A). Matter weighs exactly what the mana it was made of did:
   `matterMass` goes, and condensing and unmaking keep mass and momentum exactly. The `matter` impulse goes too.

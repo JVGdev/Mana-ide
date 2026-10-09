@@ -6,14 +6,23 @@
 export const PHYSICS = {
   /** Metres per cell. */
   cell: 0.25,
-  /** Matter a full cell holds (M of condensed mana). */
-  cellMatter: 100,
-  /** Free mana in each cell of open air, when a world is made. */
+  /**
+   * How dense each part's matter is, packed full, in kg/m³: flame (a hot gas), water, air (the gas we breathe), earth (as
+   * packed soil). Matter is condensed mana, so this is how much mana a cell holds condensed: a full cell of earth is
+   * (0.25 m)³ × 1,600 kg/m³ = 25 kg, which at 0.7 g a M is 35,700 M. How full a cell is, is the room its matter takes:
+   * each part's mass over its density, summed. *(Flame and air are gases, and get a pressure of their own in PLAN step 3;
+   * soil that packs into rock, 2,600 kg/m³, comes with step 2. Until then they take room at these densities.)*
+   */
+  density: [0.3, 1000, 1.2, 1600] as number[],
+  /** Free mana in each cell of open air at the ground, when a world is made: 20 g, as heavy as real air (1.3 kg/m³). */
   airMana: 40,
-  /** How much matter 1 M of free mana can hold bound (influence). Bound matter moves with its mana and is held up by it. */
-  bind: 20,
-  /** Unbound earth and water in a cell, from which it counts as something to touch, and blocks mana. */
-  solid: 30,
+  /**
+   * How much matter 1 M of free mana can hold bound (influence), in kilograms. Bound matter moves with its mana and is
+   * held up by it.
+   */
+  bind: 5,
+  /** How full of unbound earth and water a cell has to be, as a share of its room, to count as solid: to block and touch. */
+  solid: 0.3,
   /** Metres around the body that GATH draws from. */
   gatherRadius: 2,
   /**
@@ -36,8 +45,11 @@ export const PHYSICS = {
   mote: 0.25,
   /** Metres over which particles feel each other. */
   smoothing: 0.25,
-  /** How hard each part presses outward: pressure = stiffness × density. It spreads at about √stiffness m/tick. Earth
-   * doesn't spread at all: it holds together (a stand-in until earth and water get cohesion of their own). */
+  /**
+   * How hard each part's free mana presses outward, as the square of the speed it spreads at, (m/tick)²: a gas of it
+   * presses p = stiffness × its mass a M × how many M a m³ (the ideal gas law, by part). Earth's free mana doesn't spread
+   * at all.
+   */
   stiffness: [0.0009, 0.0001, 0.002, 0] as number[],
   /** How much each part's neighbours' motions even out: water is thick, earth thicker. */
   viscosity: [0.0005, 0.003, 0.0005, 0.01] as number[],
@@ -46,26 +58,23 @@ export const PHYSICS = {
   /** How fast things fall, m/tick²: 9.81 m/s² at 30 ticks a second. */
   gravity: 9.81 / 900,
   /**
-   * The mass of 1 M of free mana of each part, in kilograms. Free mana is a gas: a parcel of it pushes aside as much of
-   * the air as it is mana, and the air holds it up by what that much air weighs (buoyancy). Fire is the lightest, so it
-   * rises through the air; earth the heaviest, so it sinks, a little. Raw mana, a quarter of each, weighs 1 kg a M.
+   * The mass of 1 M of mana of each part, in kilograms, free or condensed: mass is mana (D40). Fire is the lightest, then
+   * air, then water, then earth. Raw mana, a quarter of each, weighs half a gram a M. Free mana is a gas: a parcel of it
+   * pushes aside its own M's worth of air, which weighs half a gram a M, so fire rises through the air and earth sinks.
+   * Matter is heavy because it's packed: many M to a cell.
    */
-  manaMass: [0.97, 1.01, 1, 1.02] as number[],
+  manaMass: [0.0003, 0.00055, 0.00045, 0.0007] as number[],
   /**
-   * The mass of 1 M of matter of each part, in kilograms. A full cell (100 M, 0.25 m across) of earth is 25 kg, of water
-   * 15.6 kg: as dense as the real things. Flame and air hardly weigh. Matter isn't held up by the air: it's what's heavy.
-   */
-  matterMass: [0.0002, 0.156, 0.0002, 0.25] as number[],
-  /**
-   * How hard matter pushes back when it's packed denser than it can be (a full cell): pressure = this × (ρ − ρ₀), in
+   * How hard matter pushes back when it's packed denser than it can be (its `density`): pressure = this × (ρ − ρ₀), in
    * (m/tick)². Water and earth can't be squeezed: a column of them holds up what's on it.
    */
   matterStiffness: 0.3,
   /**
-   * How strongly each part pulls on its neighbours, free mana by part: water some, earth strongly. Matter too, by part:
-   * water's pull is its surface tension.
+   * How strongly each part pulls on its neighbours, for each kilogram of them: free mana by part, water some, earth
+   * strongly; and matter, by part: water's pull is its surface tension. *(A stand-in for each material's own cohesion,
+   * PLAN step 2.)*
    */
-  cohesion: [0, 0.00002, 0, 0.0001] as number[],
+  cohesion: [0, 0.037, 0, 0.15] as number[],
   matterCohesion: [0, 0.0001, 0, 0.0001] as number[],
   /**
    * Earth held by mana is rock: where it's packed as full as solid ground (`solid`) and still, moving against its

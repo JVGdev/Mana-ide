@@ -10,7 +10,7 @@
 
 import { PHYSICS } from './physics.ts'
 import { total } from './parts.ts'
-import { massOf, massOfParts, type Body, type Bond, type Particle, type Vec, type World } from './world.ts'
+import { fillOf, massOf, massOfParts, type Body, type Bond, type Particle, type Vec, type World } from './world.ts'
 import { RAW_MASS } from './air.ts'
 
 /** What the fluid needs to know from the machine. */
@@ -85,35 +85,41 @@ function cohesionShape(r: number, h: number): number {
 /** Free mana: what presses as a gas, and what the mana senses (DENS, GRAD, NVEL). */
 const freeMass = (p: Particle) => total(p.free)
 /** The mass of the matter it holds. */
-function matterMass(p: Particle): number {
-  const m = PHYSICS.matterMass
-  return p.carried[0] * m[0] + p.carried[1] * m[1] + p.carried[2] * m[2] + p.carried[3] * m[3]
-}
+const matterMass = (p: Particle) => massOfParts(p.carried)
 
-/** A blend of a per-part property by how much of each part a particle's free mana is. */
-function blend(p: Particle, by: number[]): number {
+/**
+ * How hard a particle's free mana presses for each M a m³ of it: each part's stiffness (the square of how fast it spreads)
+ * times its weight a M, blended by how much of each part it holds. The ideal gas law: p = this × ρ.
+ */
+function gas(p: Particle): number {
   const m = freeMass(p)
   if (m <= 0) return 0
-  return (p.free[0] * by[0] + p.free[1] * by[1] + p.free[2] * by[2] + p.free[3] * by[3]) / m
+  const k = PHYSICS.stiffness
+  const w = PHYSICS.manaMass
+  return (p.free[0] * k[0] * w[0] + p.free[1] * k[1] * w[1] + p.free[2] * k[2] * w[2] + p.free[3] * k[3] * w[3]) / m
 }
 
 /** A blend of a property of free mana and one of matter, by how much of the particle's mass each part is. */
 function blendAll(p: Particle, free: number[], matter: number[]): number {
-  const mm = PHYSICS.matterMass
+  const w = PHYSICS.manaMass
   let s = 0
   let m = 0
   for (let k = 0; k < 4; k++) {
-    s += p.free[k] * free[k] + p.carried[k] * mm[k] * matter[k]
-    m += p.free[k] + p.carried[k] * mm[k]
+    s += (p.free[k] * free[k] + p.carried[k] * matter[k]) * w[k]
+    m += (p.free[k] + p.carried[k]) * w[k]
   }
   return m > 0 ? s / m : 0
 }
 
-/** How dense a particle's matter would be, packed full: a full cell's mass over its volume. */
+/** How dense a particle's matter would be, packed full: its mass over the room it would take, by each part's density. */
 function fullDensity(p: Particle): number {
-  const held = total(p.carried)
-  if (held <= 0) return 0
-  return (PHYSICS.cellMatter * (matterMass(p) / held)) / PHYSICS.cell ** 3
+  const mass = matterMass(p)
+  if (mass <= 0) return 0
+  const w = PHYSICS.manaMass
+  const d = PHYSICS.density
+  let volume = 0
+  for (let k = 0; k < 4; k++) volume += (p.carried[k] * w[k]) / d[k]
+  return volume > 0 ? mass / volume : 0
 }
 
 /** Neighbours this step: pairs of indices into the particles, closer than the smoothing length, and how far apart. */
@@ -391,12 +397,13 @@ function forces(world: World, ps: Particle[], pairs: Pairs, dt: number, free = p
     } else p.acc = [0, 0, 0]
     mm[i] = matterMass(p)
     // Free mana presses like a gas: pressure = k·ρ, so its term is k/ρ.
-    press[i] = fm[i] > 0 ? blend(p, PHYSICS.stiffness) / (p.rho * depth) : 0
+    press[i] = fm[i] > 0 ? gas(p) / (p.rho * depth) : 0
     // Matter can't be packed past full: past it, it presses back.
     over[i] = mm[i] > 0 ? (PHYSICS.matterStiffness * Math.max(0, p.rhoM - fullDensity(p))) / (p.rhoM * p.rhoM) : 0
     coh[i] = blendAll(p, PHYSICS.cohesion, PHYSICS.matterCohesion)
     visc[i] = blendAll(p, PHYSICS.viscosity, PHYSICS.viscosity)
-    rho[i] = p.rho + p.rhoM
+    // How dense it all is, in kg/m³: its free mana (counted in M, so by its weight a M) and its matter.
+    rho[i] = (fm[i] > 0 ? (p.rho * massOfParts(p.free)) / fm[i] : 0) + p.rhoM
   }
   const { a: A, b: Bi, d: D, r: R } = pairs
   const h6 = h ** 6
@@ -577,16 +584,16 @@ type Blocked = (p: Particle, from: number, to: number, down: boolean) => boolean
 /**
  * Whether what's in a cell stops a particle moving into it from another. Free mana is stopped by solid matter. Mana
  * holding matter is stopped where there's no room for what it holds (matter blocks matter), and, coming down, by any
- * solid matter: loose earth holds up what lands on it.
+ * solid matter: loose earth holds up what lands on it. Room is a share of the cell, each part's matter taking its own
+ * by its density.
  */
 function blocker(world: World, hooks: FluidHooks): Blocked {
   return (p, from, to, down) => {
     if (to < 0) return true
     if (to === from) return false
-    const load = total(p.carried)
-    if (load <= PHYSICS.epsilon) return world.solidAt(to)
+    if (total(p.carried) <= PHYSICS.epsilon) return world.solidAt(to)
     if (down && world.solidAt(to)) return true
-    return PHYSICS.cellMatter - total(world.matter[to]) - (hooks.othersCarried?.(p, to) ?? 0) < load
+    return 1 - world.fill(to) - (hooks.othersCarried?.(p, to) ?? 0) < fillOf(p.carried)
   }
 }
 
@@ -688,7 +695,7 @@ function drag(world: World, ps: Particle[], dt: number) {
     if (m <= 0 || c < 0) continue
     const M = massOfParts(world.air[c])
     if (M <= 0) continue
-    const rate = (PHYSICS.airDrag * M) / PHYSICS.airMana
+    const rate = (PHYSICS.airDrag * M) / (PHYSICS.airMana * RAW_MASS())
     const mu = (m * M) / (m + M)
     const k = mu * (1 - Math.exp(-rate * (1 + m / M) * dt))
     let rel2 = 0
@@ -771,7 +778,7 @@ export function storedInFluid(world: World, air = 1): { gas: number; packing: nu
   const depth = world.d === 1 ? world.cell : 1
   for (const p of ps) {
     const fm = freeMass(p)
-    if (fm > 0 && p.rho > 0) out.gas += fm * blend(p, PHYSICS.stiffness) * Math.log(p.rho / air)
+    if (fm > 0 && p.rho > 0) out.gas += fm * gas(p) * Math.log(p.rho / air)
     const mm = matterMass(p)
     const full = fullDensity(p)
     if (mm > 0 && p.rhoM > full) out.packing += mm * PHYSICS.matterStiffness * (Math.log(p.rhoM / full) + full / p.rhoM - 1)

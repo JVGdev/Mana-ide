@@ -1,7 +1,8 @@
 // The air (SPEC §11): the free mana spread through the world's cells, as a gas. It presses from dense to thin, carries
 // itself along (and its mana, and its momentum, with it), flows around what's solid, and is held still against the
-// ground and the world's edge. Its pressure is its density times the square of its speed of sound (PHYSICS.airSound):
-// fast enough beside the winds in it that it flows around things, as air does, rather than piling up against them. It
+// ground and the world's edge. Its pressure is its density in M times its gas constant, which is the square of its speed
+// of sound (PHYSICS.airSound) times what a M of it weighs (RAW_MASS): the ideal gas law. That speed is fast enough beside
+// the winds in it that it flows around things, as air does, rather than piling up against them. It
 // weighs, so at rest it's thicker low down than high up: its own weight presses it down, and its pressure holds it up.
 // That pressure, thicker below than above, is what holds up a parcel of mana lighter than the air around it.
 //
@@ -23,12 +24,15 @@ const CALM = 5e-3
 /** The mass of 1 M of raw mana: what the air weighs for each M of it, before anything's taken out or let into it. */
 export const RAW_MASS = () => PHYSICS.manaMass.reduce((a, b) => a + b, 0) / 4
 
+/** The air's gas constant: how hard it presses for each M a m³ of it, p = this × ρ. */
+export const AIR_GAS = () => PHYSICS.airSound ** 2 * RAW_MASS()
+
 /**
- * How high the air at rest thins by a factor of e, metres: its speed of sound squared over what it weighs. Air at rest is
- * as thick, at height y, as e^(−y/H) times what it is at the ground.
+ * How high the air at rest thins by a factor of e, metres: its gas constant over what a M of it weighs, times g. Air at
+ * rest is as thick, at height y, as e^(−y/H) times what it is at the ground.
  */
 export function scaleHeight(): number {
-  return PHYSICS.airSound ** 2 / (PHYSICS.gravity * RAW_MASS())
+  return AIR_GAS() / (PHYSICS.gravity * RAW_MASS())
 }
 
 /**
@@ -65,7 +69,7 @@ export function stepAir(world: World) {
   const v = world.airVel
   const air = world.air
   const walls = world.impulse.walls
-  const k2 = PHYSICS.airSound ** 2
+  const k2 = AIR_GAS()
   const g = PHYSICS.gravity
   const raw = RAW_MASS()
   // Pressure and weight are measured from the air at rest (atRest): the pressure that holds it up there, and the weight

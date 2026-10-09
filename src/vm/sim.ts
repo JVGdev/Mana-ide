@@ -7,7 +7,7 @@ import { PHYSICS } from './physics.ts'
 import { add, take, total, zero, type Parts } from './parts.ts'
 import { Caster, type CasterStats, type ManaRegister } from './caster.ts'
 import { Weave, centreOf, stampOf, turnToFrame, turnToWorld } from './weave.ts'
-import { EARTH, World, massOf, massOfParts, type Body, type Particle, type Vec } from './world.ts'
+import { EARTH, World, fillOf, massOf, massOfParts, packed, type Body, type Particle, type Vec } from './world.ts'
 import { findPairs, mergeAndSplit, stepFluid, type Change, type FluidHooks } from './fluid.ts'
 import { stepAir } from './air.ts'
 import { heatOf, stored, sum, type Ledger } from './energy.ts'
@@ -1009,7 +1009,7 @@ export class Sim {
     this.carriedBy.clear()
     for (const p of this.world.particles) {
       const i = this.world.cellOf(p.pos)
-      const m = total(p.carried)
+      const m = fillOf(p.carried)
       if (i < 0 || m <= 0) continue
       this.carried[i] += m
       let own = this.carriedBy.get(p.weave)
@@ -1048,7 +1048,7 @@ export class Sim {
           free += p.free[k]
           have += p.carried[k]
         }
-        const can = free * PHYSICS.bind
+        const can = (free * PHYSICS.bind) / PHYSICS.manaMass[k] // M of matter: `bind` kilograms for each M
         if (have < can && free > 0) {
           const got = Math.min(can - have, w.matter[i][k])
           if (got <= 0) continue
@@ -1232,19 +1232,19 @@ export class Sim {
           const amount = source(f, instr, 0)
           const i = w.cellOf(p.pos)
           if (trace) trace.cnds += amount
-          const before = massOf(p)
           if (amount > 0 && i >= 0) {
-            const room = Math.max(0, PHYSICS.cellMatter - total(w.matter[i]) - this.carried[i])
-            const made = take(p.free, Math.min(amount, room))
+            // As much as the room left in the cell takes, each part of it by its density.
+            const room = Math.max(0, 1 - w.fill(i) - this.carried[i])
+            const each = total(p.free) > 0 ? fillOf(p.free) / total(p.free) : 0
+            const made = take(p.free, Math.min(amount, each > 0 ? room / each : amount))
             add(p.carried, made)
-            this.carried[i] += total(made)
+            this.carried[i] += fillOf(made)
           } else if (amount < 0) {
             const freed = take(p.carried, -amount)
             add(p.free, freed)
-            if (i >= 0) this.carried[i] -= total(freed)
+            if (i >= 0) this.carried[i] -= fillOf(freed)
           }
-          // Matter doesn't weigh what the mana it was made of did: the particle's mass changes, at its own speed.
-          this.massChanged(p, before)
+          // Matter weighs what the mana it was made of did (D40): its mass, and its momentum, don't change.
           next()
           continue
         }
@@ -1350,10 +1350,13 @@ export class Sim {
     this.massChanged(p, before)
   }
 
-  /** A particle's mass has changed with nothing pushing it: what it gained or lost, it gained or lost at its own speed. */
+  /**
+   * A particle has let go of matter, which stops dead in the ground where it is (the ground's matter doesn't move): the
+   * ground takes the momentum it had.
+   */
   private massChanged(p: Particle, before: number) {
     const d = massOf(p) - before
-    for (let k = 0; k < 3; k++) this.world.impulse.matter[k] += d * p.vel[k]
+    for (let k = 0; k < 3; k++) this.world.impulse.walls[k] += d * p.vel[k]
   }
 
   /**
@@ -1372,16 +1375,16 @@ export class Sim {
       const i = w.cellOf(p.pos)
       if (i >= 0 && p.carried[EARTH] > 0) held.set(i, (held.get(i) ?? 0) + p.carried[EARTH])
     }
-    const packed = (p: Particle) => {
+    const tight = (p: Particle) => {
       const i = w.cellOf(p.pos)
-      return i >= 0 && w.matter[i][EARTH] + (held.get(i) ?? 0) >= PHYSICS.solid
+      return i >= 0 && (w.matter[i][EARTH] + (held.get(i) ?? 0)) / packed(EARTH) >= PHYSICS.solid
     }
     const known = new Set(w.bonds.map((b) => (b.a.id < b.b.id ? `${b.a.id}:${b.b.id}` : `${b.b.id}:${b.a.id}`)))
     const pairs = findPairs(w, ps)
     const isPacked = new Map<Particle, boolean>()
     const check = (p: Particle) => {
       let v = isPacked.get(p)
-      if (v === undefined) isPacked.set(p, (v = packed(p)))
+      if (v === undefined) isPacked.set(p, (v = tight(p)))
       return v
     }
     for (let e = 0; e < pairs.n; e++) {

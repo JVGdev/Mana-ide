@@ -34,7 +34,9 @@ particle's mana as it thinks. The Order panel shows any one particle's last run,
 back; pick the particle by number or click it in the world. A breakpoint in order code pauses on the particle that hit it.
 
 The world runs on real physics, as near as it can (SPEC §0, §11). Things weigh, and fall at 9.8 m/s² (a tick is 1/30
-s); the air weighs too, and holds up a parcel of mana by what the air it pushes aside weighs, so fire rises. Every push
+s). Mass is mana: each part of it weighs its own (fire 0.3 g a M, then air, water, earth 0.7 g), free or condensed, and
+matter is heavy because it's packed. The air weighs too, as much as real air, and holds up a parcel of mana by what the
+air it pushes aside weighs, so fire rises. Every push
 pushes something back: a caster's push goes off their body, through their reach, and an order's kick goes off the air
 it's in or the ground it's against. Its Energy is transformed out of mana by a mind (the Law of Transformation): the
 mana isn't used up, but the mind strains, as hard as its power allows, and past its capacity it's harmed. Earth held by

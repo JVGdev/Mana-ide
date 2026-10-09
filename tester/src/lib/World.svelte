@@ -3,7 +3,7 @@
   import { dominant, total } from '../../../src/vm/parts.ts'
   import { PHYSICS } from '../../../src/vm/physics.ts'
   import type { Parts } from '../../../src/vm/parts.ts'
-  import { massOf } from '../../../src/vm/world.ts'
+  import { fillOf, massOf } from '../../../src/vm/world.ts'
 
   let canvas = $state<HTMLCanvasElement>()
   let wrap: HTMLDivElement
@@ -85,9 +85,9 @@
     for (let y = 0; y < w.h; y++)
       for (let x = 0; x < w.w; x++) {
         const m = w.matter[w.index(x, y, z)]
-        const t = total(m)
-        if (t < 0.5) continue
-        g.fillStyle = rgba(MATTER[dominant(m)], 0.25 + 0.75 * Math.min(1, t / PHYSICS.cellMatter))
+        const t = fillOf(m) // the share of the cell it takes
+        if (t < 0.005) continue
+        g.fillStyle = rgba(MATTER[dominant(m)], 0.25 + 0.75 * Math.min(1, t))
         g.fillRect(X(x), Y(y), px, px)
       }
 
@@ -95,9 +95,9 @@
     const cells = weaveCells(z)
     for (const [i, c] of cells) {
       const [x, y] = w.coords(i)
-      const held = total(c.carried)
-      if (held > 0.5) {
-        g.fillStyle = rgba(MATTER[dominant(c.carried)], 0.35 + 0.65 * Math.min(1, held / PHYSICS.cellMatter))
+      const held = fillOf(c.carried)
+      if (held > 0.005) {
+        g.fillStyle = rgba(MATTER[dominant(c.carried)], 0.35 + 0.65 * Math.min(1, held))
         g.fillRect(X(x), Y(y), px, px)
       }
     }

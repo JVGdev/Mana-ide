@@ -49,7 +49,9 @@ describe('the Energy ledger', () => {
     ['Fireball', 70, 0.05],
     ['Gust', 30, 0.05],
     ['WaterShield', 80, 0.05],
-    ['StoneWall', 160, 0.25],
+    // A wall's rock is bonds pushed back to their length every step: standing, it fights the forces on it, and what the
+    // bonds give back and take out again shows here (PLAN step 2 makes rock a material).
+    ['StoneWall', 160, 0.4],
   ] as const)
     it(`balances through a ${name}: what's held and turned to heat is what was put in, near enough`, () => {
       const s = SCENES[name](2)

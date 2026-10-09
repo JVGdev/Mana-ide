@@ -6,7 +6,7 @@
 import { PHYSICS } from './physics.ts'
 import { total } from './parts.ts'
 import { buoyed, parcels, storedInFluid } from './fluid.ts'
-import { RAW_MASS, scaleHeight } from './air.ts'
+import { AIR_GAS, RAW_MASS, scaleHeight } from './air.ts'
 import { massOf, massOfParts, type World } from './world.ts'
 
 export type Stored = {
@@ -49,7 +49,7 @@ export function stored(world: World, inBodies = 0): Stored {
   }
   for (const b of world.bodies) motion += 0.5 * b.mass * (b.vel[0] ** 2 + b.vel[1] ** 2 + b.vel[2] ** 2)
   let air = 0
-  const c2 = PHYSICS.airSound ** 2
+  const c2 = AIR_GAS()
   // Air stores energy pressed denser, or drawn thinner, than the rest of it is: c²(ln(ρ/ρ̄) + ρ̄/ρ − 1) for each M,
   // which is nothing at the air's own density. So mana let into the air, or gathered from it, as dense as it is
   // brings or takes no energy with it.
@@ -67,7 +67,7 @@ export function stored(world: World, inBodies = 0): Stored {
     if (!world.solidAt(i) && usual > 0) air += c2 * (M > 0 ? M * Math.log(M / usual) + usual - M : usual)
     const mt = world.matter[i]
     let w = 0
-    for (let k = 0; k < 4; k++) w += mt[k] * PHYSICS.matterMass[k]
+    for (let k = 0; k < 4; k++) w += mt[k] * PHYSICS.manaMass[k]
     if (w) height += g * w * y
   }
   return { motion, height, ...storedInFluid(world, usual > 0 ? usual / world.cell ** 3 : 1), air, bodies: g * raw * level * inBodies }

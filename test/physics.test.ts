@@ -52,18 +52,21 @@ describe('weight', () => {
     expect(G * 900).toBeCloseTo(9.81, 6) // ticks are 1/30 s
   })
 
-  it('holds mana up in the air by what the air it pushes aside weighs: fire rises, earth mana sinks, matter falls', () => {
+  it('holds mana up in the air by what the air it pushes aside weighs: the lighter rises, the heavier sinks, matter falls', () => {
     const w = World.withGround(40, 24, 1, 8)
-    const fire = drop(w, [2, 4, 0.125], 0)[0]
-    const air = drop(w, [4, 4, 0.125], 2)[0]
-    const earth = drop(w, [6, 4, 0.125], EARTH)[0]
-    const rock = drop(w, [8, 4, 0.125], EARTH, 1, 4)[0]
+    const fire = drop(w, [1, 4, 0.125], 0)[0]
+    const air = drop(w, [3, 4, 0.125], 2)[0]
+    const water = drop(w, [5, 4, 0.125], WATER)[0]
+    const earth = drop(w, [7, 4, 0.125], EARTH)[0]
+    const rock = drop(w, [9, 4, 0.125], EARTH, 1, 4)[0]
     run(w, 10)
-    expect(fire.vel[1]).toBeGreaterThan(0) // lighter than the air: it rises
-    expect(Math.abs(air.vel[1])).toBeLessThan(0.05 * 10 * G) // as heavy as the air: it floats
-    expect(earth.vel[1]).toBeLessThan(0) // heavier: it sinks, slowly
-    expect(earth.vel[1]).toBeGreaterThan(-0.1 * 10 * G)
-    expect(rock.vel[1]).toBeLessThan(-0.7 * 10 * G) // matter the air doesn't hold up: it falls
+    // Fire, then air, then water, then earth: the air, raw mana, weighs between air's and water's.
+    expect(fire.vel[1]).toBeGreaterThan(air.vel[1])
+    expect(air.vel[1]).toBeGreaterThan(0)
+    expect(water.vel[1]).toBeLessThan(0)
+    expect(earth.vel[1]).toBeLessThan(water.vel[1])
+    expect(earth.vel[1]).toBeGreaterThan(-0.5 * 10 * G) // held up, but not enough
+    expect(rock.vel[1]).toBeLessThan(-0.9 * 10 * G) // matter the air doesn't hold up: it falls
   })
 
   it('stops what falls on the ground, which holds it up from then on', () => {
@@ -78,7 +81,7 @@ describe('weight', () => {
   it('gives matter held by mana its weight and inertia', () => {
     const w = ground()
     const p = drop(w, [2, 3, 0.125], EARTH, 1, 4)[0]
-    expect(massOf(p)).toBeCloseTo(PHYSICS.mote * PHYSICS.manaMass[EARTH] + 4 * PHYSICS.matterMass[EARTH], 9)
+    expect(massOf(p)).toBeCloseTo((PHYSICS.mote + 4) * PHYSICS.manaMass[EARTH], 12) // matter weighs what its mana did
   })
 
   it('keeps sliding things from sliding, by friction', () => {
@@ -233,9 +236,16 @@ kick:   ${src}`,
     const { sim, p } = kicked(src)
     expect(p.vel[0]).toBeGreaterThan(0.04) // what the air took back, it took from the air
     expect(sim.spent.kick).toBeGreaterThan(0)
-    // With no air, all it has to push off is the little mana its own thinking lets into the air around it.
-    const empty = kicked(src, false)
-    expect(empty.p.vel[0]).toBeLessThan(p.vel[0] / 5)
+    // With no air, and none let out by its thinking, it has nothing to push off.
+    const burn = PHYSICS.orderBurn
+    PHYSICS.orderBurn = 0
+    try {
+      const empty = kicked(src, false)
+      expect(empty.p.vel[0]).toBe(0)
+      expect(empty.sim.spent.kick).toBe(0)
+    } finally {
+      PHYSICS.orderBurn = burn
+    }
   })
 
   it('costs more the faster it already goes the same way', () => {
@@ -407,7 +417,7 @@ describe('the air', () => {
       for (let x = x0; x < x1; x++) {
         const i = w.index(x, y, 0)
         w.airVel[i * 3] = u
-        w.impulse.outside[0] += total(w.air[i]) * u
+        w.impulse.outside[0] += w.airMass(i) * u
       }
   }
 

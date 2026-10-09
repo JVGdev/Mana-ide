@@ -55,7 +55,8 @@ what's left.
    empty space it can't push at all.
 2. **A caster's push recoiled on nobody.** Now `SHOV` goes off the caster's body, through their reach, and `SEND`
    throws mana out of it: the body is pushed back, and their feet on the ground hold them as far as friction lets
-   them (D33). Throwing an 18 M fireball at 13 m/s slides an adept back a metre.
+   them (D33). A 5 g fireball hardly moves its thrower; a 400 kg wall moved by hand pulls its caster along, unless they
+   move it gently.
 3. **A push's Energy came from nowhere.** Now a mind transforms it out of mana, as hard as its power allows, and strains
    for it; past its capacity it's harmed (the Law of Transformation, D32). The mana isn't used up. The Energy ledger
    counts what minds put in, push by push.
@@ -100,12 +101,18 @@ what's left.
 **What's left.** Found while fixing the above, and not fixed yet:
 
 - **Matter held by mana doesn't block.** Only unbound matter is solid. A fireball passes through a raised Stone Wall's
-  rock, and the air flows into the wall's cells while it's still in the ground. *Organic:* matter is matter, held or not.
-  This changes how a wall can rise. With its cells full of rock, its upper rows have no air of their own to push off,
-  so it has to rise like a jack, from the ground, and the Stone Wall's order would need to know it's at the bottom.
-- **Condensing changes mass.** 1 M of free mana is about 1 kg; 1 M of matter is 0.25 kg of earth, and less of the rest.
-  What a particle gains or loses that way, at its speed, is booked as momentum from outside (`matter`). Matter that's
-  let go of stops dead in the ground, and the ground takes its momentum.
+  rock, and the air flows into the wall's cells while it's still in the ground. *Organic:* matter is matter, held or not
+  (PLAN step 2).
+- **Matter has no shape of its own.** Its particles are poured scattered through their cells, so a wall's base is as
+  rough as its scatter: it rests on a few points and would tip over. It stands only because its order holds it, and
+  leans. Real soil gives under a heavy base until it rests on all of it (PLAN step 2).
+- **Rock's bonds fight what rests on them.** Bonds are pushed back to their length every step, and a wall at rest
+  under its own weight gives a little motion back each time, which is taken out again as heat. The Energy ledger shows
+  it: about a third of what moves through a Stone Wall (PLAN step 2, where rock is a material).
+- **Bodies don't feel the air.** Mana strikes them, but the air doesn't push them: a Gust of a few grams of mana can't
+  blow anyone over until bodies feel the wind it drives (PLAN step 3).
+- **Matter let go of stops dead.** The ground's matter doesn't move, so what a particle drops stops where it is, and the
+  ground takes its momentum (PLAN step 2).
 - **What bodies do to the air comes from outside.** Gathering thins the air around the body, and pouring mana into a
   point presses it together. That Energy is booked as `bodies` in the ledger, not drawn from the mind. It's small: a few
   kJ a cast.
@@ -157,8 +164,9 @@ what's left.
 | D35 | **Touch is a force felt.** `TUCH` says whether something stopped or struck the particle when the world last moved: matter, the ground, a body, anyone's. Mana strikes its maker's body as it strikes anyone's; the casting hand is at arm's length (0.6 m) so that what's poured there doesn't. |
 | D36 | **Rock forms where earth is packed and still.** Earth held by mana, in a cell as full of earth as solid ground, binds to its neighbours that hardly move against it. Whose mana it is doesn't matter, nor whether it's in hand. |
 | D37 | **The hand holds what's in it by force.** A weave in hand presses on the mana and air around it, and they on it; the hand holds it still, bears its weight, and the body behind the hand feels the rest. |
-| D38 | **Free mana is a gas, and the air holds it up.** Each part of free mana has its own mass (`manaMass`: fire 0.97 kg a M, water 1.01, air 1, earth 1.02), and everything weighs its mass times g. The air weighs too, and at rest it's thicker low down. A parcel of mana pushes aside its own M's worth of air, and the air holds it up by what that weighs (Archimedes): fire, the lightest, rises; earth mana sinks a little; matter is what's heavy. Where there's no air, everything falls alike. |
+| D38 | **Free mana is a gas, and the air holds it up.** Each part of free mana has its own mass (`manaMass`, D40), and everything weighs its mass times g. The air weighs too, and at rest it's thicker low down. A parcel of mana pushes aside its own M's worth of air, and the air holds it up by what that weighs (Archimedes): fire, the lightest, rises; earth mana sinks a little; matter is what's heavy. Where there's no air, everything falls alike. |
 | D39 | **Friction and flame.** A pushed body slides until the ground's friction stops it (μg, its weight pressing on the ground). Flame spreads as a gas does, from more to less, evening out with its neighbours. |
+| D40 | **Mass is mana, by part.** Each part of mana weighs its own amount a M, free or condensed: fire 0.3 g, air 0.45 g, water 0.55 g, earth 0.7 g (the order is the author's; the numbers are tuning). Raw mana weighs half a gram a M, so a cell of air at 40 M is as heavy as real air. Matter is heavy because it's packed: a full cell of earth holds 35,700 M (25 kg, as dense as packed soil), and of water 28,400 M. Condensing and unmaking keep mass and momentum exactly. Matter takes room by its density, and a cell is full when its matter fills it. 1 M of free mana holds 5 kg of matter (`bind`). Gases press by the ideal gas law, by part. |
 | D27 | **Knowing costs.** An order is ingrained one particle at a time, at a beat for every instruction it could run, and every beat it thinks burns its particle's mana. A short order is cheap to ingrain and cheap to keep; an order that senses more costs more. |
 
 ---
@@ -237,8 +245,9 @@ These rules belong to the world, not to the machine:
 1. **Pure free mana binds matter of its own part** in the cell it's in (*influence*): a weave's earth mana takes hold of the
    earth there, water mana of the water. How much it can hold depends on how much mana is there. Too little, and some matter
    is left behind.
-2. **Bound matter moves with its mana, and weighs.** It adds its mass to the particle holding it (`matterMass`: a full cell
-   of earth is 25 kg, of water 15.6 kg), so the particle is heavier to push and falls with it. Earth mana that moves up
+2. **Bound matter moves with its mana, and weighs.** It adds its mass to the particle holding it: as much as the mana it
+   was made of (D40), so a full cell of earth is 25 kg, of water 15.6 kg. The particle is heavier to push and falls with
+   it. Earth mana that moves up
    carries its earth with it, paying to lift it, and the ground it left is empty. Matter that is no longer bound follows its
    nature again: lifted earth falls.
 3. **Mana can condense** (*make*): an order can turn some of its particle's free mana into matter of the same parts (`CNDS`).
@@ -690,6 +699,46 @@ throw:  IN    n15, REACH
         JMP   .pass
 .done:  RET
 
+; heave: one pass of moving a weave by hand. It works out what the weave as a whole still lacks of the velocity n0:2 (in
+; its frame), at most n14 m/tick of it across and n15 up or down, and gives every particle it feels that same push, off
+; the caster's body. Rock passes a push on through itself, so a pass that takes a few ticks still moves it as one. Across
+; is gentle: the body is pushed back as hard as it pushes, and its feet hold only so much. Each push pays from m0.
+;   in: n0:2 the velocity, n4 weave, n14 the most across a pass, n15 the most up or down
+heave:  CIRC  m0                  ; keep holding what it pays with
+        WVEL  n8:10, n4
+        MOV   n11, n0
+        SUB   n11, n8
+        MOV   n12, n1
+        SUB   n12, n9
+        MOV   n13, n2
+        SUB   n13, n10            ; what it lacks
+        MOV   n8, n11
+        MUL   n8, n11
+        MOV   n9, n13
+        MUL   n9, n13
+        ADD   n8, n9              ; across, squared
+        MOV   n9, n14
+        MUL   n9, n14
+        CMP   n8, n9
+        JLE   .up                 ; no more than the most: all of it
+        SQRT  n8
+        MOV   n9, n14
+        DIV   n9, n8
+        MUL   n11, n9
+        MUL   n13, n9             ; the most across, of it
+.up:    MIN   n12, n15
+        MOV   n9, n15
+        NEG   n9
+        MAX   n12, n9             ; and up or down
+        PCNT  n5, n4
+        LDI   n6, #0
+.p:     CMP   n6, n5
+        JGE   .done
+        SHOV  m0, n4, n6, n11:13
+        ADD   n6, #1
+        JMP   .p
+.done:  RET
+
 ; follow (an order): each particle pushes itself toward the velocity in w5–w7 (in its weave's frame), paying with
 ; itself, and does nothing when it's near enough to it. It doesn't know where it is, or where anything else is: its
 ; caster has to tell it how to move (keep), and while nobody does, it holds still where it is.
@@ -905,7 +954,8 @@ runs out before the bottom of the shell. That's the kind of thing a better libra
 a mage could be known for.
 
 ```
-; wall: a block of the ground under the weave's origin, given the order to rise (ingrain it, then set it loose)
+; wall: a block of the ground under the weave's origin, laid out in hand. In hand it binds its earth and, packed and
+; still, is rock. Raising it is up to its caster: it weighs what the ground does.
 ;   in: n0 height, n1 length, n2 thickness (m), n4 weave (on the ground, turned to face out)
 wall:   IN    n5, CELL
         DIV   n0, n5
@@ -954,72 +1004,16 @@ wall:   IN    n5, CELL
         ADD   n9, #1
         CMP   n9, n0
         JLT   .d
-        MUL   n0, n5              ; H, back in metres
-        ADD   n0, #0.05           ; and a little more, to clear the ground
-        MOV   n3, n0
-        DIV   n3, #0.1
-        ADD   n3, #0.499
-        ROUND n3                  ; ticks to climb, at no more than 0.1 m a tick
-        WSET  n4, #0, n3
-        DIV   n0, n3
-        WSET  n4, #1, n0          ; how fast: it climbs exactly H + 0.05 m
-        MUL   n2, n5              ; how far to step back: its thickness, onto the ground in front of its trench
-        MOV   n6, n2
-        DIV   n6, #0.05
-        ADD   n6, #0.499
-        ROUND n6                  ; ticks to step, at no more than 0.05 m a tick
-        DIV   n2, n6
-        WSET  n4, #4, n2          ; how fast
-        ADD   n6, n3
-        WSET  n4, #3, n6          ; when it's there
-        ORDR  n4, rise
-        RET
-
-; rise (an order): the wall climbs out of the ground, steps back toward its maker, and comes down on solid ground in
-; front of the trench it came from, where it stands on its own. It can't see where it is: it goes by the clock its caster
-; worked out (wall), and by feeling its own speed. Phases, in w2, for whoever watches: 0 climbing, 1 stepping, 2 standing.
-;   Climbing, its first w0 ticks: up at w1 m a tick.
-;   Stepping, until tick w3: back at w4 m a tick.
-;   Each tick it kicks itself to the speed it wants, and a little faster than that, by half of what it falls in a tick
-;   (9.8 m/s² is 0.011 m/tick²), so that it holds itself up as it goes.
-;   Standing: it stops dead, lets go of itself and drops the last few centimetres onto the ground, which holds it up from
-;   then on. Its rock holds its shape. Its order thinks three beats a tick, which is all it costs to keep.
-rise:   GETW  n5, #2
-        CMP   n5, #2
-        JEQ   .done               ; standing: nothing to do
-        IN    n8:10, VEL
-        LDI   n11, #0
-        SUB   n11, n8             ; nothing sideways
-        LDI   n12, #0
-        LDI   n13, #0
-        SUB   n13, n10            ; nor forward or back
-        GETW  n6, #0
-        CMP   n4, n6
-        JGE   .step
-        GETW  n12, #1             ; climbing: up
-        JMP   .kick
-.step:  GETW  n6, #3
-        CMP   n4, n6
-        JGE   .stand
-        PUTW  #2, #1
-        GETW  n7, #4
-        SUB   n13, n7             ; stepping: back, toward its maker
-.kick:  ADD   n12, #0.0055        ; and half of what it'll fall this tick
-        SUB   n12, n9
-        KICK  n11:13
-.done:  RET
-.stand: PUTW  #2, #2              ; there: stop, and let go
-        SUB   n12, n9
-        KICK  n11:13
         RET
 ```
 
 The wall isn't made of the spell's mana. It's the ground, lifted: the earth mana *influences* the earth around each particle,
 binding it and carrying it up, and the ground it came from is left as a trench. A caster with poor earth affinity binds less
-earth, and the wall rises full of holes. Climbing costs the earth mana some of itself, lifting 375 kg of earth 2 m (about
-10 M) and thinking about it (more), so it lets go of some earth on the way up; that earth falls to the bottom of the trench.
-Once it stands on the ground, its order thinks three beats a tick, which costs little, but not nothing: the wall slowly
-crumbles as its order burns its mana away, and its rock comes apart as its mana lets go of the earth.
+earth, and the wall rises full of holes. It's raised by hand (`heave`, in Basics): 400 kg of earth, lifted 2 m, is about
+8 kJ, which the caster's mind transforms out of the residue in `m0` (about 9 M), and moving it back pulls the caster along
+as hard as they pull it, so it's moved gently. Once it stands on the ground, its order holds it as it stands, which costs
+it, and the wall slowly crumbles as its order burns its mana away, and its rock comes apart as its mana lets go of the
+earth.
 
 Size matters in 3D. The 2D wall is 16 cells of earth; the 3D one, 4 m long, is 256. Binding a full cell takes 5 M of earth
 mana, so the 3D wall needs about 8000 M gathered: far past an adept's capacity of 600. It's a master's spell.
@@ -1344,7 +1338,7 @@ StoneWall:
         IN    n19, AMOUNT
         GATH  m0, n19             ; GATHER
         CIRC  m0                  ; CIRCULATE
-        FILT  m1, m0, #EARTH      ; FILTER: earth × affinity; the residue stays in m0
+        FILT  m1, m0, #EARTH      ; FILTER: earth × affinity; the residue stays in m0, to push with
         WEAV  n20, n16:18         ; a weave on the ground at the aim
         IN    n0:2, SELF
         MOV   n3, n16
@@ -1358,13 +1352,87 @@ StoneWall:
         LDI   n0, #2              ; 2 m high
         LDI   n1, #4              ; 4 m long
         LDI   n2, #0.5            ; 0.5 m thick
-        CALL  wall                ; the ground laid out, and its order to rise
+        CALL  wall                ; the ground laid out in hand: it takes hold of its earth, and is rock
+        MANI  n20                 ; SEND: let go of it, and hold it up by pushing
+        WPOS  n21:23, n20
+        MOV   n24, n22
+        ADD   n24, #2.05          ; how high its middle is to go: out of the ground, and a little more
+        IN    n25:27, SELF            ; where the caster stands as it begins
+        SUB   n21, n25
+        SUB   n23, n27
+        MUL   n21, n21
+        MUL   n23, n23
+        ADD   n21, n23
+        SQRT  n21
+        SUB   n21, #0.5           ; how far from the caster it's to stand: its thickness nearer, in front of its trench
+.climb: LDI   n0, #0              ; RAISE: up, at 0.1 m a tick
+        LDI   n1, #0.1
+        LDI   n2, #0
         MOV   n4, n20
-        CALL  ingrain             ; ORDER: into every particle, before any of it moves
-        MANI  n20                 ; SEND: it rises
-        MOV   n0, n20
+        LDI   n14, #0.001
+        LDI   n15, #0.15
+        CALL  heave
+        WPOS  n8:10, n20
+        CMP   n9, n24
+        JLT   .climb
+.step:  CALL  .level               ; POSITION: back toward the caster, slowly: it pulls them as hard as they pull it
+        LDI   n0, #0
+        LDI   n2, #-0.01
+        MOV   n4, n20
+        LDI   n14, #0.001
+        LDI   n15, #0.15
+        CALL  heave
+        WPOS  n8:10, n20
+        SUB   n8, n25
+        SUB   n10, n27
+        MUL   n8, n8
+        MUL   n10, n10
+        ADD   n8, n10
+        SQRT  n8
+        CMP   n8, n21
+        JGT   .step
+        LDI   n28, #20            ; passes to come to a stop above its place
+.stop:  CALL  .level
+        LDI   n0, #0
+        LDI   n2, #0
+        MOV   n4, n20
+        LDI   n14, #0.001
+        LDI   n15, #0.15
+        CALL  heave
+        SUB   n28, #1
+        CMP   n28, #0
+        JGT   .stop
+        ORDR  n20, .stand
+        MOV   n4, n20
+        CALL  ingrain             ; ORDER: it holds itself as it stands, and stays this weave's once its caster goes
+        LDI   n28, #40            ; passes to set it down: its middle lowered 4 mm a pass, onto the ground
+.down:  SUB   n24, #0.004
+        CALL  .level
+        LDI   n0, #0
+        LDI   n2, #0
+        MOV   n4, n20
+        LDI   n14, #0.001
+        LDI   n15, #0.15
+        CALL  heave
+        SUB   n28, #1
+        CMP   n28, #0
+        JGT   .down
+        MOV   n0, n20             ; let go: the ground holds it up from then on
         HALT                      ; m0 isn't held any more: it joins the flow
 .fail:  FAIL  #1                  ; no earth there
+
+.level: WPOS  n8:10, n20          ; how fast to rise or sink to keep its middle at the height it climbed to, n24
+        MOV   n1, n24
+        SUB   n1, n9
+        MUL   n1, #0.3
+        RET
+
+.stand: IN    n5:7, VEL           ; LOCK: it keeps itself as it stands, kicking against whatever moves it across. Its
+        NEG   n5                  ; base is rough, so it rests on a few points, and would tip over with nothing holding
+        LDI   n6, #0              ; it. Up and down, the ground holds it.
+        NEG   n7
+        KICK  n5:7
+        RET
 ```
 
 ```
@@ -1392,13 +1460,16 @@ Metadata StoneWall(Metadata data) {
 }
 ```
 
-The whole wall has to be in reach to be ingrained: its foot is 2 m down. Every particle is ingrained before any of it moves,
-or the top would rise and tear away from the rest.
+The wall used to climb out of the ground by its own order, kicking off the air in its cells. That only worked while the
+air was as heavy as rock. Real air (D40) can't hold up 400 kg of earth, and the way you'd raise a wall is the way a mage
+does: by hand. In hand, the ground laid out takes hold of its earth and becomes rock. Let go, the caster pushes it up,
+the whole wall alike, pass after pass, holding it at the height it climbed to; moves it back by its own thickness, gently,
+since it pulls them as hard as they pull it; ingrains its order while it's still held; and sets it down on the solid
+ground in front of its trench. The trench is a ditch in front of it.
 
-A wall that rose out of its trench and stayed there would have nothing under it: it would have to hold itself up forever,
-thinking every tick, and burning its mana to do it. So it rises, steps back toward its caster by its own thickness, and
-comes down on the solid ground in front of its trench. Its rock holds its shape, the ground holds it up, and its order goes
-quiet. The trench is a ditch in front of it.
+Its base is as rough as its particles were poured, so it rests on a few points, and would tip over: its order holds it,
+kicking against whatever moves it across, and it leans a little as it settles. That costs its mana, and the wall holds
+half its earth for about 8 s. Real ground would bed it in: PLAN step 2. Raising 400 kg by hand is a master's spell.
 
 ### Fireball
 
@@ -1486,9 +1557,9 @@ writes it into the weave, since the order can't know where the radius is. Laying
 instructions, and ingraining about 12 ticks. The residue in `m0`, the parts that weren't fire, pays for the throw.
 
 Once it's out of reach, nothing but its order holds it. In the test world an adept's fireball flies 8 m to the pillar in
-0.7 s with 96% of its mana within a metre of its middle, and bursts against it: the particles that touch it first pass
-the word to the rest by touch. Throwing it, the caster is pushed back a metre across the ground, and their mind strains
-for the 2 kJ it took.
+0.73 s with 98% of its mana within a metre of its middle, and bursts against it: the particles that touch it first pass
+the word to the rest by touch. It weighs 5 g, lighter than the air it pushes aside, so it rises 1.2 m on the way.
+Throwing it costs its caster's mind a fraction of a joule.
 
 ### Gust
 
@@ -1537,9 +1608,9 @@ spell Gust(Metadata data) {
 ```
 
 Each pass keeps the residue and adds a fresh gather. If the body drains slower than the caster gathers, its load climbs, and a
-long Gust overcharges. It needs only two streams. Its speed is transformed out of a share of what it sends (D32), and every
-breath pushes its caster back as hard as it pushes its target: a gust that blows someone back a metre and a half slides
-its caster back as far.
+long Gust overcharges. It needs only two streams. Its speed is transformed out of a share of what it sends (D32). A breath
+of it is a few grams of mana: it drives the air, but it can't blow anyone over by striking them, and bodies don't feel the
+air yet (PLAN step 3).
 
 ### Water Shield
 
@@ -1836,9 +1907,10 @@ air ahead of it, wind turns up and over a pillar, and the hole a caster gathers 
 that has all but stopped stops, and air at rest, as thick as rest would have it, costs nothing to run.
 
 The air holds up what's in it (D38). A parcel of free mana is a gas like the air, so it pushes aside its own M's worth of
-air, and the air at rest holds it up by what that weighs: `RAW_MASS` (1 kg) a M, the weight of raw mana. Free mana of each
-part has its own mass (`manaMass`): fire 0.97 kg a M, so it rises; water 1.01 and earth 1.02, so they sink, slowly; air
-1, so it floats. Matter isn't held up: it's what's heavy. Where there's no air, everything falls alike.
+air, and the air at rest holds it up by what that weighs: `RAW_MASS` (half a gram) a M, the weight of raw mana. Free
+mana of each part has its own mass (`manaMass`, D40): fire 0.3 g a M, so it rises at about two-thirds of g; air 0.45 g, so
+it rises a little; water 0.55 g, so it sinks a little; earth 0.7 g, so it sinks at about a third of g. Matter isn't held
+up: it's what's heavy. Where there's no air, everything falls alike.
 
 When particles come to rest beside each other, they merge, to keep their number down: closer than `mergeRange`, moving
 within `mergeSpeed` of each other, and together no more than `maxMote`. The new particle sits at their centre of mass with
@@ -1867,7 +1939,8 @@ Each part has its own numbers, in `physics.ts`, by part number. The machine stil
 
 *Built:* each part's pressure, thickness, mass (`manaMass`; the air holds it up, D38) and how it holds together
 (`cohesion`, a pull between neighbours, strongest at half the smoothing length). Matter held by mana adds its weight and
-its mass (`matterMass`), can't be packed past full (`matterStiffness`), and pulls on its neighbours as water does
+its mass, as much as the mana it was made of (D40), can't be packed past full (`density`, `matterStiffness`), and pulls on
+its neighbours as water does
 (`matterCohesion`). Earth held by mana becomes rock where it's packed as full as solid ground and still (D30, D36): each
 particle is bound to its neighbours within `bondRange`, and the bonds hold their length, a dozen passes a step, so that
 the ground's support reaches up through a wall. The ground holds up what rests on it, with friction.
@@ -1889,8 +1962,7 @@ or the air it's in. So:
 - Slowing something down costs nothing. What's taken out of its motion becomes heat.
 - Holding something up against its weight costs nothing on the ground: each tick the push only takes back the speed it
   gained falling. Held up in the air, it pushes the air down, a little more each tick, and pays for that downdraft.
-  Lifting it costs its weight times the height, and a little more for the air it climbs by: lifting a 2 m Stone Wall of
-  375 kg of earth costs about 13 M.
+  Lifting it costs its weight times the height: lifting a 2 m Stone Wall of 400 kg of earth is about 8 kJ, 9 M poured.
 - Pushing sideways across a motion costs only what the sideways speed adds.
 
 The poured mana goes **loose where it was poured**, still mana: nothing is used up. A construct pushed for a long time sits
@@ -2019,9 +2091,9 @@ Things the machine found that the sandbox couldn't:
 
 What making it organic found (D32–D39):
 
-- **Throwing is shoving.** A push goes off the body, so throwing an 18 M fireball (18 kg) at 13 m/s slides an adept back
-  a metre, and a Gust slides its caster back as far as it blows its target. Mana weighs what it weighs; to throw without
-  being thrown, a mage would brace, throw less, or throw slower.
+- **Throwing is shoving.** A push goes off the body. While mana weighed a kilogram a M, throwing an 18 M fireball slid an
+  adept back a metre. Since D40 it weighs 5 g, and nothing much happens to the thrower; moving a 400 kg wall by hand is
+  another matter.
 - **A strong mind tears what it throws.** With no limit on how fast a particle can be sped up but the mind's power, a mind
   that pushes particles one at a time sends its first ones off at full speed while the last wait, and the ball tears. A
   good throw works out the push once a pass and gives every particle the same step (`throw`, 0.1 m/tick): cheaper too.
@@ -2038,20 +2110,50 @@ What making it organic found (D32–D39):
   knowing the particle is there, drove the air away from every particle: wind from nothing, which the Energy ledger caught
   (38 units of error in one Fireball). Archimedes in air at rest is exact.
 
+**What making mass mana found (D40):**
+
+- **Real air can't hold up rock.** The Stone Wall climbed out of its trench by kicking off the air in its cells. That
+  worked while a cell of air weighed 40 kg. At 20 g, kicking 400 kg up off it would take a gale its order can't pay for,
+  and it sank. It's raised by hand now, as a mage would.
+- **Heavy air hid three things.** It damped every wobble, so a wall on a rough base stood; it was half of the `bodies`
+  term in the Energy ledger, hiding what rock's bonds get wrong; and it made a breath of air mana heavy enough to knock
+  someone over. With real air, all three show (§0, What's left).
+- **Light things are cheap to throw.** A fireball weighs 5 g: throwing it at 13 m/s is a fraction of a joule. What a mind
+  pays for is moving matter.
+- **Making matter is dear.** Condensing keeps mass, so 11.5 M of water mana makes 6 g of water. A shield worth having
+  takes a river's water (*influence*), not the caster's own mana.
+- **Soil packs.** With earth packing full at rock's density, the ground's soil had room to spare, and a wall standing in it
+  sank into itself, 2 m to 1.5 m. Earth packs full at soil's density until step 2 tells soil from rock.
+
 ### How the spells do now
 
-The targets, and where the four spells stand against them (2D, an adept), with ticks of 1/30 s:
+The targets, and where the four spells stand against them (2D), with ticks of 1/30 s:
 
 | Spell | Target | Now |
 |---|---|---|
-| Fireball | Leaves the hand within a second, reaches a pillar 9 m away with most of its mana | Let go after 0.5 s, hits after 0.7 s more, 96% of its mana together. Its caster slides back 1.25 m, and strains 2 kJ |
-| Stone Wall | Rises in seconds, stands on its own for half a minute or more | Rises and stands in 2.4 s, holds half its earth for 29 s, then crumbles |
-| Water Shield | Holds its water around its caster for several seconds | Makes 11.5 M of water, holds half of it for 57 s |
-| Gust | Knocks someone back | Pushes a 60 kg body back 1.7 m; its caster slides back 2 m, and strains 3 kJ |
+| Fireball | Leaves the hand within a second, reaches a pillar 9 m away with most of its mana | Let go after 0.5 s, hits after 0.73 s more, 98% of its mana together, having risen 1.2 m on the way |
+| Stone Wall | Rises in seconds, stands on its own for half a minute or more | Raised by hand (a master), stands at 6 s, leaning; holds half its earth for 8 s. *Short of its target: its base is rough (§0)* |
+| Water Shield | Holds its water around its caster for several seconds | Makes 11.5 M of water mana into 6 g of water, holds half of it for 42 s |
+| Gust | Knocks someone back | Drives the air, but can't move a body until bodies feel the air (PLAN step 3) |
 
-The numbers in `physics.ts` were left where they are, but for the new ones (`manaMass`, `orderPower`, `relay`,
-`bondSpeed`, `flameSpread`, and the mind's `power`, `capacity` and `recovery`): every spell meets its target. Two now do
-more than they did, and that's yours to tune: the throw and the gust shove their caster back, and the shield lasts.
+Since D40 two spells miss their targets, and both for reasons step 2 or 3 fixes, not numbers: tuning around them would
+hide them.
+
+### The numbers, and what they come from
+
+| Number | Value | From |
+|---|---|---|
+| `manaMass` | fire 0.3 g, water 0.55 g, air 0.45 g, earth 0.7 g a M | The author's order; raw mana as heavy, at 40 M a cell, as real air |
+| `airMana` | 40 M a cell of air, at the ground | 20 g in (0.25 m)³: 1.3 kg/m³, real air |
+| `density` | flame 0.3, water 1,000, air 1.2, earth 1,600 kg/m³ | Hot gas, water, air, packed soil |
+| `bind` | 5 kg of matter a M of free mana | Kept from before: a wall's mana holds what it did |
+| `gravity` | 9.81 m/s², a tick 1/30 s | Real |
+| `airSound` | 0.6 m/tick (18 m/s) | Slowed from 340 m/s to keep steps few; real in step 3 |
+| `pushEnergy` | 900 J a M poured | A guess, kept |
+| `stiffness` | fire 0.0009, water 0.0001, air 0.002, earth 0 (m/tick)² | How fast each part's free mana spreads: kept |
+| `cohesion` | free water 0.037, free earth 0.15 a kg | Rescaled so free mana pulls as it did, now it's lighter |
+| `matterCohesion`, `matterStiffness` | 0.0001, 0.3 | Kept; real surface tension and stiffness come with step 2 |
+| mind `power`, `capacity`, `recovery` | adept 450 J a tick, 54 kJ, 18 J a tick | Guesses (D32) |
 
 ### The bench
 

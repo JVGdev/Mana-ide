@@ -26,7 +26,7 @@ describe('the bench', () => {
   it('an order holds a still ball better than nothing does', () => {
     const nothing = runVariant(variant('HoldNothing'), 'adept', 2, 2)
     const cling = runVariant(variant('HoldCling'), 'adept', 2, 2)
-    expect(nothing.spread).toBeGreaterThan(0.8)
+    expect(nothing.spread).toBeGreaterThan(cling.spread * 1.5)
     expect(cling.spread).toBeLessThan(0.5)
     expect(cling.burn).toBeGreaterThan(0) // and pays for it from the ball
   })

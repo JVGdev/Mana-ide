@@ -65,28 +65,41 @@ export type Particle = {
 export type Bond = { a: Particle; b: Particle; rest: number }
 
 /**
- * A particle's mass: its free mana, and the matter it holds (PHYSICS.matterMass). Pushing it, the air dragging it,
- * and its weight all go by this.
+ * A particle's mass: its free mana, and the matter it holds, each part by its weight a M (PHYSICS.manaMass): mass is
+ * mana, free or condensed (D40). Pushing it, the air dragging it, and its weight all go by this.
  */
 export function massOf(p: Particle): number {
-  const m = PHYSICS.matterMass
-  return massOfParts(p.free) + p.carried[0] * m[0] + p.carried[1] * m[1] + p.carried[2] * m[2] + p.carried[3] * m[3]
+  return massOfParts(p.free) + massOfParts(p.carried)
 }
 
-/** The mass of some free mana, by part (PHYSICS.manaMass). */
+/** The mass of some mana, free or condensed, by part (PHYSICS.manaMass). */
 export function massOfParts(p: Parts): number {
   const m = PHYSICS.manaMass
   return p[0] * m[0] + p[1] * m[1] + p[2] * m[2] + p[3] * m[3]
 }
 
+/** How many M of a part's matter a cell holds, packed full: its density over its weight a M. */
+export function packed(k: number): number {
+  return (PHYSICS.density[k] * PHYSICS.cell ** 3) / PHYSICS.manaMass[k]
+}
+
+/** The share of a cell's room some matter takes: each part's amount over what a full cell of it holds. */
+export function fillOf(m: Parts): number {
+  return m[0] / packed(0) + m[1] / packed(1) + m[2] / packed(2) + m[3] / packed(3)
+}
+
+/** How many M of a part a cell of the world's ground holds: full. */
+export function groundAmount(k: number): number {
+  return packed(k)
+}
+
 /**
- * Momentum given to the world from outside it: weight, the ground and walls (which hold up and stop what's against them,
- * and take what's pushed off them), and matter changing its mass: condensing (1 M of matter weighs less than 1 M of free
- * mana), and matter let go of, which stops dead in the ground. Pushes and kicks are inside it: what's pushed, and what
- * it's pushed off (a caster's body, the air, the ground), take equal and opposite shares. `outside` is what's given by
- * hand, from beyond the world: a test setting something moving.
+ * Momentum given to the world from outside it: weight, and the ground and walls, which hold up and stop what's against
+ * them, take what's pushed off them, and take the motion of matter let go of, which stops dead in the ground. Pushes and
+ * kicks are inside it: what's pushed, and what it's pushed off (a caster's body, the air, the ground), take equal and
+ * opposite shares. `outside` is what's given by hand, from beyond the world: a test setting something moving.
  */
-export type Impulses = Record<'gravity' | 'walls' | 'matter' | 'outside', Vec>
+export type Impulses = Record<'gravity' | 'walls' | 'outside', Vec>
 
 export const FIRE = 0
 export const WATER = 1
@@ -105,7 +118,7 @@ export class World {
   particles: Particle[] = []
   bodies: Body[] = []
   tick = 0
-  impulse: Impulses = { gravity: [0, 0, 0], walls: [0, 0, 0], matter: [0, 0, 0], outside: [0, 0, 0] }
+  impulse: Impulses = { gravity: [0, 0, 0], walls: [0, 0, 0], outside: [0, 0, 0] }
   /** Rock: pairs of particles bound together. */
   bonds: Bond[] = []
   /**
@@ -171,11 +184,16 @@ export class World {
   solidAt(i: number): boolean {
     if (i < 0) return true
     const m = this.matter[i]
-    return m[EARTH] + m[WATER] >= PHYSICS.solid
+    return m[EARTH] / packed(EARTH) + m[WATER] / packed(WATER) >= PHYSICS.solid
   }
 
   private earthAt(i: number): boolean {
-    return i >= 0 && this.matter[i][EARTH] >= PHYSICS.solid
+    return i >= 0 && this.matter[i][EARTH] / packed(EARTH) >= PHYSICS.solid
+  }
+
+  /** The share of a cell's room its unbound matter takes. */
+  fill(i: number): number {
+    return fillOf(this.matter[i])
   }
 
   // Building worlds
@@ -189,14 +207,14 @@ export class World {
     const H = scaleHeight()
     for (let i = 0; i < world.size; i++) {
       const [, y] = world.coords(i)
-      if (y < top) world.matter[i][part] = PHYSICS.cellMatter
+      if (y < top) world.matter[i][part] = groundAmount(part)
       else world.air[i].fill((PHYSICS.airMana / 4) * Math.exp(-((y + 0.5 - top) * world.cell) / H))
     }
     return world
   }
 
   /** Fills a box of cells (inclusive) with matter, where the air mana there was. For building a world, before it runs. */
-  fillBox(from: Vec, to: Vec, part = EARTH, amount = PHYSICS.cellMatter) {
+  fillBox(from: Vec, to: Vec, part = EARTH, amount = groundAmount(part)) {
     for (let z = from[2]; z <= to[2]; z++)
       for (let y = from[1]; y <= to[1]; y++)
         for (let x = from[0]; x <= to[0]; x++) {
@@ -354,11 +372,13 @@ export class World {
 
   /**
    * Matter follows its nature: earth falls and piles, water falls and spreads, air and flame rise.
-   * `carried` is the matter weaves hold in each cell: it takes room too.
+   * `carried` is the share of each cell's room the matter weaves hold there takes: it takes room too.
    */
   settleMatter(carried: Float64Array) {
     const moved = new Uint8Array(this.size)
-    const room = (j: number) => PHYSICS.cellMatter - total(this.matter[j]) - carried[j]
+    const room = (j: number) => 1 - fillOf(this.matter[j]) - carried[j]
+    // How much of a cell's room each M of a cell's matter takes.
+    const each = (m: Parts) => (total(m) > 0 ? fillOf(m) / total(m) : 0)
     const flip = this.tick % 2 === 0 ? 1 : -1
     const sides: [number, number][] = this.d > 1 ? [[flip, 0], [-flip, 0], [0, flip], [0, -flip]] : [[flip, 0], [-flip, 0]]
 
@@ -366,7 +386,7 @@ export class World {
       if (j < 0) return 0
       const r = room(j)
       if (r <= PHYSICS.epsilon) return 0
-      const moving = take(this.matter[i], Math.min(amount, r))
+      const moving = take(this.matter[i], Math.min(amount, r / each(this.matter[i])))
       add(this.matter[j], moving)
       moved[j] = 1
       return total(moving)
@@ -394,7 +414,9 @@ export class World {
           if (kind === WATER || kind === AIR) {
             for (const [sx, sz] of sides) {
               const j = this.index(x + sx, y, z + sz)
-              if (j >= 0 && total(this.matter[j]) + carried[j] < here()) tryMove(i, j, (here() - total(this.matter[j])) / 2)
+              const fj = j >= 0 ? fillOf(this.matter[j]) + carried[j] : 1
+              const fi = fillOf(m)
+              if (fj < fi) tryMove(i, j, (fi - fj) / 2 / each(m))
             }
           } else if (kind === FIRE) {
             // Flame spreads as any gas does: from where there's more of it to where there's less, evening out with its
@@ -404,8 +426,8 @@ export class World {
               if (j < 0 || room(j) <= 0) continue
               const diff = m[FIRE] - this.matter[j][FIRE]
               if (diff <= 0) continue
-              const f = Math.min(room(j), (PHYSICS.flameSpread * diff) / (sides.length + 1))
-              add(this.matter[j], take(m, (f * total(m)) / m[FIRE]))
+              const f = Math.min(room(j) / each(m), ((PHYSICS.flameSpread * diff) / (sides.length + 1)) * (total(m) / m[FIRE]))
+              add(this.matter[j], take(m, f))
               moved[j] = 1
             }
           }

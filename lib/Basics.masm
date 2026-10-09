@@ -97,6 +97,46 @@ throw:  IN    n15, REACH
         JMP   .pass
 .done:  RET
 
+; heave: one pass of moving a weave by hand. It works out what the weave as a whole still lacks of the velocity n0:2 (in
+; its frame), at most n14 m/tick of it across and n15 up or down, and gives every particle it feels that same push, off
+; the caster's body. Rock passes a push on through itself, so a pass that takes a few ticks still moves it as one. Across
+; is gentle: the body is pushed back as hard as it pushes, and its feet hold only so much. Each push pays from m0.
+;   in: n0:2 the velocity, n4 weave, n14 the most across a pass, n15 the most up or down
+heave:  CIRC  m0                  ; keep holding what it pays with
+        WVEL  n8:10, n4
+        MOV   n11, n0
+        SUB   n11, n8
+        MOV   n12, n1
+        SUB   n12, n9
+        MOV   n13, n2
+        SUB   n13, n10            ; what it lacks
+        MOV   n8, n11
+        MUL   n8, n11
+        MOV   n9, n13
+        MUL   n9, n13
+        ADD   n8, n9              ; across, squared
+        MOV   n9, n14
+        MUL   n9, n14
+        CMP   n8, n9
+        JLE   .up                 ; no more than the most: all of it
+        SQRT  n8
+        MOV   n9, n14
+        DIV   n9, n8
+        MUL   n11, n9
+        MUL   n13, n9             ; the most across, of it
+.up:    MIN   n12, n15
+        MOV   n9, n15
+        NEG   n9
+        MAX   n12, n9             ; and up or down
+        PCNT  n5, n4
+        LDI   n6, #0
+.p:     CMP   n6, n5
+        JGE   .done
+        SHOV  m0, n4, n6, n11:13
+        ADD   n6, #1
+        JMP   .p
+.done:  RET
+
 ; follow (an order): each particle pushes itself toward the velocity in w5–w7 (in its weave's frame), paying with
 ; itself, and does nothing when it's near enough to it. It doesn't know where it is, or where anything else is: its
 ; caster has to tell it how to move (keep), and while nobody does, it holds still where it is.
