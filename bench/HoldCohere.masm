@@ -1,0 +1,12 @@
+; Held by its own order: knowing where it is from the centre and how its neighbours move, it comes back in at the speed it should (39). The caster ingrains it and walks away.
+        .use  Bench, Shapes, Orders
+
+HoldCohere:
+        CALL  pour
+        ORDR  n16, .order
+        CALL  release
+        MOV   n0, n16
+        HALT
+
+.order: CALL  cohere
+        RET

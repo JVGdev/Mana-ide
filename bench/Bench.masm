@@ -1,0 +1,109 @@
+; Bench: what the bench's spells share (npm run bench, SPEC §11 The bench). A ball of fire poured into the hand, then held
+; or thrown, by hand or by its own order, to see what each way costs and how well it does.
+        .use  Elements, Basics, Holding
+
+; pour: gathers AMOUNT, pours its fire into one point at the hand, and keeps the rest in m0 to push with. It's turned to
+; face the aim: in its frame +z is forward and y is up. Its order (if it gets one) holds it to w2 = 0.5 m.
+;   out: n16 the weave, still in hand; n7 the mana poured
+pour:   IN    n17, AMOUNT
+        GATH  m0, n17
+        CIRC  m0
+        FILT  m1, m0, #FIRE
+        IN    n1:3, HAND
+        WEAV  n16, n1:3
+        IN    n4:6, AIM
+        SUB   n4, n1
+        LDI   n5, #0
+        SUB   n6, n3
+        TURN  n16, n4:6
+        LDI   n4, #0
+        LDI   n5, #0
+        LDI   n6, #0
+        MEAS  n7, m1
+        EMIT  m1, n7, n16, n4:6
+        HOLD  n16, #1.5
+        WSET  n16, #2, #0.5
+        RET
+
+; edge: how thin the mana is at the ball's edge, for an order that only feels (Orders.feel): 3/4 of its mana spread
+; evenly through a ball of 0.5 m (in 2D, a disc one cell deep), into w3.   in: n7 its mana, n16
+edge:   IN    n8, DEPTH
+        CMP   n8, #1
+        JNE   .ball
+        IN    n9, CELL
+        MUL   n9, #0.785398       ; π·0.5²
+        JMP   .div
+.ball:  LDI   n9, #0.523599       ; 4/3·π·0.5³
+.div:   MUL   n7, #0.75
+        DIV   n7, n9
+        WSET  n16, #3, n7
+        RET
+
+; release: its order into every particle, then let go.   in: n16
+release: MOV  n4, n16
+        CALL  ingrain
+        MANI  n16
+        RET
+
+; aim: the velocity to throw at, in the weave's frame: FORCE m/tick, up toward the aim by n3 radians.   out: n0:2, n3
+aim:    IN    n0:2, HAND
+        IN    n3:5, AIM
+        SUB   n3, n0
+        SUB   n4, n1
+        SUB   n5, n2
+        MUL   n3, n3
+        MUL   n5, n5
+        ADD   n3, n5
+        SQRT  n3                  ; how far ahead
+        ATN2  n4, n3              ; how far up
+        MOV   n3, n4
+        IN    n6, FORCE
+        MOV   n1, n3
+        SIN   n1
+        MUL   n1, n6
+        MOV   n2, n3
+        COS   n2
+        MUL   n2, n6
+        LDI   n0, #0
+        RET
+
+; throwHeld: throw (Basics), holding it together as it goes: every pass, each particle is pushed back in (Holding.hold)
+; and then toward the velocity, until it leaves reach.   in: n0:2 velocity, n4 weave
+throwHeld: MOV n22, n0
+        MOV   n23, n1
+        MOV   n24, n2             ; (hold uses n1:3)
+        IN    n15, REACH
+        MUL   n15, n15
+        LDI   n14, #0.5
+.pass:  CIRC  m0
+        WPOS  n8:10, n4
+        IN    n11:13, SELF
+        SUB   n8, n11
+        SUB   n9, n12
+        SUB   n10, n13
+        MUL   n8, n8
+        MUL   n9, n9
+        MUL   n10, n10
+        ADD   n8, n9
+        ADD   n8, n10
+        CMP   n8, n15
+        JGT   .done               ; out of reach
+        PCNT  n5, n4
+        CMP   n5, #0
+        JEQ   .done
+        CALL  hold
+        PCNT  n5, n4
+        LDI   n6, #0
+.p:     CMP   n6, n5
+        JGE   .pass
+        PVEL  n8:10, n4, n6
+        MOV   n11, n22
+        SUB   n11, n8
+        MOV   n12, n23
+        SUB   n12, n9
+        MOV   n13, n24
+        SUB   n13, n10
+        SHOV  m0, n4, n6, n11:13
+        ADD   n6, #1
+        JMP   .p
+.done:  RET

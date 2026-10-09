@@ -1,0 +1,16 @@
+; Held by hand while it's maintained: only the outer ones, after a quick look at where each is, pushed back in when it strays.
+        .use  Bench
+
+HoldSurface:
+        CALL  pour
+        MANI  n16
+        MOV   n4, n16
+        LDI   n14, #0.5
+        LDI   n21, #0
+.keep:  CIRC  m0
+        CALL  holdSurface
+        IN    n17, MAINTAIN
+        CMP   n17, #0
+        JNE   .keep
+        MOV   n0, n16
+        HALT

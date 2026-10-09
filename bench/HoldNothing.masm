@@ -1,0 +1,8 @@
+; Held by nothing: poured, let go, and left. Its own pressure takes it apart.
+        .use  Bench
+
+HoldNothing:
+        CALL  pour
+        MANI  n16
+        MOV   n0, n16
+        HALT

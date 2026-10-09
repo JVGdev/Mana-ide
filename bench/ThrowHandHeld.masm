@@ -1,0 +1,13 @@
+; Thrown by hand and held by hand while it's in reach: every pass pushes each particle back in, then forward. No order:
+; out of reach, nothing holds it, and nothing bursts it.
+        .use  Bench
+
+ThrowHandHeld:
+        CALL  pour
+        MANI  n16
+        CALL  aim
+        MOV   n4, n16
+        CALL  throwHeld
+        LOCK  n16, INPUT
+        MOV   n0, n16
+        HALT

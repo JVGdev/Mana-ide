@@ -58,6 +58,11 @@ export const PHYSICS = {
   looseRest: 0.02,
   /** M of its own mana an order burns for every beat it thinks. */
   orderBurn: 0.00005,
+  /**
+   * Whether an order is told where its particle is from its weave's centre, and can read ORIGIN and MAKER. Without it, an
+   * order only feels its own particle and its neighbours (SPEC §12, question 6). The bench tries both.
+   */
+  orderKnowsCentre: true,
   /** How far a weave's field reaches around its centre, in metres, until HOLD says otherwise. */
   field: 1,
   /** Steps the fluid takes in one tick. */

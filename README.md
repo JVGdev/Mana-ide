@@ -19,23 +19,25 @@ npm run tester
 
 Opens at http://localhost:5175. Edit a spell or a library, Cast it, then Play, Step one instruction (F10) or run to the end
 of the Tick (Shift+F10). Click the gutter for a breakpoint; the second gutter shows what each line has cost in beats. Click
-the world to aim. Ctrl+S saves the file back to `spells/` or `lib/`.
+the world to aim. Ctrl+S saves the file back to `spells/`, `bench/` or `lib/`.
 
 Mana is particles (SPEC §11). A weave's order runs in every particle it's ingrained into, every tick, and burns that
 particle's mana as it thinks. The Order panel shows any one particle's last run, instruction by instruction, forward and
 back; pick the particle by number or click it in the world. A breakpoint in order code pauses on the particle that hit it.
 
-## The mana fluid sandbox
+## The bench
 
 ```
-npm run sandbox
-npm run sandbox:compare -- throw
+npm run bench
+npm run bench -- --only Throw --3d
 ```
 
-Mana as a fluid of particles, in 2D, outside the machine (SPEC §11): a fireball pushes itself apart, and a caster holds it
-by pushing its particles back in, paying beats and mana for every push. Pick a caster and a way of holding, throw it at the
-wall, change the physics, and compare every way of holding side by side. `npm run sandbox:bundle` writes it as one HTML
-file, `sandbox/dist/sandbox.html`, that opens anywhere.
+The same ball of fire, held still or thrown at a pillar in every way the bench knows: by hand (every particle, every
+other one, only the surface) or by its own order (one that knows where its centre is, one that also feels its
+neighbours, one that only feels, one told just an angle to fly along). Each runs on the real machine, for an adept and a
+master, on five layouts, and the bench prints what each cost and how well it did: how long the order took to ingrain, how
+much of the ball stayed together, and the mana the caster's hand and the ball's own order spent. The bench's spells are in
+`bench/`, and the tester lists them too.
 
 ## Assemble a spell
 
@@ -104,4 +106,4 @@ Each spell has a test world (`src/scenes.ts`). The terminal shows a slice of it:
 - `src/profile.ts`: where a cast's beats went.
 - `lib/`: the libraries.
 - `spells/`: Stone Wall, Fireball, Gust and Water Shield.
-- `sandbox/`: the mana fluid sandbox. `sim.ts` is the physics, `mind.ts` the caster, `strategies.ts` the ways of holding.
+- `bench/` and `src/bench.ts`: the bench, its spells and what it measures.

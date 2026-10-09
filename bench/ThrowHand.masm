@@ -1,0 +1,13 @@
+; Thrown by hand, with no order: pushed toward the aim until it's fast enough or out of reach, then on its own. Nothing
+; holds it together and nothing bursts it.
+        .use  Bench
+
+ThrowHand:
+        CALL  pour
+        MANI  n16
+        CALL  aim
+        MOV   n4, n16
+        CALL  throw
+        LOCK  n16, INPUT
+        MOV   n0, n16
+        HALT
