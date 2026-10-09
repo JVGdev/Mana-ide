@@ -3,7 +3,8 @@
 //! while the port is checked against it (PLAN step R). Each function is checked against V8's answers in
 //! `tests/v8_math.rs`.
 
-#![allow(clippy::excessive_precision, clippy::approx_constant)]
+#![allow(clippy::excessive_precision, clippy::approx_constant, clippy::eq_op, clippy::explicit_counter_loop)]
+// `x - x` is how fdlibm makes a NaN from an infinity: it is meant.
 
 fn high(x: f64) -> i32 {
     (x.to_bits() >> 32) as i32

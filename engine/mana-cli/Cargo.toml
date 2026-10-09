@@ -6,3 +6,6 @@ edition.workspace = true
 
 [dependencies]
 mana = { path = "../mana" }
+
+[lints]
+workspace = true

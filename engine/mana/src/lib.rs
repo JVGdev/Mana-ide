@@ -3,3 +3,4 @@
 pub mod asm;
 pub mod js;
 pub mod load;
+pub mod vm;

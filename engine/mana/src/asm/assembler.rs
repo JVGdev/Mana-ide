@@ -32,6 +32,13 @@ pub struct Program {
     pub lines: BTreeMap<usize, SourceLine>,
 }
 
+impl Program {
+    /// A program with nothing in it.
+    pub fn empty() -> Program {
+        Program { bytes: vec![], labels: IndexMap::new(), consts: IndexMap::new(), lines: BTreeMap::new() }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct AsmError {
     pub problems: Vec<String>,

@@ -11,3 +11,6 @@ crate-type = ["cdylib", "rlib"]
 mana = { path = "../mana" }
 # Must match the wasm-bindgen CLI exactly (wasm-pack uses the installed one).
 wasm-bindgen = "=0.2.128"
+
+[lints]
+workspace = true
