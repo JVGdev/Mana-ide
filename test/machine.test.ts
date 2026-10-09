@@ -408,8 +408,8 @@ describe('mana as a fluid', () => {
     const p = weave.particles[0]
     expect(p.vel[0]).toBeCloseTo(PHYSICS.pushRate, 2) // asked for 0.5, got a tick's worth (less what the air took)
     expect(sim.world.impulse.push[0]).toBeCloseTo(0.25 * PHYSICS.pushRate, 6) // 1⅔ is a float32
-    // It cost what a push of that size costs, and that mana went loose into the air.
-    expect(cast.frame.n[20] - cast.frame.n[21]).toBeCloseTo((0.25 * PHYSICS.pushRate) / PHYSICS.pushYield, 6)
+    // It cost the kinetic energy it added (from rest, in the hand), and that mana went loose into the air.
+    expect(cast.frame.n[20] - cast.frame.n[21]).toBeCloseTo((0.5 * 0.25 * PHYSICS.pushRate ** 2) / PHYSICS.pushEnergy, 6)
     // Out of reach, nothing happens.
     const far = setup(src, (s) => (s.body.reach.genetics = 0.5))
     far.sim.step()
@@ -456,12 +456,14 @@ kick:   LDI   n0, #0
     const weave = [...sim.weaves.values()][0]
     const p = weave.particles[0]
     const before = total(p.free)
+    const vy = p.vel[1]
     sim.traceOrders = true
     sim.step()
     const trace = sim.traces.get(weave.id)!
     expect(trace.length).toBe(1) // only the ingrained one
     expect(trace[0].burned).toBeCloseTo(trace[0].beats * PHYSICS.orderBurn, 12)
-    const kickCost = (before * 0.05) / PHYSICS.pushYield // it kicks first; its thinking is paid for after
+    // It kicks first, and pays the kinetic energy the kick adds; its thinking is paid for after.
+    const kickCost = (before * vy * 0.05 + 0.5 * before * 0.05 ** 2) / PHYSICS.pushEnergy
     expect(total(p.free)).toBeCloseTo(before - kickCost - trace[0].burned, 9)
     expect(sim.world.momentumError()).toBeLessThan(1e-9)
   })

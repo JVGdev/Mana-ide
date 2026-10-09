@@ -40,7 +40,7 @@ describe('the bench', () => {
   })
 
   it('an order that only feels holds a thrown ball together all the way', () => {
-    const r = runVariant(variant('ThrowFeel'), 'adept', 2, 2)
+    const r = runVariant(variant('ThrowFeel'), 'master', 2, 2)
     expect(r.arrived).toBe(true)
     expect(r.together).toBeGreaterThan(0.9)
   })

@@ -7,7 +7,7 @@ import { PHYSICS } from './physics.ts'
 import { add, take, total, zero, type Parts } from './parts.ts'
 import { Caster, type CasterStats, type ManaRegister } from './caster.ts'
 import { Weave } from './weave.ts'
-import { World, type Particle, type Vec } from './world.ts'
+import { EARTH, World, massOf, type Particle, type Vec } from './world.ts'
 import { airFlow, stepFluid } from './fluid.ts'
 
 export class Fault extends Error {
@@ -292,6 +292,7 @@ export class Sim {
     airFlow(w)
     for (const weave of [...this.weaves.values()]) this.keep(weave)
     this.settleLoose()
+    this.unbind()
     w.moveBodies()
     this.measureCarried()
     w.settleMatter(this.carried)
@@ -516,7 +517,8 @@ export class Sim {
         const parts = take(r.parts, Math.max(0, n(1)))
         const pos = this.inside(vec(2))
         const vel = vec(3)
-        const sent = 1 / (1 + Math.hypot(...vel) / PHYSICS.pushYield)
+        // Each M sent at speed v carries ½v² of kinetic energy, paid for at pushEnergy a M.
+        const sent = 1 / (1 + (0.5 * (vel[0] ** 2 + vel[1] ** 2 + vel[2] ** 2)) / PHYSICS.pushEnergy)
         const spent = take(parts, total(parts) * (1 - sent))
         this.world.addAir(this.world.clampedCellOf(pos), spent)
         const t = total(parts)
@@ -590,6 +592,7 @@ export class Sim {
           wv.manifestedAt = this.tick
           const c = wv.centre()
           if (c) wv.origin = c.pos
+          this.bind(wv)
           this.log({ kind: 'manifest', caster: caster.name, weave: wv.id })
         }
         return next()
@@ -714,8 +717,9 @@ export class Sim {
   }
 
   /**
-   * Pour mana onto a particle to change its velocity by `dv`, no more than it has left this tick. `pay` gives what it can
-   * of what's asked. What's poured goes loose into the air where it was poured. Returns the M spent.
+   * Pour mana onto a particle to change its velocity by `dv`, no more than it has left this tick. It costs the kinetic
+   * energy it adds (PHYSICS.pushEnergy); slowing it costs nothing. `pay` gives what it can of what's asked. What's
+   * poured goes loose into the air where it was poured. Returns the M spent.
    */
   private push(p: Particle, dv: Vec, pay: (want: number) => Parts, from: 'push' | 'kick'): number {
     let size = Math.hypot(...dv)
@@ -724,17 +728,29 @@ export class Sim {
       dv = dv.map((v) => (v * p.dvLeft) / size) as Vec
       size = p.dvLeft
     }
-    const want = (total(p.free) * size) / PHYSICS.pushYield
-    if (want <= 0) return 0
-    const paid = pay(want)
-    const got = total(paid)
-    if (got <= 0) return 0
-    const c = this.world.clampedCellOf(p.pos)
-    // Mana a particle pays with itself leaves carrying its share of the particle's momentum.
-    this.world.addAir(c, paid, from === 'kick' ? (p.vel.map((v) => v * got) as Vec) : [0, 0, 0])
-    this.spent[from] += got
-    const k = Math.min(1, got / want)
-    const m = total(p.free)
+    // The energy a share k of the push adds: ½M(|v + k·dv|² − |v|²) = k·M(v·dv) + k²·½M|dv|².
+    const M = massOf(p)
+    const lin = M * (p.vel[0] * dv[0] + p.vel[1] * dv[1] + p.vel[2] * dv[2])
+    const quad = 0.5 * M * size * size
+    const want = Math.max(0, lin + quad) / PHYSICS.pushEnergy
+    let k = 1
+    let got = 0
+    if (want > 0) {
+      const paid = pay(want)
+      got = total(paid)
+      if (got <= 0) return 0
+      const c = this.world.clampedCellOf(p.pos)
+      // Mana a particle pays with itself leaves carrying its share of the particle's momentum.
+      this.world.addAir(c, paid, from === 'kick' ? (p.vel.map((v) => v * got) as Vec) : [0, 0, 0])
+      this.spent[from] += got
+      if (got < want) {
+        // As much of the push as what was paid buys: solve k·lin + k²·quad = energy.
+        const e = got * PHYSICS.pushEnergy
+        k = (-lin + Math.sqrt(lin * lin + 4 * quad * e)) / (2 * quad)
+        k = Math.max(0, Math.min(1, k))
+      }
+    }
+    const m = massOf(p)
     for (let i = 0; i < 3; i++) {
       p.vel[i] += dv[i] * k
       this.world.impulse[from][i] += m * dv[i] * k
@@ -801,6 +817,7 @@ export class Sim {
       if (!list) byCell.set(i, (list = []))
       list.push(p)
     }
+    const before = new Map(weave.particles.map((p) => [p, massOf(p)]))
     for (const [i, ps] of byCell)
       for (let k = 0; k < 4; k++) {
         let free = 0
@@ -821,6 +838,13 @@ export class Sim {
           for (const p of ps) p.carried[k] -= (out * p.carried[k]) / have
         }
       }
+    // Matter taken up was at rest: the particle carries it at its own speed now, and slows for it. Matter let go of
+    // stops dead in the ground, and its momentum with it.
+    for (const [p, m] of before) {
+      const now = massOf(p)
+      if (now > m && now > 0) for (let k = 0; k < 3; k++) p.vel[k] *= m / now
+      else if (now < m) this.massChanged(p, m)
+    }
   }
 
   /** Every particle carrying an order runs it. */
@@ -927,18 +951,19 @@ export class Sim {
           const amount = source(f, instr, 0)
           const i = w.cellOf(p.pos)
           if (trace) trace.cnds += amount
+          const before = massOf(p)
           if (amount > 0 && i >= 0) {
             const room = Math.max(0, PHYSICS.cellMatter - total(w.matter[i]) - this.carried[i])
             const made = take(p.free, Math.min(amount, room))
             add(p.carried, made)
             this.carried[i] += total(made)
-            for (let k = 0; k < 3; k++) w.impulse.matter[k] -= total(made) * p.vel[k]
           } else if (amount < 0) {
             const freed = take(p.carried, -amount)
             add(p.free, freed)
             if (i >= 0) this.carried[i] -= total(freed)
-            for (let k = 0; k < 3; k++) w.impulse.matter[k] += total(freed) * p.vel[k]
           }
+          // Matter doesn't weigh what the mana it was made of did: the particle's mass changes, at its own speed.
+          this.massChanged(p, before)
           next()
           continue
         }
@@ -1051,8 +1076,49 @@ export class Sim {
     this.log({ kind: 'dissolve', caster: weave.maker.name, weave: weave.id, detail: why })
   }
 
+  /** A particle lets go of the matter it holds. It stops dead where it is: its momentum goes into the ground. */
   private dropMatter(p: Particle) {
+    const before = massOf(p)
     add(this.world.matter[this.world.clampedCellOf(p.pos)], take(p.carried, Infinity))
+    this.massChanged(p, before)
+  }
+
+  /** A particle's mass has changed with nothing pushing it: what it gained or lost, it gained or lost at its own speed. */
+  private massChanged(p: Particle, before: number) {
+    const d = massOf(p) - before
+    for (let k = 0; k < 3; k++) this.world.impulse.matter[k] += d * p.vel[k]
+  }
+
+  /**
+   * A weave set loose with earth in it is rock: each particle holding earth is bound to its neighbours that do
+   * (PHYSICS.bondRange). The bonds hold it in the shape it was laid out in.
+   */
+  private bind(weave: Weave) {
+    const rock = weave.particles.filter((p) => p.carried[EARTH] > 0.5 * total(p.carried) && p.carried[EARTH] > PHYSICS.epsilon)
+    const r = PHYSICS.bondRange
+    const grid = new Map<string, Particle[]>()
+    const at = (p: Particle) => p.pos.map((v) => Math.floor(v / r))
+    for (const p of rock) {
+      const k = at(p).join()
+      grid.set(k, [...(grid.get(k) ?? []), p])
+    }
+    for (const a of rock) {
+      const [x, y, z] = at(a)
+      for (let dx = -1; dx <= 1; dx++)
+        for (let dy = -1; dy <= 1; dy++)
+          for (let dz = -1; dz <= 1; dz++)
+            for (const b of grid.get([x + dx, y + dy, z + dz].join()) ?? []) {
+              if (b.id <= a.id) continue
+              const d = Math.hypot(a.pos[0] - b.pos[0], a.pos[1] - b.pos[1], a.pos[2] - b.pos[2])
+              if (d < r && d > 1e-6) this.world.bonds.push({ a, b, rest: d })
+            }
+    }
+  }
+
+  /** Bonds hold only particles of the same weave that are still in the world. */
+  private unbind() {
+    const alive = new Set(this.world.particles)
+    this.world.bonds = this.world.bonds.filter((b) => b.a.weave !== 0 && b.a.weave === b.b.weave && alive.has(b.a) && alive.has(b.b))
   }
 }
 

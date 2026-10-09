@@ -42,11 +42,14 @@ The examples throughout are the four spells of Ikozu: **Stone Wall**, **Fireball
 | D19 | **The physics is as real as we can make it.** Spells get better by using the shortcuts reality gives, so the more real the world, the better the spells that can be written for it (§11). |
 | D20 | **Mana is chemistry, Energy is physics.** Mana is what things are. Energy is how things happen: force, motion, electricity. Each is conserved on its own, and mana moves Energy only indirectly. Fire mana is the substance of heat; the motion that heat is, is Energy. |
 | D21 | **Free mana is a fluid of particles.** It has pressure, and spreads unless something holds it. Particles that share a velocity travel together. |
-| D22 | **Pushing mana costs mana.** It is poured onto a particle, and the poured mana goes loose where it was poured. A push changes a particle's speed only so much per tick: a caster speeds mana up by keeping the push going. |
+| D22 | **Pushing mana costs mana.** It is poured onto a particle, and the poured mana goes loose where it was poured. A push changes a particle's speed only so much per tick: a caster speeds mana up by keeping the push going. *(How much it costs: D29.)* |
 | D23 | **A construct is held by pushing it.** The caster keeps its particles in by pushing them back, as many and as often as their mind allows. A particle that gets out of the caster's field leaves the weave. Locking a shape is a loop in a library, not an instruction. |
 | D24 | **Orders are reactions ingrained in mana.** Each particle carries its order. An order can spend its own particle's mana to push it. |
 | D25 | **Orders don't spread to other mana**, except through a second flaw (§11, *The second flaw*). |
 | D26 | **A weave in hand is held still.** Its mana counts toward the body's load because the body holds it: it stays where it was laid until `MANI` lets it go. |
+| D28 | **Things weigh.** A tick is 1/30 s, and things fall at 9.8 m/s². Matter held by mana weighs what that much matter weighs (a full cell of earth, 25 kg), and the mana holding it has to carry it. What rests on the ground is held up by the ground. |
+| D29 | **A push costs the kinetic energy it adds** (D22, made exact): mana poured onto a particle turns into its motion. Speeding up costs more the faster it's already going. Slowing down costs nothing: what's taken out of the motion is heat. Holding something up against its weight costs nothing; lifting it costs its weight times the height. |
+| D30 | **Earth held by mana is rock.** When a weave holding earth is let go of, its particles are bound to their neighbours, and keep their shape. Rock cracks where it's bent too far or made to hold too much, and comes apart as its mana lets go of the earth. |
 | D27 | **Knowing costs.** An order is ingrained one particle at a time, at a beat for every instruction it could run, and every beat it thinks burns its particle's mana. A short order is cheap to ingrain and cheap to keep; an order that senses more costs more. |
 
 ---
@@ -125,9 +128,10 @@ These rules belong to the world, not to the machine:
 1. **Pure free mana binds matter of its own part** in the cell it's in (*influence*): a weave's earth mana takes hold of the
    earth there, water mana of the water. How much it can hold depends on how much mana is there. Too little, and some matter
    is left behind.
-2. **Bound matter moves with its mana**, and is held up by it: to the mana that holds it, it weighs nothing. Earth mana that
-   moves up carries its earth with it, and the ground it left is empty. Matter that is no longer bound follows its nature
-   again: lifted earth falls.
+2. **Bound matter moves with its mana, and weighs.** It adds its mass to the particle holding it (`matterMass`: a full cell
+   of earth is 25 kg, of water 15.6 kg), so the particle is heavier to push and falls with it. Earth mana that moves up
+   carries its earth with it, paying to lift it, and the ground it left is empty. Matter that is no longer bound follows its
+   nature again: lifted earth falls.
 3. **Mana can condense** (*make*): an order can turn some of its particle's free mana into matter of the same parts (`CNDS`).
    Condensed matter is real. It stays when the weave is gone. Nothing natural frees it again: burning only changes what
    matter is mixed with fire, and a flame thins out into warmth that is still matter. Freeing it is possible, but only through a
@@ -136,8 +140,13 @@ These rules belong to the world, not to the machine:
    dragged by it (**wind**), and strikes the bodies it runs into. Loose mana that has slowed to the speed of the air around it
    settles into it.
 5. **Matter blocks matter.** Mana holding matter can't move into a cell without room for it, unless that room is taken by
-   its own weave's matter. Free mana stops against solid matter. Being against matter, or a body, is a **touch**.
-6. **Holding costs.** A weave doesn't leak by itself any more. What holds it together is its caster's pushes or its own
+   its own weave's matter, and coming down it lands on any solid matter, however loose. Free mana stops against solid
+   matter. What rests on the ground is held up by it, and its friction keeps it from sliding. Being against matter, or a
+   body, is a **touch**.
+6. **Earth held by mana is rock** (D30). A weave's earth particles are bound to their neighbours when it's let go of. A
+   bond keeps its length, and breaks if it's bent too far, made to hold more than it can, or either particle stops holding
+   earth. Water held by mana is water: it holds together, and can't be squeezed past full.
+7. **Holding costs.** A weave doesn't leak by itself any more. What holds it together is its caster's pushes or its own
    order, and an order burns its mana as it thinks (D27). Less mana binds less matter, so a Stone Wall slowly crumbles as its
    earth falls free.
 
@@ -341,7 +350,7 @@ keyboard, sliders).
 |---|---|---|---|
 | `40` | `PROB d, n:3, s` | PROBE | How much matter of part `s` is in the cell at `n:3`. |
 | `41` | `AIRM d, n:3, s` | PROBE | How much air mana of part `s` floats at `n:3`. |
-| `42` | `SEND m, n, n:3, n:3` | SEND | Let `n` M of `m` out at a position, with a velocity, loose. The speed is paid for from what's sent: a share goes into the air there. |
+| `42` | `SEND m, n, n:3, n:3` | SEND | Let `n` M of `m` out at a position, with a velocity, loose. The speed is paid for from what's sent, by the kinetic energy it carries: a share goes into the air there. |
 | `43` | `WPOS n:3, w` | | Where the weave's centre is, in the world. |
 | `44` | `WVEL n:3, w` | | How the weave's mana moves on average, in its frame. |
 
@@ -360,7 +369,7 @@ keyboard, sliders).
 | `59` | `PCNT d, w` | | How many particles the weave holds. |
 | `5A` | `PPOS n:3, w, s` | PROBE | Where particle `s` is, from the weave's origin, in its frame. |
 | `5B` | `PVEL n:3, w, s` | PROBE | How particle `s` moves, in the weave's frame. |
-| `5C` | `SHOV m, w, n, n:3` | PUSH | Push particle `n`: change its velocity by `n:3`, at most `pushRate` a tick. It costs `mass × speed ÷ pushYield` M from `m`, poured into the air there. Only within reach. |
+| `5C` | `SHOV m, w, n, n:3` | PUSH | Push particle `n`: change its velocity by `n:3`, at most `pushRate` a tick. It costs the kinetic energy it adds, at `pushEnergy` for each M, from `m`, poured into the air there (D29). Slowing a particle costs nothing. Only within reach. |
 | `5D` | `INGR w, s` | ORDER | Ingrain the weave's order into particle `s`. 4 beats, and one more for every instruction the order could run. Only within reach. |
 | `5E` | `HOLD w, s` | | The weave's field: `s` metres around its centre. |
 
@@ -368,7 +377,7 @@ keyboard, sliders).
 
 | Op | Mnemonic | Does |
 |---|---|---|
-| `60` | `KICK n:3` | Push this particle: change its velocity by `n:3`, in the weave's frame, paid from its own mana (never more than half of it at once). 4 beats. |
+| `60` | `KICK n:3` | Push this particle: change its velocity by `n:3`, in the weave's frame, paid from its own mana (never more than half of it at once), by the kinetic energy it adds (D29). 4 beats. |
 | `61` | `TUCH d` | `d = 1` if this particle is against matter, or a body, that isn't its maker's. |
 | `62` | `GETW d, #k` / `PUTW #k, s` (`63`) | Read and write this weave's registers. |
 | `64` | `DISS` | The whole weave comes apart. Its mana goes loose where it is, and forgets its orders. |
@@ -773,23 +782,25 @@ wall:   IN    n5, CELL
         DIV   n7, n6              ; mana per cell
         MOV   n10, n1
         SUB   n10, #1
-        DIV   n10, #2             ; (L − 1) / 2, to centre the length
+        DIV   n10, #2
+        FLOOR n10                 ; ⌊(L − 1) / 2⌋, to centre the length on whole cells
         MOV   n11, n2
         SUB   n11, #1
-        DIV   n11, #2             ; (T − 1) / 2, to centre the thickness
+        DIV   n11, #2
+        FLOOR n11                 ; ⌊(T − 1) / 2⌋, to centre the thickness
         LDI   n9, #0              ; d: 0 … H−1, down into the ground
 .d:     CIRC  m1                  ; keep holding it, layer by layer
         LDI   n8, #0              ; t: across
 .t:     LDI   n3, #0              ; a: along
 .a:     MOV   n13, n3
         SUB   n13, n10
-        MUL   n13, n5             ; x = (a − (L−1)/2) · cell
+        MUL   n13, n5             ; x = (a − ⌊(L−1)/2⌋) · cell
         MOV   n14, n9
         NEG   n14
         MUL   n14, n5             ; y = −d · cell
         MOV   n15, n8
         SUB   n15, n11
-        MUL   n15, n5             ; z = (t − (T−1)/2) · cell
+        MUL   n15, n5             ; z = (t − ⌊(T−1)/2⌋) · cell
         EMIT  m1, n7, n4, n13:15
         ADD   n3, #1
         CMP   n3, n1
@@ -801,23 +812,41 @@ wall:   IN    n5, CELL
         CMP   n9, n0
         JLT   .d
         MUL   n0, n5              ; H, back in metres
+        ADD   n0, #0.05           ; and a little more, to clear the ground
         WSET  n4, #0, n0          ; how far to rise, for the order
+        MUL   n2, n5
+        WSET  n4, #3, n2          ; how far to step back: its thickness, onto the ground in front of its trench
         ORDR  n4, rise
         RET
 
-; rise (an order): the weave climbs until its centre has risen w0 metres, then stops. Each particle pushes itself toward
-; the speed that gets it there (at most 0.1 m a tick, slowing as it nears), paying with itself: climbing slowly costs
-; less. The first tick, it notes where the centre began, in w1. Once it's there (w2 = 1), each particle only stops
-; itself if it drifts, which costs little.
-rise:   CMP   n4, #0
+; rise (an order): the wall climbs out of the ground, steps toward its maker, and comes down on solid ground in front of
+; the trench it came from, where it stands on its own. Phases, in w2: 0 climbing, 1 stepping, 2 standing.
+;   Climbing: until its centre has risen w0 metres (where it began, noted the first tick in w1). Each particle pushes
+;   itself toward the speed that gets it there, at most 0.1 m a tick, slowing as it nears, and a little faster than
+;   that, by half of what it falls in a tick (9.8 m/s² is 0.011 m/tick²), so that it holds itself up as it goes.
+;   Stepping: until its centre is w3 metres nearer its maker than it began (noted in w4), at most 0.05 m a tick, holding
+;   itself up as it goes.
+;   Standing: it lets go of itself and drops the last few centimetres onto the ground, which holds it up from then on.
+;   Its rock holds its shape. Its order thinks three beats a tick, which is all it costs to keep.
+rise:   GETW  n5, #2
+        CMP   n5, #2
+        JEQ   .done               ; standing: nothing to do
+        CMP   n4, #0
         JNE   .go
         IN    n5:7, ORIGIN
-        PUTW  #1, n6              ; where it began
+        PUTW  #1, n6              ; how high it began
+        IN    n8:10, MAKER
+        SUB   n5, n8
+        SUB   n7, n10
+        MUL   n5, n5
+        MUL   n7, n7
+        ADD   n5, n7
+        SQRT  n5
+        PUTW  #4, n5              ; how far from its maker it began
         RET
 .go:    IN    n8:10, VEL
-        GETW  n5, #2
-        CMP   n5, #0
-        JNE   .stand
+        CMP   n5, #1
+        JEQ   .step
         IN    n5:7, ORIGIN
         GETW  n7, #1
         SUB   n6, n7              ; risen so far
@@ -827,30 +856,52 @@ rise:   CMP   n4, #0
         MIN   n7, #0.1
         MAX   n7, #0              ; the speed it wants: up
         CMP   n7, #0.005
-        JGT   .push
-        PUTW  #2, #1              ; there: from now on, it stands
-.push:  LDI   n11, #0
+        JGT   .up
+        PUTW  #2, #1              ; high enough: step
+.up:    LDI   n11, #0
         SUB   n11, n8
         MOV   n12, n7
+        ADD   n12, #0.0055        ; and half of what it will fall this tick
         SUB   n12, n9
         LDI   n13, #0
         SUB   n13, n10
         KICK  n11:13
         RET
-.stand: MOV   n5, n9
-        ABS   n5
-        CMP   n5, #0.002
-        JLT   .done               ; still: nothing to do
-        LDI   n7, #0
-        JMP   .push
+.step:  IN    n5:7, ORIGIN
+        IN    n11:13, MAKER
+        SUB   n5, n11
+        SUB   n7, n13
+        MUL   n5, n5
+        MUL   n7, n7
+        ADD   n5, n7
+        SQRT  n5                  ; how far from its maker now
+        GETW  n6, #4
+        SUB   n6, n5              ; stepped so far
+        GETW  n7, #3
+        SUB   n7, n6              ; still to step
+        MUL   n7, #0.3
+        MIN   n7, #0.05           ; the speed it wants: back, toward its maker
+        CMP   n7, #0.003
+        JGT   .move
+        PUTW  #2, #2              ; there: let go and stand
+        RET
+.move:  LDI   n11, #0
+        SUB   n11, n8
+        LDI   n12, #0.0055        ; holding itself up
+        SUB   n12, n9
+        MOV   n13, n7
+        NEG   n13
+        SUB   n13, n10
+        KICK  n11:13
 .done:  RET
 ```
 
 The wall isn't made of the spell's mana. It's the ground, lifted: the earth mana *influences* the earth around each particle,
 binding it and carrying it up, and the ground it came from is left as a trench. A caster with poor earth affinity binds less
-earth, and the wall rises full of holes. Climbing costs the earth mana some of itself, so it lets go of some earth on the way
-up; that earth falls to the bottom of the trench. Standing, the order only checks that it's still, and that costs little, but
-not nothing: the wall slowly crumbles as its order burns its mana away.
+earth, and the wall rises full of holes. Climbing costs the earth mana some of itself, lifting 375 kg of earth 2 m (about
+10 M) and thinking about it (more), so it lets go of some earth on the way up; that earth falls to the bottom of the trench.
+Once it stands on the ground, its order thinks three beats a tick, which costs little, but not nothing: the wall slowly
+crumbles as its order burns its mana away, and its rock comes apart as its mana lets go of the earth.
 
 Size matters in 3D. The 2D wall is 16 cells of earth; the 3D one, 4 m long, is 256. Binding a full cell takes 5 M of earth
 mana, so the 3D wall needs about 8000 M gathered: far past an adept's capacity of 600. It's a master's spell.
@@ -1044,12 +1095,17 @@ Metadata StoneWall(Metadata data) {
 The whole wall has to be in reach to be ingrained: its foot is 2 m down. Every particle is ingrained before any of it moves,
 or the top would rise and tear away from the rest.
 
+A wall that rose out of its trench and stayed there would have nothing under it: it would have to hold itself up forever,
+thinking every tick, and burning its mana to do it. So it rises, steps back toward its caster by its own thickness, and
+comes down on the solid ground in front of its trench. Its rock holds its shape, the ground holds it up, and its order goes
+quiet. The trench is a ditch in front of it.
+
 ### Fireball
 
 Fire poured into a ball, held together by its own order, thrown by pushing, and burst on touch.
 
 ```
-Fireball: fire poured into a ball, held together by its own order, thrown by pushing, and burst on touch.
+; Fireball: fire poured into a ball, held together by its own order, thrown by pushing, and burst on touch.
         .use  Elements, Basics, Shapes, Reactions, Transformations
 
 Fireball:
@@ -1136,7 +1192,7 @@ A sudden push of wind, for as long as the caster keeps it up. It makes no weave:
 it moves through and strikes whoever is in its way.
 
 ```
-Gust: a sudden push of wind, for as long as the caster keeps it up.
+; Gust: a sudden push of wind, for as long as the caster keeps it up.
         .use  Elements, Basics
 
 Gust:
@@ -1429,18 +1485,31 @@ Each part has its own numbers, in `physics.ts`, by part number. The machine stil
 | 2 (air) | high | light | no | fills what's empty. The easiest to pour. |
 | 3 (earth) | very low | heavy | strongly | barely spreads. It has to be laid out by hand. |
 
-*Built so far:* each part's pressure, thickness and rising. Earth has no pressure at all and is very thick, which stands in
-for holding together until earth and water get real cohesion. Weight acts on nothing yet: bound matter is held up by its
-mana (§3), and free mana weighs nothing.
+*Built:* each part's pressure, thickness, weight (`fall`: fire rises a little, air floats, water and earth fall) and how it
+holds together (`cohesion`, a pull between neighbours, strongest at half the smoothing length). Matter held by mana adds its
+weight and its mass (`matterMass`), can't be packed past full (`matterStiffness`), and pulls on its neighbours as water
+does (`matterCohesion`). Earth held by a weave becomes rock when the weave is let go of (D30): each particle is bound to
+its neighbours within `bondRange`, and the bonds hold their length, a dozen passes a step, so that the ground's support
+reaches up through a wall. The ground holds up what rests on it, with friction.
 
 An adept's fireball is 72 particles of a quarter of an M each (`mote`).
 
 
 ### Pushing
 
-A push pours mana onto a particle and changes its velocity. The more mana poured, the bigger the change, up to a limit per
-tick (`pushRate`). The poured mana goes **loose where it was poured**. Nothing is lost, but a construct pushed for a long
-time sits in a haze of spent mana.
+A push pours mana onto a particle and changes its velocity, up to a limit per tick (`pushRate`). The poured mana turns into
+the particle's motion: a push costs the **kinetic energy it adds**, measured against the ground, at `pushEnergy` for each M
+(D29). One M is 900 J. So:
+
+- Speeding something up from rest costs ½mv². Speeding it up further costs more for the same change, the faster it
+  already goes: the same 0.05 m/tick costs a 0.3 m/tick fireball thirteen times what it costs one at rest.
+- Slowing something down costs nothing. What's taken out of its motion becomes heat.
+- Holding something up against its weight costs nothing: each tick the push only takes back the speed it gained falling.
+  Lifting it costs its weight times the height: lifting a 2 m Stone Wall of 375 kg of earth costs about 10 M.
+- Pushing sideways across a motion costs only what the sideways speed adds.
+
+The poured mana goes **loose where it was poured**. Nothing is lost, but a construct pushed for a long time sits in a haze
+of spent mana.
 
 So a fireball isn't thrown in one instruction. The caster pushes it along the aim tick after tick, holding it together
 while it speeds up. A heavier ball takes longer to get going.

@@ -41,14 +41,32 @@ export type Particle = {
   rho: number
   grad: Vec
   nvel: Vec
+  /** How dense the matter held around it is: its mass per m³. */
+  rhoM: number
+  /** The force on it this step. */
   acc: Vec
+  /** Its mass, as of this step (massOf). */
+  mass: number
+}
+
+/** Two particles of rock held together (PHYSICS.bondRange): a spring `rest` metres long. */
+export type Bond = { a: Particle; b: Particle; rest: number }
+
+/**
+ * A particle's mass: its free mana, and the matter it holds (PHYSICS.matterMass). Pushing it, the air dragging it,
+ * and its weight all go by this.
+ */
+export function massOf(p: Particle): number {
+  const m = PHYSICS.matterMass
+  return p.free[0] + p.free[1] + p.free[2] + p.free[3] + p.carried[0] * m[0] + p.carried[1] * m[1] + p.carried[2] * m[2] + p.carried[3] * m[3]
 }
 
 /**
- * Momentum given to the world from outside it: pushes, orders' kicks, rising, the ground and walls, what gathering takes
- * out of the air, and what mana takes with it when it condenses (matter held by mana has no momentum of its own).
+ * Momentum given to the world from outside it: pushes, orders' kicks, weight, the ground and walls, what gathering takes
+ * out of the air, and matter changing its mass: condensing (1 M of matter weighs less than 1 M of free mana), and matter
+ * let go of, which stops dead in the ground.
  */
-export type Impulses = Record<'push' | 'kick' | 'rise' | 'walls' | 'gather' | 'matter', Vec>
+export type Impulses = Record<'push' | 'kick' | 'gravity' | 'walls' | 'gather' | 'matter', Vec>
 
 export const FIRE = 0
 export const WATER = 1
@@ -67,7 +85,9 @@ export class World {
   particles: Particle[] = []
   bodies: Body[] = []
   tick = 0
-  impulse: Impulses = { push: [0, 0, 0], kick: [0, 0, 0], rise: [0, 0, 0], walls: [0, 0, 0], gather: [0, 0, 0], matter: [0, 0, 0] }
+  impulse: Impulses = { push: [0, 0, 0], kick: [0, 0, 0], gravity: [0, 0, 0], walls: [0, 0, 0], gather: [0, 0, 0], matter: [0, 0, 0] }
+  /** Rock: pairs of particles bound together. */
+  bonds: Bond[] = []
   private nextBody = 1
   private nextParticle = 1
 
@@ -199,7 +219,9 @@ export class World {
         rho: 0,
         grad: [0, 0, 0],
         nvel: [0, 0, 0],
+        rhoM: 0,
         acc: [0, 0, 0],
+        mass: 0,
       }
       this.particles.push(p)
       out.push(p)
@@ -354,7 +376,7 @@ export class World {
   momentumError(): number {
     const m: Vec = [0, 0, 0]
     for (const p of this.particles) {
-      const mass = total(p.free)
+      const mass = massOf(p)
       for (let k = 0; k < 3; k++) m[k] += mass * p.vel[k]
     }
     for (let i = 0; i < this.size; i++) {
