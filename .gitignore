@@ -1,3 +1,5 @@
 node_modules/
 *.mbc
 tester/dist/
+engine/target
+engine/mana-wasm/pkg

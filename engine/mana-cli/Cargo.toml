@@ -1,0 +1,8 @@
+[package]
+name = "mana-cli"
+description = "mas, mvm and bench: the assembler, the machine and the bench, in the terminal"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+mana = { path = "../mana" }

@@ -1,0 +1,7 @@
+[package]
+name = "mana"
+description = "Ikozu's magic as a machine you can program: the machine, the world and the assembler"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]

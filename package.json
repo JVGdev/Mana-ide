@@ -10,6 +10,8 @@
   },
   "scripts": {
     "test": "vitest run",
+    "engine:test": "cargo test --manifest-path engine/Cargo.toml",
+    "engine:wasm": "wasm-pack build engine/mana-wasm --target web --release",
     "check": "tsc --noEmit && svelte-check --tsconfig ./tsconfig.json --workspace tester --fail-on-warnings",
     "tester": "vite --config tester/vite.config.ts",
     "build:tester": "vite build --config tester/vite.config.ts",

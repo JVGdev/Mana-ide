@@ -1,0 +1,18 @@
+# The engine (SPEC D41): the machine, the world, the assembler and the tools, in Rust.
+[workspace]
+resolver = "3"
+members = ["mana", "mana-cli", "mana-wasm"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+
+[profile.release]
+debug = 1
+
+# Tests run the world for hundreds of ticks: they need optimised code to finish in time.
+[profile.test]
+opt-level = 3
+
+[profile.dev]
+opt-level = 1
