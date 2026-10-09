@@ -11,8 +11,9 @@
     const sim = session.sim
     if (!sim) return []
     return [...sim.weaves.values()].map((w) => {
-      const free = sum(w.cells.map((c) => c.free))
-      const carried = sum(w.cells.map((c) => c.carried))
+      const free = sum(w.particles.map((p) => p.free))
+      const carried = sum(w.particles.map((p) => p.carried))
+      const ingrained = w.particles.filter((p) => p.order).length
       let order = ''
       if (w.order !== null) for (const [name, addr] of w.program.labels) if (addr === w.order) order = name
       return {
@@ -21,7 +22,9 @@
         inHand: w.inHand,
         age: w.inHand ? 0 : sim.tick - w.manifestedAt,
         origin: w.origin.map((v) => num(v, 2)).join(', '),
-        cells: w.cells.length,
+        particles: w.particles.length,
+        ingrained,
+        field: w.field,
         free,
         carried,
         locks: Object.entries(w.locks).filter(([, v]) => v).map(([k]) => k),
@@ -44,7 +47,8 @@
         {#if w.order}<span class="muted">order <span class="mono">{w.order}</span></span>{/if}
       </div>
       <div class="facts">
-        <span>{w.cells} cells</span>
+        <span>{w.particles} particles, {w.ingrained} ingrained</span>
+        <span>field {num(w.field, 2)} m</span>
         <span>at <span class="mono">{w.origin}</span></span>
       </div>
       <div class="line"><span>mana {num(total(w.free))}</span><Parts parts={w.free} scale={total(w.free)} /></div>

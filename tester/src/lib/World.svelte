@@ -21,24 +21,32 @@
   const world = $derived(session.sim?.world)
   const px = $derived(world ? Math.max(4, Math.floor(width / world.w)) : 10)
 
-  /** The weave cells in each world cell of the slice: their free mana and the matter they hold. */
+  /** What weaves hold in each world cell of the slice: their free mana and the matter they carry. */
   function weaveCells(z: number) {
     const sim = session.sim!
     const w = sim.world
-    const out = new Map<number, { free: Parts; carried: Parts; weaves: Set<number> }>()
-    for (const wv of sim.weaves.values())
-      for (const c of wv.cells) {
-        const i = w.cellOf(wv.worldPos(c))
-        if (i < 0 || w.coords(i)[2] !== z) continue
-        const e = out.get(i) ?? { free: [0, 0, 0, 0], carried: [0, 0, 0, 0], weaves: new Set() }
-        for (let k = 0; k < 4; k++) {
-          e.free[k] += c.free[k]
-          e.carried[k] += c.carried[k]
-        }
-        e.weaves.add(wv.id)
-        out.set(i, e)
+    const out = new Map<number, { free: Parts; carried: Parts; weaves: Set<number>; particles: number }>()
+    for (const p of w.particles) {
+      if (!p.weave) continue
+      const i = w.cellOf(p.pos)
+      if (i < 0 || w.coords(i)[2] !== z) continue
+      const e = out.get(i) ?? { free: [0, 0, 0, 0], carried: [0, 0, 0, 0], weaves: new Set(), particles: 0 }
+      for (let k = 0; k < 4; k++) {
+        e.free[k] += p.free[k]
+        e.carried[k] += p.carried[k]
       }
+      e.weaves.add(p.weave)
+      e.particles++
+      out.set(i, e)
+    }
     return out
+  }
+
+  /** The particle whose order is being looked at. */
+  function selected() {
+    const sim = session.sim
+    const t = sim?.traces.get(session.orderSel.weave)?.[session.orderSel.particle]
+    return t ? sim!.weaves.get(t.weave)?.particles[t.particle] : undefined
   }
 
   function draw() {
@@ -80,9 +88,8 @@
         g.fillRect(X(x), Y(y), px, px)
       }
 
-    // Weaves: the matter they hold, then their mana, brightest where there's most.
+    // Weaves: the matter they hold, cell by cell.
     const cells = weaveCells(z)
-    const most = Math.max(1e-9, ...[...cells.values()].map((c) => total(c.free)))
     for (const [i, c] of cells) {
       const [x, y] = w.coords(i)
       const held = total(c.carried)
@@ -90,25 +97,41 @@
         g.fillStyle = rgba(MATTER[dominant(c.carried)], 0.35 + 0.65 * Math.min(1, held / PHYSICS.cellMatter))
         g.fillRect(X(x), Y(y), px, px)
       }
-      const free = total(c.free)
-      const col = MANA[dominant(c.free)]
-      g.fillStyle = rgba(col, 0.2 + 0.6 * Math.sqrt(free / most))
-      g.fillRect(X(x) + 1, Y(y) + 1, px - 2, px - 2)
-      g.strokeStyle = rgba(col, 0.9)
-      g.lineWidth = 1
-      g.strokeRect(X(x) + 0.5, Y(y) + 0.5, px - 1, px - 1)
     }
 
-    // Loose mana.
-    for (const p of w.loose) {
-      const i = w.clampedCellOf(p.pos)
-      if (w.coords(i)[2] !== z) continue
-      const r = Math.max(1.5, Math.min(px / 2, Math.sqrt(total(p.parts)) * 0.8))
-      g.fillStyle = rgba(MANA[dominant(p.parts)], 0.85)
+    // Wind: the air, where it moves.
+    g.lineWidth = 1
+    for (let y = 0; y < w.h; y++)
+      for (let x = 0; x < w.w; x++) {
+        const i = w.index(x, y, z)
+        const vx = w.airVel[i * 3]
+        const vy = w.airVel[i * 3 + 1]
+        const v = Math.hypot(vx, vy)
+        if (v < 0.001) continue
+        const len = Math.min(px * 0.9, px * (0.2 + v * 20)) / v
+        const cx = X(x) + px / 2
+        const cy = Y(y) + px / 2
+        g.strokeStyle = rgba('#8db0cf', Math.min(0.8, 0.2 + v * 30))
+        g.beginPath()
+        g.moveTo(cx - (vx * len) / 2, cy + (vy * len) / 2)
+        g.lineTo(cx + (vx * len) / 2, cy - (vy * len) / 2)
+        g.stroke()
+      }
+
+    // Mana: every particle. In a weave it glows; loose, it's dim; pushed this tick, it's bright.
+    g.globalCompositeOperation = 'lighter'
+    for (const p of w.particles) {
+      if (w.d > 1 && Math.floor(p.pos[2] / w.cell) !== z) continue
+      const m = total(p.free)
+      if (m <= 0) continue
+      const r = Math.max(1.2, Math.sqrt(m / PHYSICS.mote) * px * 0.16)
+      const pushed = p.pushedAt === sim.tick - 1
+      g.fillStyle = rgba(pushed ? '#fff1d6' : MANA[dominant(p.free)], p.weave ? 0.85 : 0.4)
       g.beginPath()
-      g.arc(p.pos[0] / w.cell * px, (w.h - p.pos[1] / w.cell) * px, r, 0, Math.PI * 2)
+      g.arc((p.pos[0] / w.cell) * px, (w.h - p.pos[1] / w.cell) * px, r, 0, Math.PI * 2)
       g.fill()
     }
+    g.globalCompositeOperation = 'source-over'
 
     // Bodies.
     const caster = session.caster
@@ -125,18 +148,15 @@
       g.fillText(b.name, left, top - 4)
     }
 
-    // The cell whose order is being looked at.
+    // The particle whose order is being looked at.
     if (session.panel === 'order') {
-      const wv = sim.weaves.get(session.orderSel.weave)
-      const cell = wv?.cells[session.orderSel.cell]
-      if (wv && cell) {
-        const i = w.cellOf(wv.worldPos(cell))
-        if (i >= 0 && w.coords(i)[2] === z) {
-          const [x, y] = w.coords(i)
-          g.strokeStyle = '#8db0cf'
-          g.lineWidth = 2
-          g.strokeRect(X(x) - 2, Y(y) - 2, px + 4, px + 4)
-        }
+      const p = selected()
+      if (p && (w.d === 1 || Math.floor(p.pos[2] / w.cell) === z)) {
+        g.strokeStyle = '#8db0cf'
+        g.lineWidth = 2
+        g.beginPath()
+        g.arc((p.pos[0] / w.cell) * px, (w.h - p.pos[1] / w.cell) * px, Math.max(5, px * 0.5), 0, Math.PI * 2)
+        g.stroke()
       }
     }
 
@@ -182,15 +202,22 @@
     if (!world) return
     const c = cellAt(e)
     if (session.picking) {
+      // The nearest particle that ran its order last tick.
       const sim = session.sim!
-      const i = world.index(c.x, c.y, session.sliceZ)
-      for (const wv of sim.weaves.values()) {
-        const k = wv.cells.findIndex((cell) => world.cellOf(wv.worldPos(cell)) === i)
-        if (k >= 0) {
-          session.picking = false
-          session.selectOrder(wv.id, k)
-          return
-        }
+      let best: { weave: number; k: number; d: number } | undefined
+      for (const [id, traces] of sim.traces) {
+        const wv = sim.weaves.get(id)
+        if (!wv) continue
+        traces.forEach((t, k) => {
+          const p = wv.particles[t.particle]
+          if (!p || (world.d > 1 && Math.floor(p.pos[2] / world.cell) !== session.sliceZ)) return
+          const d = Math.hypot(p.pos[0] - c.mx, p.pos[1] - c.my)
+          if (!best || d < best.d) best = { weave: id, k, d }
+        })
+      }
+      if (best && best.d < world.cell * 2) {
+        session.picking = false
+        session.selectOrder(best.weave, best.k)
       }
       return
     }
@@ -209,7 +236,9 @@
     const bits = [`cell ${hover.x}, ${hover.y}${w.d > 1 ? `, ${session.sliceZ}` : ''}`, `air ${fmt(w.air[i])}`]
     if (total(w.matter[i]) > 0.01) bits.push(`matter ${fmt(w.matter[i])}`)
     const wc = weaveCells(session.sliceZ).get(i)
-    if (wc) bits.push(`weave ${[...wc.weaves].join(', ')}: mana ${fmt(wc.free)}, holds ${fmt(wc.carried)}`)
+    if (wc) bits.push(`weave ${[...wc.weaves].join(', ')}: ${wc.particles} particles, mana ${fmt(wc.free)}, holds ${fmt(wc.carried)}`)
+    const v = [w.airVel[i * 3], w.airVel[i * 3 + 1], w.airVel[i * 3 + 2]]
+    if (Math.hypot(...v) > 0.0005) bits.push(`wind ${v.map((x) => x.toFixed(3)).join(', ')} m/t`)
     return bits.join('  ·  ')
   })
 </script>
@@ -224,7 +253,7 @@
         hover = { x: c.x, y: c.y }
       }}
       onmouseleave={() => (hover = null)}
-      title={session.picking ? 'Click a weave cell' : 'Click to aim'}
+      title={session.picking ? 'Click a particle' : 'Click to aim'}
       class:picking={session.picking}
     ></canvas>
     <div class="under">
@@ -235,7 +264,7 @@
           <span class="num">{session.sliceZ}</span>
         </label>
       {/if}
-      <span class="info">{session.picking ? 'Click a cell of a weave to see its order.' : info || 'Hover a cell to read it. Click to aim.'}</span>
+      <span class="info">{session.picking ? 'Click a particle of a weave to see its order.' : info || 'Hover a cell to read it. Click to aim.'}</span>
     </div>
   {/if}
 </div>

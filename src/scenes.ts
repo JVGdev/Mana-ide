@@ -25,7 +25,7 @@ export function onGround(s: Scene, x: number): Vec {
 
 export function stoneWall(dims: 2 | 3 = 2): Scene {
   const s = field(dims)
-  s.caster.will = { aim: onGround(s, 6), amount: 500, force: 0, maintain: false }
+  s.caster.will = { aim: onGround(s, 4), amount: 500, force: 0, maintain: false }
   if (dims === 3) {
     // A wall 4 m long is 256 cells of earth to lift, not 16: it takes a master to hold that much.
     s.caster.will.amount = 8000

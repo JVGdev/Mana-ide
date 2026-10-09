@@ -25,7 +25,7 @@
       condition: { ...c.condition },
       regs,
       biggest: Math.max(1, ...regs.map((r) => r.amount)),
-      inHand: inHand.reduce((s, w) => s + w.cells.reduce((t, cell) => t + total(cell.free), 0), 0),
+      inHand: inHand.reduce((s, w) => s + w.mana(), 0),
       focus: c.focus,
       drain: c.drain,
       baseline: c.baseline,

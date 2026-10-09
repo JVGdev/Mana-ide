@@ -21,9 +21,9 @@ Opens at http://localhost:5175. Edit a spell or a library, Cast it, then Play, S
 of the Tick (Shift+F10). Click the gutter for a breakpoint; the second gutter shows what each line has cost in beats. Click
 the world to aim. Ctrl+S saves the file back to `spells/` or `lib/`.
 
-Weaves run their orders in every cell, every tick. The Order panel shows any one cell's last run, instruction by
-instruction, forward and back; pick the cell by number or click it in the world. A breakpoint in order code pauses on the
-cell that hit it.
+Mana is particles (SPEC §11). A weave's order runs in every particle it's ingrained into, every tick, and burns that
+particle's mana as it thinks. The Order panel shows any one particle's last run, instruction by instruction, forward and
+back; pick the particle by number or click it in the world. A breakpoint in order code pauses on the particle that hit it.
 
 ## The mana fluid sandbox
 
@@ -68,37 +68,39 @@ npx tsx src/cli/mvm.ts spells/Fireball.masm --3d --quiet --ticks 60 --profile
 ```
 
 ```
-Fireball: 14515 beats over 49 ticks
+Fireball: 10445 beats over 35 ticks
 
 routines:
-    14441   99.5%  ball
-       51    0.4%  Fireball
+     6392   61.2%  throw
+     3968   38.0%  ingrain
 …
 lines:
-     3064   21.1%  ×383    Shapes.masm:52         COS   n13
-     3064   21.1%  ×383    Shapes.masm:56         SIN   n15
+     3384   32.4%  ×72     Basics.masm:30         INGR  n4, n6
+     1440   13.8%  ×360    Basics.masm:77         .p:     PVEL  n8:10, n4, n6
+     1440   13.8%  ×360    Basics.masm:84         SHOV  m0, n4, n6, n11:13
 ```
 
 Each spell has a test world (`src/scenes.ts`). The terminal shows a slice of it:
 
 ```
-|                        HH                                      |
-|        @               HH                                      |
-|        @               HH                                      |
-|        @               HH                                      |
-|                        HH                                      |
-|########################  ######################################|
-|########################  ######################################|
+|                HH                                              |
+|        @       HH                                              |
+|        @       HH                                              |
+|        @       HH                                              |
+|                HH                                              |
+|################  ##############################################|
+|################  ##############################################|
 ```
 
-`@` is the caster, `#` is earth, `H` is earth a weave holds, `W` is water a weave holds, `*` is fire mana, and `.` is loose
-mana. The full key is in `src/render.ts`.
+`@` is the caster, `#` is earth, `H` is earth a weave holds, `W` is water a weave holds, `*` is fire mana in a weave, and
+`.` is loose mana. The full key is in `src/render.ts`.
 
 ## Where things are
 
 - `src/asm/isa.ts`: every instruction, its opcode and operands.
 - `src/vm/sim.ts`: the machine. What each instruction does, and what happens each tick.
 - `src/vm/physics.ts`: the numbers the world runs on, to be tuned.
+- `src/vm/fluid.ts`: mana as a fluid of particles: pressure, the air, what it runs into.
 - `src/profile.ts`: where a cast's beats went.
 - `lib/`: the libraries.
 - `spells/`: Stone Wall, Fireball, Gust and Water Shield.

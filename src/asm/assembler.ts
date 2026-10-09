@@ -190,7 +190,8 @@ export function assemble(source: string, file: string, libraries: LibraryResolve
         }
         case 'K': {
           const v = token.startsWith('#') ? constant(token, consts) : LOCKS[token.toUpperCase()]
-          if (v === undefined || !Number.isInteger(v) || v < 0 || v > 255) bad('a small constant, like #3 or SHAPE')
+          if (token.toUpperCase() === 'SHAPE') bad("INPUT or ORDER: a shape isn't locked any more, it's held by pushing (SPEC §11)")
+          else if (v === undefined || !Number.isInteger(v) || v < 0 || v > 255) bad('a small constant, like #3 or INPUT')
           else bytes[at] = v
           at += 1
           break

@@ -15,6 +15,7 @@
     { label: 'drain', stat: body.drain, effective: () => c()?.drain ?? 0, hint: 'M a tick the flow drains toward baseline' },
     { label: 'focus', stat: body.focus, effective: () => c()?.focus ?? 0, hint: 'ticks a CIRC holds' },
     { label: 'streams', stat: body.streams, effective: () => c()?.streams ?? 0, hint: 'mana registers it can work, m0–m7' },
+    { label: 'reach', stat: body.reach, effective: () => c()?.reach ?? 0, hint: 'metres from the body it can push mana' },
     ...PART_NAMES.map((name, k) => ({
       label: name,
       stat: body.affinity[k],

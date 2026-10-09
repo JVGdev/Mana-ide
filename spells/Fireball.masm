@@ -1,38 +1,47 @@
-; Fireball: a sphere of fire, gathered, shaped and thrown. On touch, it bursts.
+; Fireball: fire poured into a ball, held together by its own order, thrown by pushing, and burst on touch.
         .use  Elements, Basics, Shapes, Reactions, Transformations
 
 Fireball:
         IN    n17, AMOUNT
         GATH  m0, n17             ; GATHER
         CIRC  m0                  ; CIRCULATE
-        FILT  m1, m0, #FIRE       ; FILTER
+        FILT  m1, m0, #FIRE       ; FILTER: the fire; the rest stays in m0, to push it with
         IN    n1:3, HAND
         WEAV  n16, n1:3           ; POSITION: a weave at the hand
+        LDI   n4, #0
+        LDI   n5, #0
+        LDI   n6, #0
+        MEAS  n7, m1
+        EMIT  m1, n7, n16, n4:6   ; all the fire, poured into one point, held still in the hand
+        HOLD  n16, #1.5           ; the field: how far it may spread and still be this weave
+        WSET  n16, #2, #0.5       ; the radius its order holds it to
+        ORDR  n16, .order
         MOV   n4, n16
-        LDI   n0, #0.5
-        CALL  ball                ; ORDER: the fire laid out as a ball, 0.5 m
+        CALL  ingrain             ; ORDER: into every particle, one by one, while the hand holds it
+        MANI  n16                 ; let go: its pressure fills out the ball, and its order catches it at the radius
         IN    n0:2, HAND
         IN    n3:5, AIM
         IN    n6, FORCE
-        CALL  toward              ; n3:5 = its velocity
-        WSET  n16, #1, n3
-        WSET  n16, #2, n4
-        WSET  n16, #3, n5
-        ORDR  n16, .order         ; REACT: fly, and on touch, expand
-        MANI  n16                 ; SEND: it leaves the hand
+        CALL  toward
+        MOV   n0, n3
+        MOV   n1, n4
+        MOV   n2, n5
+        MOV   n4, n16
+        CALL  throw               ; SEND: pushed toward the aim until it's fast enough, or out of reach
         LOCK  n16, INPUT          ; LOCK: cut from the caster
         MOV   n0, n16
         HALT
 
-.order: GETW  n5, #0              ; w0, the phase: 0 flying, 1 bursting
+.order: GETW  n5, #0              ; the phase: 0 holding together, 1 bursting
         CMP   n5, #0
         JNE   .burst
-        CALL  fly
-        CALL  touch               ; n5 = 1 if this cell touched something
+        CALL  touch               ; n5 = 1 if it's against something
         CMP   n5, #0
-        JEQ   .end
-        PUTW  #0, n5              ; the whole weave bursts from the next tick
+        JNE   .hit
+        CALL  pull                ; back toward the centre if it strays
+        RET
+.hit:   PUTW  #0, n5              ; the whole weave bursts from the next tick
         PUTW  #4, n4              ; counting from now
-.end:   RET
-.burst: CALL  expand
+        RET
+.burst: CALL  burst               ; REACT: it spends itself flying apart
         RET

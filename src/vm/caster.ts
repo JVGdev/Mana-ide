@@ -13,6 +13,8 @@ export type CasterStats = {
     drain: Stat
     focus: Stat
     streams: Stat
+    /** Metres from the body that they can still push mana. */
+    reach: Stat
     /** Fire, water, air, earth: 0–1. */
     affinity: [Stat, Stat, Stat, Stat]
   }
@@ -34,6 +36,7 @@ export function adept(): CasterStats {
       drain: s(15),
       focus: s(6),
       streams: s(4),
+      reach: s(4),
       affinity: [s(0.6), s(0.6), s(0.6), s(0.6)],
     },
     mind: { speed: s(300), registers: s(32), memory: s(256) },
@@ -49,6 +52,7 @@ export function child(): CasterStats {
       drain: s(8),
       focus: s(3),
       streams: s(2),
+      reach: s(2.5),
       affinity: [s(0.3), s(0.3), s(0.3), s(0.3)],
     },
     mind: { speed: s(120), registers: s(8), memory: s(32) },
@@ -64,6 +68,7 @@ export function master(): CasterStats {
       drain: s(15, 10),
       focus: s(6, 6),
       streams: s(4, 4),
+      reach: s(3, 2),
       affinity: [s(0.6, 0.25), s(0.6, 0.25), s(0.6, 0.25), s(0.6, 0.25)],
     },
     mind: { speed: s(300, 1200), registers: s(32), memory: s(256) },
@@ -116,6 +121,9 @@ export class Caster {
   }
   get streams() {
     return Math.max(0, Math.min(8, Math.floor(this.bodyStat(this.stats.body.streams))))
+  }
+  get reach() {
+    return Math.max(0, this.bodyStat(this.stats.body.reach))
   }
   affinity(k: number) {
     return Math.max(0, Math.min(1, this.bodyStat(this.stats.body.affinity[k])))

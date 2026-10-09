@@ -47,7 +47,7 @@ describe('decoding', () => {
 start:  IN    n16:18, AIM
         LDI   n0, #2.5
         PROB  n0, n16:18, #3
-        LOCK  n20, SHAPE
+        LOCK  n20, INPUT
         PUTW  #4, n4
         LD    n1, [n2]
         JMP   start`
@@ -57,7 +57,7 @@ start:  IN    n16:18, AIM
       'IN    n16:18, AIM',
       'LDI   n0, #2.5',
       'PROB  n0, n16:18, #3',
-      'LOCK  n20, SHAPE',
+      'LOCK  n20, INPUT',
       'PUTW  #4, n4',
       'LD    n1, [n2]',
       'JMP   start',

@@ -26,19 +26,29 @@ export function render(sim: Sim, z?: number): string {
       const k = dominant(m)
       put(x, y, k === EARTH ? (t >= 40 ? '#' : ':') : k === WATER ? '~' : k === FIRE ? '^' : ' ')
     }
-  for (const p of w.loose) {
-    const [x, y, zz] = w.coords(w.clampedCellOf(p.pos))
-    if (zz === slice) put(x, y, '.')
-  }
-  for (const weave of sim.weaves.values())
-    for (const c of weave.cells) {
-      const i = w.cellOf(weave.worldPos(c))
-      if (i < 0) continue
-      const [x, y, zz] = w.coords(i)
-      if (zz !== slice) continue
-      if (total(c.carried) >= 0.2) put(x, y, dominant(c.carried) === WATER ? 'W' : 'H')
-      else if (total(c.free) > 0.01) put(x, y, ['*', 'o', '=', '+'][dominant(c.free)])
+  // Mana: the matter weaves hold, cell by cell, then the mana itself.
+  const held = new Map<number, number[]>()
+  for (const p of w.particles) {
+    const i = w.cellOf(p.pos)
+    if (i < 0 || w.coords(i)[2] !== slice) continue
+    const e = held.get(i) ?? [0, 0, 0, 0, 0, 0, 0, 0]
+    for (let k = 0; k < 4; k++) {
+      e[k] += p.carried[k]
+      e[4 + k] += p.weave ? p.free[k] : 0
     }
+    held.set(i, e)
+    if (!p.weave) {
+      const [x, y] = w.coords(i)
+      put(x, y, '.')
+    }
+  }
+  for (const [i, e] of held) {
+    const [x, y] = w.coords(i)
+    const carried = e.slice(0, 4) as [number, number, number, number]
+    const free = e.slice(4) as [number, number, number, number]
+    if (total(carried) >= 5) put(x, y, dominant(carried) === WATER ? 'W' : 'H')
+    else if (total(free) > 0.01) put(x, y, ['*', 'o', '=', '+'][dominant(free)])
+  }
   for (const b of w.bodies) {
     const [x, y, zz] = w.coords(w.clampedCellOf(b.pos))
     if (zz !== slice) continue

@@ -4,10 +4,11 @@ import { decode, type Instr } from '../asm/disassembler.ts'
 import { PORT_BY_CODE } from '../asm/isa.ts'
 import type { Program } from '../asm/assembler.ts'
 import { PHYSICS } from './physics.ts'
-import { add, share, take, total, zero, type Parts } from './parts.ts'
+import { add, take, total, zero, type Parts } from './parts.ts'
 import { Caster, type CasterStats, type ManaRegister } from './caster.ts'
-import { Weave, type WeaveCell } from './weave.ts'
-import { World, type Vec } from './world.ts'
+import { Weave } from './weave.ts'
+import { World, type Particle, type Vec } from './world.ts'
+import { airFlow, stepFluid } from './fluid.ts'
 
 export class Fault extends Error {
   constructor(
@@ -71,17 +72,16 @@ export type Cast = {
   yielded: boolean
 }
 
-/** What one cell's order asked for this tick. */
-type CellOrder = { move: Vec; cnds: number }
-
-/** One instruction of a cell's order: where it is, and the cell's registers just before it ran. */
+/** One instruction of a particle's order: where it is, and the particle's registers just before it ran. */
 export type OrderStep = { addr: number; n: Float64Array }
 
-/** One cell's order, run for one tick, instruction by instruction (when `traceOrders` is on). */
+/** One particle's order, run for one tick, instruction by instruction (when `traceOrders` is on). */
 export type OrderTrace = {
   tick: number
   weave: number
-  cell: number
+  /** Which of its weave's particles, as PPOS counts them. */
+  particle: number
+  /** Where it was from its weave's centre, in the weave's frame, as the tick began. */
   off: Vec
   /** The weave's registers as the tick began: what GETW reads. */
   w: Float64Array
@@ -91,11 +91,47 @@ export type OrderTrace = {
   /** Done, let go (DISS), or the fault that frayed it. */
   outcome: string
   beats: number
-  move: Vec
+  /** Its own mana its thinking burned. */
+  burned: number
+  /** How it pushed itself (KICK), in the weave's frame. */
+  kick: Vec
   cnds: number
 }
 
 const decoded = new WeakMap<Uint8Array, Map<number, Instr>>()
+const lengths = new WeakMap<Uint8Array, Map<number, number>>()
+
+/**
+ * How long an order is: every instruction it could ever run from `addr`, following its jumps and calls. Ingraining it
+ * into a particle takes a beat for each.
+ */
+export function orderLength(program: Program, addr: number): number {
+  let cache = lengths.get(program.bytes)
+  if (!cache) lengths.set(program.bytes, (cache = new Map()))
+  const known = cache.get(addr)
+  if (known !== undefined) return known
+  const seen = new Set<number>()
+  const todo = [addr]
+  while (todo.length) {
+    const a = todo.pop()!
+    if (seen.has(a) || a >= program.bytes.length) continue
+    let instr: Instr
+    try {
+      instr = fetch(program, a)
+    } catch {
+      continue
+    }
+    seen.add(a)
+    const name = instr.op.name
+    const next = a + instr.size
+    if (['RET', 'HALT', 'DISS', 'FAIL', 'TICK'].includes(name)) continue
+    if (name === 'JMP') todo.push(instr.args[0])
+    else if (name === 'CALL' || name.startsWith('J')) todo.push(instr.args[0], next)
+    else todo.push(next)
+  }
+  cache.set(addr, seen.size)
+  return seen.size
+}
 
 function fetch(program: Program, addr: number): Instr {
   let cache = decoded.get(program.bytes)
@@ -116,12 +152,19 @@ export class Sim {
   private nextWeave = 1
   /** Partway through a tick: some minds may still be thinking, and the world hasn't moved yet. */
   midTick = false
-  /** Record every cell's order, instruction by instruction, into `traces`. For the tester; it costs time. */
+  /** Record every particle's order, instruction by instruction, into `traces`. For the tester; it costs time. */
   traceOrders = false
-  /** Last tick's orders, by weave id, one trace per cell (in the order the cells ran). */
+  /** Last tick's orders, by weave id, one trace per particle that ran one (in the order they ran). */
   traces = new Map<number, OrderTrace[]>()
-  /** Matter weaves hold, per world cell, as of the start of this tick's orders. */
+  /** Matter held by mana, per world cell, as of the start of this tick's orders. */
   private carried: Float64Array
+  /** Beats the instruction being run costs beyond its own: ingraining a long order. */
+  private extra = 0
+  /**
+   * Weaves that have come apart. Their casters can still name them: there's nothing in them to sense or push, and mana
+   * emitted into one goes loose.
+   */
+  private gone = new Map<number, Weave>()
 
   constructor(readonly world: World) {
     this.carried = new Float64Array(world.size)
@@ -212,14 +255,14 @@ export class Sim {
     return false
   }
 
-  /** The start of a tick: every running mind gets its beats. */
+  /** The start of a tick: every running mind gets its beats, less what it went over by last tick. */
   private startThinking() {
     if (this.midTick) return
     this.midTick = true
     for (const cast of this.casts)
       if (cast.state === 'running') {
-        cast.left = cast.caster.speed * (1 + (cast.caster.conditioning.get(cast.name) ?? 0))
-        cast.yielded = false
+        cast.left = cast.caster.speed * (1 + (cast.caster.conditioning.get(cast.name) ?? 0)) + Math.min(0, cast.left)
+        cast.yielded = cast.left <= 0
       }
   }
 
@@ -231,18 +274,27 @@ export class Sim {
     this.midTick = false
     // 2–4. Bodies: holds run down, flows drain, overcharge.
     for (const c of this.casters) this.breathe(c)
-    // 5. Weaves leak, and take hold of what matter they can.
+    // 5. Weaves take hold of what matter their mana can bind, and let go of what it can't.
     for (const weave of this.weaves.values()) this.hold(weave)
-    // 6. Weaves set loose run their orders.
+    // 6. Particles of weaves set loose run their orders.
     if (this.traceOrders) this.traces = new Map()
     this.measureCarried()
-    for (const weave of [...this.weaves.values()]) if (!weave.inHand && weave.order !== null) this.runOrder(weave)
-    // 7. The world moves.
+    for (const weave of [...this.weaves.values()]) if (!weave.inHand) this.runOrders(weave)
+    // 7. The world moves: the mana, the air, bodies, matter.
     this.measureCarried()
-    w.moveLoose()
+    stepFluid(w, {
+      passes: (p) => (p.weave ? this.weaves.get(p.weave)?.maker.body : undefined),
+      still: (p) => !!p.weave && !!this.weaves.get(p.weave)?.inHand,
+      othersCarried: (p, cell) => this.carried[cell] - (this.carriedBy.get(p.weave)?.get(cell) ?? 0),
+    })
+    airFlow(w)
+    for (const weave of [...this.weaves.values()]) this.keep(weave)
+    this.settleLoose()
     w.moveBodies()
+    this.measureCarried()
     w.settleMatter(this.carried)
     w.diffuseAir()
+    for (const p of w.particles) p.dvLeft = PHYSICS.pushRate
     w.tick++
   }
 
@@ -252,9 +304,9 @@ export class Sim {
     let weaves = 0
     let carried = 0
     for (const wv of this.weaves.values())
-      for (const c of wv.cells) {
-        weaves += total(c.free)
-        carried += total(c.carried)
+      for (const p of wv.particles) {
+        weaves += total(p.free)
+        carried += total(p.carried)
       }
     const casters = this.casters.reduce((s, c) => s + c.held(), 0)
     return {
@@ -301,11 +353,19 @@ export class Sim {
       spent.runs++
       spent.beats += instr.op.beats
       cast.profile.set(instr.addr, spent)
+      this.extra = 0
       try {
         if (this.execMind(cast, instr) === 'tick') cast.yielded = true
       } catch (e) {
         if (!(e instanceof Fault)) throw e
         this.end(cast, 'fault', e.message)
+      }
+      // A long order takes more beats to ingrain than there may be left this tick: the next tick pays the rest.
+      if (this.extra) {
+        cast.left -= this.extra
+        cast.beats += this.extra
+        spent.beats += this.extra
+        if (cast.left <= 0) cast.yielded = true
       }
     }
     return ran
@@ -325,10 +385,11 @@ export class Sim {
     // Weaves still in hand were never set loose: their mana falls back into the body's flow.
     for (const weave of [...this.weaves.values()])
       if (weave.maker === caster && weave.inHand) {
-        for (const c of weave.cells) {
-          add(caster.flow, c.free)
-          this.dropMatter(weave, c)
+        for (const p of weave.particles) {
+          add(caster.flow, take(p.free, Infinity))
+          this.dropMatter(p)
         }
+        this.removeEmpty()
         this.weaves.delete(weave.id)
         this.log({ kind: 'dissolve', caster: caster.name, weave: weave.id, detail: 'never set loose' })
       }
@@ -363,7 +424,7 @@ export class Sim {
     const s = (k: number) => source(f, instr, k)
     const vec = (k: number): Vec => [get(f, a[k]), get(f, a[k] + 1), get(f, a[k] + 2)]
     const weave = (k: number): Weave => {
-      const wv = this.weaves.get(n(k))
+      const wv = this.weaves.get(n(k)) ?? this.gone.get(n(k))
       if (!wv || wv.maker !== caster) throw new Fault('NOT_YOURS', `there's no weave ${n(k)} of ${caster.name}'s`)
       return wv
     }
@@ -432,7 +493,7 @@ export class Sim {
         return next()
       }
       case 'VENT':
-        add(this.world.air[this.world.clampedCellOf(caster.body.pos)], take(m(0).parts, Infinity))
+        this.world.addAir(this.world.clampedCellOf(caster.body.pos), take(m(0).parts, Infinity))
         return next()
 
       // Reach
@@ -448,13 +509,31 @@ export class Sim {
         return next()
       }
       case 'SEND': {
+        // Mana let out with a speed: the speed is paid for from the mana sent, which goes loose where it was let out.
         const r = m(0)
         const parts = take(r.parts, Math.max(0, n(1)))
-        const pos = vec(2)
-        const i = this.world.clampedCellOf(pos)
-        const [x, y, z] = this.world.coords(i)
-        const inside = this.world.cellOf(pos) >= 0 ? pos : this.world.centre(x, y, z)
-        if (total(parts) > PHYSICS.epsilon) this.world.loose.push({ pos: [...inside], vel: vec(3), parts })
+        const pos = this.inside(vec(2))
+        const vel = vec(3)
+        const sent = 1 / (1 + Math.hypot(...vel) / PHYSICS.pushYield)
+        const spent = take(parts, total(parts) * (1 - sent))
+        this.world.addAir(this.world.clampedCellOf(pos), spent)
+        const t = total(parts)
+        if (t > PHYSICS.epsilon) {
+          for (let k = 0; k < 3; k++) this.world.impulse.push[k] += t * vel[k]
+          this.world.pour(parts, pos, 0, vel)
+        }
+        return next()
+      }
+      case 'WPOS': {
+        const wv = weave(1)
+        const c = wv.centre()
+        ;(c ? c.pos : wv.origin).forEach((v, k) => set(f, a[0] + k, v))
+        return next()
+      }
+      case 'WVEL': {
+        const wv = weave(1)
+        const c = wv.centre()
+        wv.toFrame(c ? c.vel : [0, 0, 0]).forEach((v, k) => set(f, a[0] + k, v))
         return next()
       }
 
@@ -477,10 +556,11 @@ export class Sim {
         const amount = Math.max(0, n(1))
         const wv = weave(2)
         if (wv.locks.input) throw new Fault('LOCKED', `weave ${wv.id}'s input is locked`)
-        const off = vec(3)
-        const pos = wv.worldPos({ off: off.map((v) => Math.round(v / this.world.cell) * this.world.cell) as Vec, free: zero(), carried: zero() })
+        const pos = wv.worldPos(vec(3))
         if (this.world.cellOf(pos) < 0) return next() // outside the world: nothing goes there
-        add(wv.cellAt(off, this.world.cell).free, take(r.parts, amount))
+        const gone = this.gone.has(wv.id)
+        const poured = this.world.pour(take(r.parts, amount), pos, gone ? 0 : wv.id)
+        if (!gone) wv.particles.push(...poured)
         return next()
       }
       case 'WSET': {
@@ -506,6 +586,8 @@ export class Sim {
         if (wv.inHand) {
           wv.inHand = false
           wv.manifestedAt = this.tick
+          const c = wv.centre()
+          if (c) wv.origin = c.pos
           this.log({ kind: 'manifest', caster: caster.name, weave: wv.id })
         }
         return next()
@@ -513,7 +595,7 @@ export class Sim {
       case 'LOCK': {
         const wv = weave(0)
         if (wv.inHand) throw new Fault('NOT_LOOSE', `weave ${wv.id} has to be manifested before it's locked`)
-        const what = (['shape', 'input', 'order'] as const)[a[1]]
+        const what = ([undefined, 'input', 'order'] as const)[a[1]]
         if (!what) throw new Fault('NO_ROOM', `there's nothing to lock called #${a[1]}`)
         wv.locks[what] = true
         this.log({ kind: 'lock', caster: caster.name, weave: wv.id, detail: what })
@@ -521,6 +603,37 @@ export class Sim {
       }
       case 'RELS':
         this.dissolve(weave(0), 'let go')
+        return next()
+      case 'PCNT':
+        set(f, a[0], weave(1).particles.length)
+        return next()
+      case 'PPOS':
+      case 'PVEL': {
+        const wv = weave(1)
+        const p = wv.particles[Math.floor(s(2))]
+        let v: Vec = [0, 0, 0]
+        if (p) v = op.name === 'PVEL' ? wv.toFrame(p.vel) : wv.toFrame(p.pos.map((x, k) => x - wv.origin[k]) as Vec)
+        v.forEach((x, k) => set(f, a[0] + k, x))
+        return next()
+      }
+      case 'SHOV': {
+        const r = m(0)
+        const wv = weave(1)
+        const p = wv.particles[Math.floor(n(2))]
+        if (!p || !this.inReach(caster, p)) return next()
+        this.push(p, wv.toWorld(vec(3)), (want) => take(r.parts, want), 'push')
+        return next()
+      }
+      case 'INGR': {
+        const wv = weave(0)
+        if (wv.order === null) throw new Fault('NO_ORDER', `weave ${wv.id} has no order to ingrain: give it one with ORDR`)
+        this.extra = orderLength(wv.program, wv.order)
+        const p = wv.particles[Math.floor(s(1))]
+        if (p && this.inReach(caster, p)) p.order = { program: wv.program, addr: wv.order }
+        return next()
+      }
+      case 'HOLD':
+        weave(0).field = Math.max(0, s(1))
         return next()
     }
     throw new Fault('ORDER_ONLY', `${op.name} can't run in a mind`)
@@ -548,6 +661,8 @@ export class Sim {
         return [this.load(caster)]
       case 'CAPACITY':
         return [caster.capacity]
+      case 'REACH':
+        return [caster.reach]
     }
     throw new Fault('BAD_PORT', `${name} can only be read inside a weave's order`)
   }
@@ -574,14 +689,56 @@ export class Sim {
     const got = zero()
     if (available <= PHYSICS.epsilon || amount <= 0) return got
     const f = Math.min(1, amount / available)
-    for (const i of cells) add(got, share(w.air[i], f))
+    for (const i of cells) add(got, w.takeAir(i, f))
     return got
   }
 
   private load(caster: Caster): number {
     let inHand = 0
-    for (const wv of this.weaves.values()) if (wv.maker === caster && wv.inHand) for (const c of wv.cells) inHand += total(c.free)
+    for (const wv of this.weaves.values()) if (wv.maker === caster && wv.inHand) inHand += wv.mana()
     return caster.held() + inHand
+  }
+
+  /** A point inside the world: the nearest cell's centre, if it's outside. */
+  private inside(pos: Vec): Vec {
+    if (this.world.cellOf(pos) >= 0) return pos
+    const [x, y, z] = this.world.coords(this.world.clampedCellOf(pos))
+    return this.world.centre(x, y, z)
+  }
+
+  private inReach(caster: Caster, p: Particle): boolean {
+    const b = caster.body.pos
+    return Math.hypot(p.pos[0] - b[0], p.pos[1] - b[1], p.pos[2] - b[2]) <= caster.reach
+  }
+
+  /**
+   * Pour mana onto a particle to change its velocity by `dv`, no more than it has left this tick. `pay` gives what it can
+   * of what's asked. What's poured goes loose into the air where it was poured. Returns the M spent.
+   */
+  private push(p: Particle, dv: Vec, pay: (want: number) => Parts, from: 'push' | 'kick'): number {
+    let size = Math.hypot(...dv)
+    if (size < 1e-12 || p.dvLeft <= 0) return 0
+    if (size > p.dvLeft) {
+      dv = dv.map((v) => (v * p.dvLeft) / size) as Vec
+      size = p.dvLeft
+    }
+    const want = (total(p.free) * size) / PHYSICS.pushYield
+    if (want <= 0) return 0
+    const paid = pay(want)
+    const got = total(paid)
+    if (got <= 0) return 0
+    const c = this.world.clampedCellOf(p.pos)
+    // Mana a particle pays with itself leaves carrying its share of the particle's momentum.
+    this.world.addAir(c, paid, from === 'kick' ? (p.vel.map((v) => v * got) as Vec) : [0, 0, 0])
+    const k = Math.min(1, got / want)
+    const m = total(p.free)
+    for (let i = 0; i < 3; i++) {
+      p.vel[i] += dv[i] * k
+      this.world.impulse[from][i] += m * dv[i] * k
+    }
+    p.dvLeft -= size * k
+    p.pushedAt = this.tick
+    return got
   }
 
   // The body, each tick
@@ -593,7 +750,7 @@ export class Sim {
       if (total(r.parts) > PHYSICS.epsilon && r.holdUntil <= this.tick) add(caster.flow, take(r.parts, Infinity))
     // The flow drains back to the air, down to its baseline.
     const above = total(caster.flow) - caster.baseline
-    if (above > 0) add(w.air[w.clampedCellOf(caster.body.pos)], take(caster.flow, Math.min(caster.drain, above)))
+    if (above > 0) w.addAir(w.clampedCellOf(caster.body.pos), take(caster.flow, Math.min(caster.drain, above)))
     // Overcharge harms.
     const excess = this.load(caster) - caster.capacity
     if (excess > 0) {
@@ -605,43 +762,84 @@ export class Sim {
 
   // Weaves
 
+  /** Matter held by mana, cell by cell: all of it, and each weave's own. */
   private measureCarried() {
     this.carried.fill(0)
-    for (const wv of this.weaves.values())
-      for (const c of wv.cells) {
-        const i = this.world.cellOf(wv.worldPos(c))
-        if (i >= 0) this.carried[i] += total(c.carried)
-      }
+    this.carriedBy.clear()
+    for (const p of this.world.particles) {
+      const i = this.world.cellOf(p.pos)
+      const m = total(p.carried)
+      if (i < 0 || m <= 0) continue
+      this.carried[i] += m
+      let own = this.carriedBy.get(p.weave)
+      if (!own) this.carriedBy.set(p.weave, (own = new Map()))
+      own.set(i, (own.get(i) ?? 0) + m)
+    }
   }
+  private carriedBy = new Map<number, Map<number, number>>()
 
   private carriedPart(i: number, k: number): number {
     let v = 0
-    for (const wv of this.weaves.values()) for (const c of wv.cells) if (this.world.cellOf(wv.worldPos(c)) === i) v += c.carried[k]
+    for (const p of this.world.particles) if (this.world.cellOf(p.pos) === i) v += p.carried[k]
     return v
   }
 
-  private runOrder(weave: Weave) {
+  /**
+   * A weave's free mana holds what matter it can of its own parts in each cell, shared among its particles there by how
+   * much of that part each has. What it can no longer hold, it lets go of.
+   */
+  private hold(weave: Weave) {
     const w = this.world
-    const program = weave.program
+    const byCell = new Map<number, Particle[]>()
+    for (const p of weave.particles) {
+      const i = w.cellOf(p.pos)
+      if (i < 0) continue
+      let list = byCell.get(i)
+      if (!list) byCell.set(i, (list = []))
+      list.push(p)
+    }
+    for (const [i, ps] of byCell)
+      for (let k = 0; k < 4; k++) {
+        let free = 0
+        let have = 0
+        for (const p of ps) {
+          free += p.free[k]
+          have += p.carried[k]
+        }
+        const can = free * PHYSICS.bind
+        if (have < can && free > 0) {
+          const got = Math.min(can - have, w.matter[i][k])
+          if (got <= 0) continue
+          w.matter[i][k] -= got
+          for (const p of ps) p.carried[k] += (got * p.free[k]) / free
+        } else if (have > can && have > 0) {
+          const out = have - can
+          w.matter[i][k] += out
+          for (const p of ps) p.carried[k] -= (out * p.carried[k]) / have
+        }
+      }
+  }
+
+  /** Every particle carrying an order runs it. */
+  private runOrders(weave: Weave) {
     const age = this.tick - weave.manifestedAt
     const pending = weave.regs.slice()
-    const occupied = new Set(weave.cells.map((c) => w.cellOf(weave.worldPos(c))))
-    const orders: CellOrder[] = []
+    const w0 = weave.regs.slice()
     let ending: string | undefined
     const traces: OrderTrace[] = []
     if (this.traceOrders) this.traces.set(weave.id, traces)
-    const w0 = weave.regs.slice()
 
-    for (const [k, cell] of weave.cells.entries()) {
-      const f = frame(PHYSICS.orderRegisters, 16, weave.order!)
-      f.n.set([cell.off[0], cell.off[1], cell.off[2], total(cell.free), age])
-      const order: CellOrder = { move: [0, 0, 0], cnds: 0 }
-      orders.push(order)
+    for (const [k, p] of weave.particles.entries()) {
+      if (!p.order) continue
+      const f = frame(PHYSICS.orderRegisters, 16, p.order.addr)
+      const off = weave.toFrame(p.pos.map((v, i) => v - weave.origin[i]) as Vec)
+      f.n.set([off[0], off[1], off[2], total(p.free), age])
       const trace: OrderTrace | undefined = this.traceOrders
-        ? { tick: this.tick, weave: weave.id, cell: k, off: [...cell.off], w: w0, steps: [], n: f.n, outcome: 'done', beats: 0, move: order.move, cnds: 0 }
+        ? { tick: this.tick, weave: weave.id, particle: k, off, w: w0, steps: [], n: f.n, outcome: 'done', beats: 0, burned: 0, kick: [0, 0, 0], cnds: 0 }
         : undefined
+      let beats = 0
       try {
-        const result = this.execOrder(weave, cell, f, program, order, pending, occupied, trace)
+        const result = this.execOrder(weave, p, f, p.order.program, pending, trace, (b) => (beats += b))
         if (result === 'diss') ending = 'its order let it go'
         if (trace && result === 'diss') trace.outcome = 'let go (DISS)'
       } catch (e) {
@@ -650,53 +848,33 @@ export class Sim {
         ending = 'frayed'
         if (trace) trace.outcome = e.message
       }
+      // Thinking burns the particle's own mana, beat by beat. It goes into the air, carrying its momentum.
+      const burned = take(p.free, beats * PHYSICS.orderBurn)
+      const b = total(burned)
+      this.world.addAir(this.world.clampedCellOf(p.pos), burned, p.vel.map((v) => v * b) as Vec)
       if (trace) {
         trace.n = f.n.slice(0, PHYSICS.orderRegisters)
-        trace.cnds = order.cnds
+        trace.burned = b
         traces.push(trace)
       }
       if (ending) break
     }
     weave.regs.set(pending)
-    if (ending) {
-      this.dissolve(weave, ending)
-      return
-    }
-    // Condense: as much as the order asked for, up to the room the cell has. Nothing asks whether the amount is
-    // above nothing, and below nothing condensing runs backwards: the matter the cell holds comes apart into free
-    // mana. Nobody designed that; it is the flaw that makes freeing matter possible (SPEC D16).
-    weave.cells.forEach((cell, k) => {
-      const i = w.cellOf(weave.worldPos(cell))
-      const room = i < 0 ? 0 : Math.max(0, PHYSICS.cellMatter - total(w.matter[i]) - this.carried[i])
-      const amount = Math.min(orders[k].cnds, room)
-      if (amount > 0) {
-        const made = take(cell.free, amount)
-        add(cell.carried, made)
-        this.carried[i] += total(made)
-      } else if (amount < 0) {
-        const freed = take(cell.carried, -amount)
-        add(cell.free, freed)
-        if (i >= 0) this.carried[i] -= total(freed)
-      }
-    })
-    this.moveWeave(
-      weave,
-      orders.map((o) => o.move),
-    )
+    if (ending) this.dissolve(weave, ending)
   }
 
-  /** Runs one cell's order for this tick. */
+  /** Runs one particle's order for this tick. */
   private execOrder(
     weave: Weave,
-    cell: WeaveCell,
+    p: Particle,
     f: Frame,
     program: Program,
-    order: CellOrder,
     pending: Float64Array,
-    occupied: Set<number>,
-    trace?: OrderTrace,
+    trace: OrderTrace | undefined,
+    spend: (beats: number) => void,
   ): 'done' | 'diss' {
     const w = this.world
+    const triple = (r: number, v: Vec) => v.forEach((x, k) => set(f, r + k, x))
     for (let budget = PHYSICS.orderBudget; ; ) {
       const instr = fetch(program, f.pc)
       if (trace) {
@@ -704,6 +882,7 @@ export class Sim {
         trace.beats += instr.op.beats
       }
       budget -= instr.op.beats
+      spend(instr.op.beats)
       if (budget < 0) throw new Fault('FRAYED', `an order thought more than ${PHYSICS.orderBudget} beats in one tick`)
       const a = instr.args
       const common = execCommon(f, instr)
@@ -711,14 +890,16 @@ export class Sim {
       if (common !== 'unhandled') continue
       const next = () => (f.pc = instr.addr + instr.size)
       switch (instr.op.name) {
-        case 'MOVE':
-          order.move[0] += get(f, a[0])
-          order.move[1] += get(f, a[0] + 1)
-          order.move[2] += get(f, a[0] + 2)
+        case 'KICK': {
+          const dv = weave.toWorld([get(f, a[0]), get(f, a[0] + 1), get(f, a[0] + 2)])
+          // A particle pays with itself, but never more than half of what it has in one push.
+          this.push(p, dv, (want) => take(p.free, Math.min(want, total(p.free) * 0.5)), 'kick')
+          if (trace) for (let k = 0; k < 3; k++) trace.kick[k] += get(f, a[0] + k)
           next()
           continue
+        }
         case 'TUCH':
-          set(f, a[0], this.touches(weave, cell, occupied) ? 1 : 0)
+          set(f, a[0], this.touches(weave, p) ? 1 : 0)
           next()
           continue
         case 'GETW':
@@ -733,8 +914,38 @@ export class Sim {
           continue
         case 'DISS':
           return 'diss'
-        case 'CNDS':
-          order.cnds += source(f, instr, 0)
+        case 'CNDS': {
+          // As much as asked, up to the room the cell has. Nothing asks whether the amount is above nothing, and below
+          // nothing condensing runs backwards: the matter the particle holds comes apart into free mana. Nobody designed
+          // that; it is the flaw that makes freeing matter possible (SPEC D16).
+          const amount = source(f, instr, 0)
+          const i = w.cellOf(p.pos)
+          if (trace) trace.cnds += amount
+          if (amount > 0 && i >= 0) {
+            const room = Math.max(0, PHYSICS.cellMatter - total(w.matter[i]) - this.carried[i])
+            const made = take(p.free, Math.min(amount, room))
+            add(p.carried, made)
+            this.carried[i] += total(made)
+            for (let k = 0; k < 3; k++) w.impulse.matter[k] -= total(made) * p.vel[k]
+          } else if (amount < 0) {
+            const freed = take(p.carried, -amount)
+            add(p.free, freed)
+            if (i >= 0) this.carried[i] -= total(freed)
+            for (let k = 0; k < 3; k++) w.impulse.matter[k] += total(freed) * p.vel[k]
+          }
+          next()
+          continue
+        }
+        case 'DENS':
+          set(f, a[0], p.rho)
+          next()
+          continue
+        case 'GRAD':
+          triple(a[0], weave.toFrame(p.grad))
+          next()
+          continue
+        case 'NVEL':
+          triple(a[0], weave.toFrame(p.nvel))
           next()
           continue
         case 'IN': {
@@ -744,6 +955,7 @@ export class Sim {
           else if (port === 'DEPTH') values = [w.d]
           else if (port === 'ORIGIN') values = [...weave.origin]
           else if (port === 'MAKER') values = [...weave.maker.body.pos]
+          else if (port === 'VEL') values = weave.toFrame(p.vel)
           else throw new Fault('BAD_PORT', `an order can't read ${port}`)
           values.forEach((v, k) => set(f, a[0] + k, v))
           next()
@@ -754,11 +966,10 @@ export class Sim {
     }
   }
 
-  /** Is this cell against something that isn't its own: matter, or a body other than its maker's? */
-  private touches(weave: Weave, cell: WeaveCell, occupied: Set<number>): boolean {
+  /** Is this particle against something that isn't its own: matter, or a body other than its maker's? */
+  private touches(weave: Weave, p: Particle): boolean {
     const w = this.world
-    const p = weave.worldPos(cell)
-    const i = w.cellOf(p)
+    const i = w.cellOf(p.pos)
     if (i < 0) return true
     const [x, y, z] = w.coords(i)
     const around: [number, number, number][] = [[0, 0, 0], [1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0]]
@@ -766,104 +977,75 @@ export class Sim {
     for (const [dx, dy, dz] of around) {
       const j = w.index(x + dx, y + dy, z + dz)
       if (j < 0) continue
-      if ((dx || dy || dz) && occupied.has(j)) continue
       if (w.solidAt(j)) return true
       const [jx, jy, jz] = w.coords(j)
       const c = w.centre(jx, jy, jz)
-      if (w.d === 1) c[2] = p[2]
+      if (w.d === 1) c[2] = p.pos[2]
       if (w.bodyAt(c, weave.maker.body)) return true
     }
     return false
   }
 
   /**
-   * Moves each cell as its order asked, a cell's width at a time so nothing passes through a wall.
-   * A cell holding matter can't move into a cell that has no room for it. With its shape locked, the weave moves as one.
+   * After the world moves: a weave's particles that have got further from its centre than its field reaches leave it
+   * for good, and a weave set loose is measured from its centre again. A loose weave with nothing left in it is gone.
    */
-  private moveWeave(weave: Weave, asked: Vec[]) {
-    const w = this.world
-    if (asked.every((v) => !v[0] && !v[1] && !v[2])) return
-    let moves = asked
-    if (weave.locks.shape) {
-      const avg: Vec = [0, 0, 0]
-      for (const v of asked) for (let k = 0; k < 3; k++) avg[k] += v[k] / asked.length
-      moves = asked.map(() => avg)
-    }
-    const longest = Math.max(...moves.map((v) => Math.hypot(...v)))
-    const steps = Math.max(1, Math.ceil(longest / (w.cell * 0.99)))
-    const applied = moves.map(() => [0, 0, 0] as Vec)
-    const stuck = new Set<number>()
-
-    const blocked = (cell: WeaveCell, step: Vec, occupied: Set<number>) => {
-      const p = weave.worldPos(cell)
-      const d = weave.toWorld(step)
-      const j = w.cellOf([p[0] + d[0], p[1] + d[1], p[2] + d[2]])
-      if (j < 0) return true
-      const load = total(cell.carried)
-      if (load <= PHYSICS.epsilon || occupied.has(j)) return false
-      return PHYSICS.cellMatter - total(w.matter[j]) - this.carried[j] < load
-    }
-
-    for (let s = 0; s < steps; s++) {
-      const occupied = new Set(weave.cells.map((c) => w.cellOf(weave.worldPos(c))))
-      const step = (k: number): Vec => [moves[k][0] / steps, moves[k][1] / steps, moves[k][2] / steps]
-      if (weave.locks.shape) {
-        if (weave.cells.some((c, k) => blocked(c, step(k), occupied))) break
+  private keep(weave: Weave) {
+    const c = weave.centre()
+    if (c) {
+      for (const p of weave.particles) {
+        const d = Math.hypot(p.pos[0] - c.pos[0], p.pos[1] - c.pos[1], p.pos[2] - c.pos[2])
+        if (d > weave.field || total(p.free) <= PHYSICS.epsilon) this.loosen(p)
       }
-      weave.cells.forEach((c, k) => {
-        if (stuck.has(k)) return
-        const st = step(k)
-        if (!weave.locks.shape && blocked(c, st, occupied)) {
-          stuck.add(k)
-          return
-        }
-        for (let i = 0; i < 3; i++) {
-          c.off[i] += st[i]
-          applied[k][i] += st[i]
-        }
-      })
+      weave.particles = weave.particles.filter((p) => p.weave === weave.id)
+      if (!weave.inHand) weave.origin = weave.centre()?.pos ?? c.pos
     }
-    // The origin follows the cells, on average.
-    const avg: Vec = [0, 0, 0]
-    for (const v of applied) for (let k = 0; k < 3; k++) avg[k] += v[k] / applied.length
-    const d = weave.toWorld(avg)
-    for (let k = 0; k < 3; k++) weave.origin[k] += d[k]
-    for (const c of weave.cells) for (let k = 0; k < 3; k++) c.off[k] -= avg[k]
+    if (!weave.inHand && !weave.particles.length) {
+      this.weaves.delete(weave.id)
+      this.gone.set(weave.id, weave)
+      this.log({ kind: 'dissolve', caster: weave.maker.name, weave: weave.id, detail: 'its mana is gone' })
+    }
   }
 
-  /** A weave set loose leaks; every weave's free mana holds what matter it can of its own parts. */
-  private hold(weave: Weave) {
+  /** A particle leaves its weave. It drops the matter it held; its order stays with it. */
+  private loosen(p: Particle) {
+    p.weave = 0
+    this.dropMatter(p)
+  }
+
+  /** Loose mana that has come to the speed of the air around it settles into it. */
+  private settleLoose() {
     const w = this.world
-    for (const c of weave.cells) {
-      const i = w.cellOf(weave.worldPos(c))
-      if (i < 0) continue
-      if (!weave.inHand) add(w.air[i], share(c.free, PHYSICS.leak))
-      for (let k = 0; k < 4; k++) {
-        const can = c.free[k] * PHYSICS.bind
-        if (c.carried[k] < can) {
-          const got = Math.min(can - c.carried[k], w.matter[i][k])
-          c.carried[k] += got
-          w.matter[i][k] -= got
-        } else if (c.carried[k] > can) {
-          w.matter[i][k] += c.carried[k] - can
-          c.carried[k] = can
-        }
-      }
+    for (const p of w.particles) {
+      if (p.weave) continue
+      const c = w.clampedCellOf(p.pos)
+      const rel = Math.hypot(p.vel[0] - w.airVel[c * 3], p.vel[1] - w.airVel[c * 3 + 1], p.vel[2] - w.airVel[c * 3 + 2])
+      if (rel >= PHYSICS.looseRest && total(p.free) > PHYSICS.epsilon) continue
+      const m = total(p.free)
+      w.addAir(c, take(p.free, Infinity), p.vel.map((v) => v * m) as Vec)
+      this.dropMatter(p)
     }
+    this.removeEmpty()
+  }
+
+  /** Particles with no mana left are gone. */
+  private removeEmpty() {
+    this.world.particles = this.world.particles.filter((p) => total(p.free) > PHYSICS.epsilon || total(p.carried) > PHYSICS.epsilon)
   }
 
   private dissolve(weave: Weave, why: string) {
-    const w = this.world
-    for (const c of weave.cells) {
-      add(w.air[w.clampedCellOf(weave.worldPos(c))], take(c.free, Infinity))
-      this.dropMatter(weave, c)
+    for (const p of weave.particles) {
+      this.loosen(p)
+      p.order = null
     }
+    weave.particles = []
     this.weaves.delete(weave.id)
+    this.gone.set(weave.id, weave)
     this.log({ kind: 'dissolve', caster: weave.maker.name, weave: weave.id, detail: why })
   }
 
-  private dropMatter(weave: Weave, c: WeaveCell) {
-    add(this.world.matter[this.world.clampedCellOf(weave.worldPos(c))], take(c.carried, Infinity))
+  private dropMatter(p: Particle) {
+    add(this.world.matter[this.world.clampedCellOf(p.pos)], take(p.carried, Infinity))
   }
 }
 

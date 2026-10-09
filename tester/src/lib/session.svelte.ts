@@ -55,9 +55,9 @@ class Session {
   /** Bumped whenever the machine moves: everything that shows it reads this. */
   version = $state(0)
   panel = $state<Panel>('mind')
-  /** The cell whose order is shown, and which of its instructions. */
-  orderSel = $state({ weave: 0, cell: 0, step: 0 })
-  /** The next click on the world picks a weave cell instead of aiming. */
+  /** The particle whose order is shown (which of its weave's traces), and which of its instructions. */
+  orderSel = $state({ weave: 0, particle: 0, step: 0 })
+  /** The next click on the world picks a particle of a weave instead of aiming. */
   picking = $state(false)
   /** A line for the editor to scroll to; `seq` changes each time it's asked. */
   goto = $state<{ line: number; seq: number }>({ line: 0, seq: 0 })
@@ -81,7 +81,7 @@ class Session {
     s.sim.traceOrders = true
     this.sim = s.sim
     this.caster = s.caster
-    this.orderSel = { weave: 0, cell: 0, step: 0 }
+    this.orderSel = { weave: 0, particle: 0, step: 0 }
     this.picking = false
     this.cast = null
     this.syncWill()
@@ -201,10 +201,10 @@ class Session {
     if (stopped && this.follow) this.goHere()
   }
 
-  /** The trace of the chosen cell's order, from the last tick its weave ran. */
+  /** The trace of the chosen particle's order, from the last tick its weave ran. */
   orderTrace(): OrderTrace | undefined {
     void this.version
-    return this.sim?.traces.get(this.orderSel.weave)?.[this.orderSel.cell]
+    return this.sim?.traces.get(this.orderSel.weave)?.[this.orderSel.particle]
   }
 
   /** Keeps the order selection pointing at something after a tick: the first weave that ran, back to its first step. */
@@ -212,29 +212,29 @@ class Session {
   private settleOrder() {
     const traces = this.sim?.traces
     if (!traces?.size) return
-    if (!traces.has(this.orderSel.weave)) this.orderSel = { weave: [...traces.keys()][0], cell: 0, step: 0 }
+    if (!traces.has(this.orderSel.weave)) this.orderSel = { weave: [...traces.keys()][0], particle: 0, step: 0 }
     const t = traces.get(this.orderSel.weave)!
-    if (this.orderSel.cell >= t.length) this.orderSel.cell = 0
-    const trace = t[this.orderSel.cell]
+    if (this.orderSel.particle >= t.length) this.orderSel.particle = 0
+    const trace = t[this.orderSel.particle]
     if (trace && trace.tick !== this.lastTraceTick) {
       this.lastTraceTick = trace.tick
       this.orderSel.step = 0
     }
   }
 
-  /** The first cell whose order ran a line with a breakpoint last tick. */
-  private orderHit(): { weave: number; cell: number; step: number } | undefined {
+  /** The first particle whose order ran a line with a breakpoint last tick. */
+  private orderHit(): { weave: number; particle: number; step: number } | undefined {
     if (!this.breakpoints.length || !this.sim) return undefined
     for (const [weave, traces] of this.sim.traces)
-      for (const t of traces) {
+      for (const [k, t] of traces.entries()) {
         const step = t.steps.findIndex((s) => this.isBreak(s.addr))
-        if (step >= 0) return { weave, cell: t.cell, step }
+        if (step >= 0) return { weave, particle: k, step }
       }
     return undefined
   }
 
-  private stopAtOrder(hit: { weave: number; cell: number; step: number }) {
-    this.lastTraceTick = this.sim!.traces.get(hit.weave)![hit.cell].tick
+  private stopAtOrder(hit: { weave: number; particle: number; step: number }) {
+    this.lastTraceTick = this.sim!.traces.get(hit.weave)![hit.particle].tick
     this.orderSel = hit
     this.panel = 'order'
     this.goOrder()
@@ -248,8 +248,9 @@ class Session {
     if (l) this.jump(l.file, l.line)
   }
 
-  selectOrder(weave: number, cell: number) {
-    this.orderSel = { weave, cell, step: 0 }
+  /** Show a weave's order, in the particle at `particle` among the ones that ran it. */
+  selectOrder(weave: number, particle: number) {
+    this.orderSel = { weave, particle, step: 0 }
     this.panel = 'order'
     this.version++
   }

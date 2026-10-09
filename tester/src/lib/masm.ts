@@ -9,7 +9,7 @@ import { OP_DOCS, PORT_DOCS } from '../../../src/asm/docs.ts'
 
 const MNEMONICS = new Set(OPS.map((o) => o.name))
 const PORT_NAMES = new Set(PORTS.map((p) => p.name))
-const LOCKS = new Set(LOCK_NAMES)
+const LOCKS = new Set(LOCK_NAMES.filter(Boolean))
 
 type State = { start: boolean }
 
@@ -115,7 +115,7 @@ function completions(labels: () => string[], consts: () => string[]) {
     info: OP_DOCS[o.name]?.doc,
   }))
   const ports: Completion[] = PORTS.map((p) => ({ label: p.name, type: 'constant', info: PORT_DOCS[p.name] }))
-  const locks: Completion[] = LOCK_NAMES.map((l) => ({ label: l, type: 'constant' }))
+  const locks: Completion[] = LOCK_NAMES.filter(Boolean).map((l) => ({ label: l, type: 'constant' }))
   return (ctx: CompletionContext) => {
     const word = ctx.matchBefore(/[#.]?[\w.]*/)
     if (!word || (word.from === word.to && !ctx.explicit)) return null

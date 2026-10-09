@@ -4,7 +4,7 @@
   import { decode, format } from '../../../../src/asm/disassembler.ts'
   import { PHYSICS } from '../../../../src/vm/physics.ts'
 
-  const STARTS = ['cell x', 'cell y', 'cell z', 'its mana', 'weave age']
+  const STARTS = ['from centre x', 'from centre y', 'from centre z', 'its mana', 'weave age']
 
   const traces = $derived.by(() => {
     void session.version
@@ -45,9 +45,9 @@
     session.orderSel.step = Math.max(0, Math.min(trace.steps.length, step))
     if (session.follow) session.goOrder()
   }
-  function cell(k: number) {
+  function particle(k: number) {
     if (!all.length) return
-    session.orderSel.cell = (k + all.length) % all.length
+    session.orderSel.particle = (k + all.length) % all.length
     session.orderSel.step = 0
     if (session.follow) session.goOrder()
   }
@@ -80,21 +80,22 @@
     </select>
   </label>
   <span class="cellpick">
-    cell
-    <button onclick={() => cell(session.orderSel.cell - 1)} disabled={!all.length} aria-label="Previous cell">‹</button>
-    <span class="mono">{all.length ? `${session.orderSel.cell + 1} / ${all.length}` : '—'}</span>
-    <button onclick={() => cell(session.orderSel.cell + 1)} disabled={!all.length} aria-label="Next cell">›</button>
+    particle
+    <button onclick={() => particle(session.orderSel.particle - 1)} disabled={!all.length} aria-label="Previous particle">‹</button>
+    <span class="mono">{all.length ? `${session.orderSel.particle + 1} / ${all.length}` : '—'}</span>
+    <button onclick={() => particle(session.orderSel.particle + 1)} disabled={!all.length} aria-label="Next particle">›</button>
   </span>
   <button class:on={session.picking} onclick={() => (session.picking = !session.picking)}>
-    {session.picking ? 'Click a cell…' : 'Pick in the world'}
+    {session.picking ? 'Click a particle…' : 'Pick in the world'}
   </button>
 </div>
 
 {#if !trace}
   <p class="empty">
     {#if !traces.size}
-      No weave ran an order last tick. A weave runs its order every tick once it's set loose (<code>ORDR</code>, then
-      <code>MANI</code>). Run a tick or two after it leaves the hand, then look at any of its cells here.
+      No particle ran an order last tick. A particle runs its order every tick once it's ingrained (<code>ORDR</code>,
+      then <code>INGR</code>) and its weave is set loose (<code>MANI</code>). Run a tick or two after it leaves the
+      hand, then look at any of its particles here.
     {:else}
       Weave {session.orderSel.weave} didn't run its order last tick.
     {/if}
@@ -102,12 +103,14 @@
 {:else}
   <div class="facts">
     <span>tick <b>{trace.tick}</b></span>
-    <span>at <b class="mono">{trace.off.map((v) => num(v, 3)).join(', ')}</b></span>
-    <span>moved <b class="mono">{trace.move.map((v) => num(v, 3)).join(', ')}</b></span>
+    <span>particle <b>{trace.particle}</b></span>
+    <span>from centre <b class="mono">{trace.off.map((v) => num(v, 3)).join(', ')}</b></span>
+    <span>kicked <b class="mono">{trace.kick.map((v) => num(v, 3)).join(', ')}</b></span>
+    <span title="Its own mana, burned by thinking">burned <b class="mono">{num(trace.burned, 4)} M</b></span>
     {#if trace.cnds !== 0}<span>condensed <b>{num(trace.cnds)}</b></span>{/if}
     <span class:bad={trace.outcome !== 'done'}>{trace.outcome}</span>
   </div>
-  <div class="budget" title="An order that thinks past its budget frays the weave">
+  <div class="budget" title="An order that thinks past its budget frays the weave, and every beat burns the particle's mana">
     <span>beats <b>{trace.beats}</b> / {PHYSICS.orderBudget}</span>
     <span class="track"><span class:over={trace.beats > PHYSICS.orderBudget} style="width: {Math.min(100, (trace.beats / PHYSICS.orderBudget) * 100)}%"></span></span>
   </div>
