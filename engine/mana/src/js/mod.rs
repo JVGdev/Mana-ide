@@ -142,6 +142,45 @@ pub fn num(x: f64) -> String {
     }
 }
 
+/// `x.toFixed(digits)`: rounded to `digits` decimals, a tie going to the larger, and −0 written as 0.
+pub fn to_fixed(x: f64, digits: usize) -> String {
+    if x.is_nan() {
+        return "NaN".into();
+    }
+    if x.abs() >= 1e21 {
+        return num(x);
+    }
+    if x < 0.0 {
+        let s = to_fixed(-x, digits);
+        // (−0.04).toFixed(1) is "-0.0": the sign stays even when the digits round to nothing.
+        return format!("-{s}");
+    }
+    let x = x.abs();
+    // Rust rounds an exact tie to even; JavaScript to the larger. A tie shows as a 5 and then nothing in the exact digits.
+    let exact = format!("{:.*}", digits + 40, x);
+    let tail = &exact[exact.len() - 40..];
+    let rounded = format!("{:.*}", digits, x);
+    if tail.starts_with('5') && tail[1..].bytes().all(|b| b == b'0') {
+        let up = format!("{:.*}", digits, x + 0.5 * 10f64.powi(-(digits as i32)));
+        if up != rounded {
+            return up;
+        }
+    }
+    rounded
+}
+
+/// `s.padStart(n)`.
+pub fn pad_start(s: &str, n: usize) -> String {
+    let len = s.chars().count();
+    if len >= n { s.to_string() } else { format!("{}{s}", " ".repeat(n - len)) }
+}
+
+/// `s.padEnd(n)`.
+pub fn pad_end(s: &str, n: usize) -> String {
+    let len = s.chars().count();
+    if len >= n { s.to_string() } else { format!("{s}{}", " ".repeat(n - len)) }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -167,6 +206,23 @@ mod tests {
             (f64::NEG_INFINITY, "-Infinity"),
         ] {
             assert_eq!(num(x), s, "{x:e}");
+        }
+    }
+
+    #[test]
+    fn fixes_decimals_as_javascript_does() {
+        for (x, d, s) in [
+            (0.125, 2, "0.13"),
+            (0.375, 2, "0.38"),
+            (2.5, 0, "3"),
+            (1.005, 2, "1.00"),
+            (-0.04, 1, "-0.0"),
+            (0.0, 1, "0.0"),
+            (12.3456, 1, "12.3"),
+            (99.95, 1, "100.0"),
+            (1e21, 2, "1e+21"),
+        ] {
+            assert_eq!(to_fixed(x, d), s, "{x}");
         }
     }
 
