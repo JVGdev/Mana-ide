@@ -709,11 +709,10 @@ pub fn merge_and_split(world: &mut World, hooks: &FluidHooks) -> Vec<Change> {
         done.insert(b_id);
     }
     if !gone.is_empty() {
-        world.particles.retain(|p| !gone.contains(&p.id));
+        world.retain_particles(|p| !gone.contains(&p.id));
     }
     // Split what has spread thin: more of what it feels is itself than is its neighbours.
-    let index: HashMap<u64, usize> = world.particles.iter().enumerate().map(|(i, p)| (p.id, i)).collect();
-    let left: Vec<usize> = ids.iter().filter(|id| !gone.contains(id)).map(|id| index[id]).collect();
+    let left: Vec<usize> = ids.iter().filter(|id| !gone.contains(id)).map(|&id| world.slot(id).unwrap()).collect();
     feel_all(world, &left);
     let kk = kernels(dims(world));
     let depth = if world.d == 1 { world.cell } else { 1.0 };
@@ -721,7 +720,7 @@ pub fn merge_and_split(world: &mut World, hooks: &FluidHooks) -> Vec<Change> {
         if gone.contains(id) || done.contains(id) {
             continue;
         }
-        let pi = index[id];
+        let pi = world.slot(*id).unwrap();
         let p = &world.particles[pi];
         let m = total(&p.free);
         if m < 2.0 * ph.mote - ph.epsilon || p.felt <= 0.0 {

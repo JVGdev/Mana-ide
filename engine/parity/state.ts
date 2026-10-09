@@ -18,14 +18,17 @@ export function hash(xs: ArrayLike<number>): string {
 
 const flat = (cells: number[][]) => cells.flat()
 
-export function state(w: World) {
-  return {
-    tick: w.tick,
-    particles: w.particles.map((p) => [
+export function state(w: World, full = true) {
+  const particles = w.particles.map((p) => [
       p.id, ...p.pos, ...p.vel, ...p.free, ...p.carried, p.weave, p.order ? p.order.addr : -1, p.yaw, p.pushedAt, p.touchedAt,
       p.rho, p.felt, ...p.grad, ...p.nvel, p.rhoM, p.mass, ...p.regs, ...p.stamp,
-    ]),
-    bonds: w.bonds.map((b) => [b.a.id, b.b.id, b.rest]),
+    ])
+  const bonds = w.bonds.map((b) => [b.a.id, b.b.id, b.rest])
+  return {
+    tick: w.tick,
+    // Big worlds are compared by hash: the same numbers, in the same order, to the last bit.
+    particles: full ? particles : hash(particles.flat()),
+    bonds: full ? bonds : hash(bonds.flat()),
     bodies: w.bodies.map((b) => [b.id, ...b.pos, ...b.vel, b.mass]),
     impulse: [...w.impulse.gravity, ...w.impulse.walls, ...w.impulse.outside],
     heat: Object.entries(w.heat),

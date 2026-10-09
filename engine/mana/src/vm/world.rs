@@ -1,5 +1,6 @@
 //! The world: a grid of cells, each with free air mana and condensed matter. A 2D world is one cell deep.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use indexmap::IndexMap;
@@ -7,7 +8,7 @@ use indexmap::IndexMap;
 use super::air::scale_height;
 use super::parts::{Parts, add, dominant, share, take, total, zero};
 use super::physics::physics;
-use crate::asm::Program;
+use crate::asm::Code;
 use crate::js;
 
 pub type Vec3 = [f64; 3];
@@ -27,7 +28,7 @@ pub struct Body {
 /// An order ingrained in a particle: the routine at `addr` of the spell that ingrained it.
 #[derive(Clone, Debug)]
 pub struct Ingrained {
-    pub program: Arc<Program>,
+    pub program: Arc<Code>,
     pub addr: usize,
 }
 
@@ -137,6 +138,8 @@ pub struct World {
     pub matter: Vec<Parts>,
     /// How the air in each cell moves: x, y, z, cell by cell.
     pub air_vel: Vec<f64>,
+    /// The particles, in the order they came into the world. Add and take them away only through the world's own
+    /// methods (pour, spawn, retain_particles), which keep `slots` up to date.
     pub particles: Vec<Particle>,
     pub bodies: Vec<Body>,
     pub tick: i64,
@@ -148,6 +151,8 @@ pub struct World {
     pub heat: IndexMap<String, f64>,
     next_body: u32,
     next_particle: u64,
+    /// Where each particle is in `particles`, by id.
+    slots: HashMap<u64, usize>,
 }
 
 impl World {
@@ -170,6 +175,7 @@ impl World {
             heat: IndexMap::new(),
             next_body: 1,
             next_particle: 1,
+            slots: HashMap::new(),
         }
     }
 
@@ -299,13 +305,27 @@ impl World {
 
     // Particles and air
 
+    /// Where the particle with this id is in `particles`, if it's in the world.
+    pub fn slot(&self, id: u64) -> Option<usize> {
+        self.slots.get(&id).copied()
+    }
+
     /// The particle with this id, if it's in the world.
     pub fn particle(&self, id: u64) -> Option<&Particle> {
-        self.particles.iter().find(|p| p.id == id)
+        self.slot(id).map(|i| &self.particles[i])
     }
 
     pub fn particle_mut(&mut self, id: u64) -> Option<&mut Particle> {
-        self.particles.iter_mut().find(|p| p.id == id)
+        self.slot(id).map(|i| &mut self.particles[i])
+    }
+
+    /// Keeps only the particles `keep` says to, in their order.
+    pub fn retain_particles(&mut self, keep: impl FnMut(&Particle) -> bool) {
+        self.particles.retain(keep);
+        self.slots.clear();
+        for (i, p) in self.particles.iter().enumerate() {
+            self.slots.insert(p.id, i);
+        }
     }
 
     /// New particles of free mana at a point, at most a mote each, spread over `spread` metres so their pressure can act.
@@ -357,6 +377,7 @@ impl World {
                 mass: 0.0,
                 lifted: 0.0,
             });
+            self.slots.insert(id, self.particles.len() - 1);
             out.push(id);
         }
         *parts = zero();
@@ -380,6 +401,7 @@ impl World {
         // What held the old one up was the old one's.
         q.lifted = 0.0;
         self.particles.push(q);
+        self.slots.insert(id, self.particles.len() - 1);
         self.particles.len() - 1
     }
 

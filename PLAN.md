@@ -146,6 +146,14 @@ can't hold up rock. What it found, and hands on:*
    3D, and the bench, against what TypeScript took. Bring SPEC (§10, D41), README and CLAUDE.md up to date. What the
    speed turns out to be decides how stiff step 2's matter can be: real, or a softer stand-in named in §0.
 
+**Found on the way** (for later; nothing here changes what the world does):
+
+- *The reference Node matters.* A Node built for a newer CPU (CachyOS's x86-64-v4 packages) lets its C compiler fuse
+  V8's multiply-adds, and its sines and logs come out a little different from a browser's. The traces are made with an
+  official Node build, and the Rust engine carries V8's own math (fdlibm), checked against it to the last bit.
+- *Bytes that aren't an instruction.* An order that ran into them stopped the whole TypeScript machine. The assembler
+  never lays any out, so no spell can reach them; in Rust it's a fault (`BAD_CODE`), like running off the end.
+
 ## 2. One matter *(large)*
 
 All matter obeys one mechanics, held by mana or not: the ground, loose earth, water, rock a wall is made of. The cell

@@ -21,6 +21,11 @@ pub fn hash(xs: impl IntoIterator<Item = f64>) -> String {
 }
 
 pub fn state(w: &World) -> Value {
+    state_of(w, true)
+}
+
+/// The world's state; a big world's particles and bonds by hash.
+pub fn state_of(w: &World, full: bool) -> Value {
     let particles: Vec<Vec<f64>> = w
         .particles
         .iter()
@@ -56,6 +61,11 @@ pub fn state(w: &World) -> Value {
     let i = &w.impulse;
     let impulse: Vec<f64> = i.gravity.iter().chain(i.walls.iter()).chain(i.outside.iter()).copied().collect();
     let heat: Vec<(String, f64)> = w.heat.iter().map(|(k, v)| (k.clone(), *v)).collect();
+    let (particles, bonds) = if full {
+        (json!(particles), json!(bonds))
+    } else {
+        (json!(hash(particles.into_iter().flatten())), json!(hash(bonds.into_iter().flatten())))
+    };
     json!({
         "tick": w.tick,
         "particles": particles,
@@ -74,7 +84,7 @@ pub fn stored_json(s: &Stored) -> Value {
 }
 
 /// What the TypeScript engine wrote down, if it has: run `npm run parity`.
-pub fn load(name: &str) -> Option<Vec<Value>> {
+pub fn load(name: &str) -> Option<Value> {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../target/parity").join(format!("{name}.json"));
     match std::fs::read_to_string(&path) {
         Ok(text) => Some(serde_json::from_str(&text).unwrap()),

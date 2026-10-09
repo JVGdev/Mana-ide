@@ -214,7 +214,7 @@ mod merging_and_splitting {
     use super::*;
 
     fn order(addr: usize) -> Ingrained {
-        Ingrained { program: std::sync::Arc::new(mana::asm::Program::empty()), addr }
+        Ingrained { program: mana::asm::Code::new(mana::asm::Program::empty()), addr }
     }
 
     #[test]
@@ -302,7 +302,8 @@ mod the_second_flaw {
         w.particle_mut(b).unwrap().pos = [2.05, 3.0, 0.125];
         w.particle_mut(a).unwrap().free[EARTH] = 0.5;
         w.particle_mut(b).unwrap().weave = 2;
-        w.particle_mut(a).unwrap().order = Some(Ingrained { program: std::sync::Arc::new(mana::asm::Program::empty()), addr: 3 });
+        w.particle_mut(a).unwrap().order =
+            Some(Ingrained { program: mana::asm::Code::new(mana::asm::Program::empty()), addr: 3 });
         let changes = merge_and_split(&mut w, &FluidHooks::default());
         assert_eq!(changes[0], Change::Merge { into: a, from: b, weave: 2 });
         assert_eq!(p(&w, a).weave, 1);

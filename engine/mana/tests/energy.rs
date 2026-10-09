@@ -55,3 +55,45 @@ fn loses_to_the_air_what_the_air_slows() {
     // What it lost went into the air's motion and into heat.
     assert!(close(sum(&stored(&mut w, 0.0)) + heat_of(&w), before, 6));
 }
+
+mod spells {
+    use super::*;
+    use mana::asm::Code;
+    use mana::load::spell;
+    use mana::scenes::scene;
+
+    fn balances(name: &str, ticks: usize, close_enough: f64) {
+        let mut s = scene(name, 2).unwrap();
+        s.sim.keep_energy();
+        s.sim.cast(s.caster, Code::new(spell(name)), None).unwrap();
+        s.sim.run(ticks);
+        let e = s.sim.energy_now();
+        assert!(close(e.total + e.heat, e.start + e.outside + e.error_total, 6)); // the ledger's own sums
+        assert!(e.outside > 0.0); // the caster put energy in
+        assert!(e.heat > 0.0);
+        // What the numbers get wrong is small beside what moved through.
+        assert!(e.error_total.abs() < close_enough * (e.heat + e.outside.abs()));
+    }
+
+    #[test]
+    fn balances_through_a_fireball() {
+        balances("Fireball", 70, 0.05);
+    }
+
+    #[test]
+    fn balances_through_a_gust() {
+        balances("Gust", 30, 0.05);
+    }
+
+    #[test]
+    fn balances_through_a_water_shield() {
+        balances("WaterShield", 80, 0.05);
+    }
+
+    // A wall's rock is bonds pushed back to their length every step: standing, it fights the forces on it, and what the
+    // bonds give back and take out again shows here (PLAN step 2 makes rock a material).
+    #[test]
+    fn balances_through_a_stone_wall() {
+        balances("StoneWall", 160, 0.4);
+    }
+}

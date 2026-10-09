@@ -82,6 +82,7 @@ fn everything(w: &mut World) {
 
 fn check(name: &str, tune: impl Fn(&mut Physics), world: impl Fn() -> World, step: impl Fn(&mut World)) {
     let Some(want) = parity::load(&format!("world-{name}")) else { return };
+    let want = want.as_array().unwrap();
     tuned(tune, || {
         let mut w = world();
         for (t, want) in want.iter().enumerate() {
