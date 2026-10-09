@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { assemble, AsmError } from '../src/asm/assembler.ts'
 import { decodeAll, format, listing } from '../src/asm/disassembler.ts'
 import { resolver } from '../src/load.ts'
+import { OP_DOCS, PORT_DOCS } from '../src/asm/docs.ts'
+import { OPS, PORTS } from '../src/asm/isa.ts'
 
 const hex = (bytes: Uint8Array) => Array.from(bytes, (b) => b.toString(16).toUpperCase().padStart(2, '0')).join(' ')
 const asm = (src: string) => assemble(src, 'test.masm', resolver())
@@ -90,5 +92,12 @@ describe('mistakes', () => {
     expect(problems('FILT m1, m0, #EARTH')[0]).toMatch(/a known #NAME/)
     expect(problems('.use Nothing')[0]).toMatch(/no library called Nothing/)
     expect(problems('ADD n1')[0]).toMatch(/takes 2 operand/)
+  })
+})
+
+describe('docs', () => {
+  it('say what every instruction and port does', () => {
+    for (const op of OPS) expect(OP_DOCS[op.name]?.syntax.startsWith(op.name), op.name).toBe(true)
+    for (const p of PORTS) expect(PORT_DOCS[p.name], p.name).toBeTruthy()
   })
 })

@@ -1,0 +1,130 @@
+@import '@fontsource-variable/atkinson-hyperlegible-next/wght.css';
+@import '@fontsource-variable/jetbrains-mono/wght.css';
+
+/* Quire's lamplight: walnut ink, vellum text, candle brass. */
+:root {
+  --bg: #17130f;
+  --bg-2: #1b1712;
+  --panel: #1f1a14;
+  --panel-2: #29221a;
+  --panel-3: #322a20;
+  --line: #342c22;
+  --line-2: #4a3f31;
+  --text: #ebe3d2;
+  --text-2: #c0b39c;
+  --muted: #968a75;
+  --accent: #d6a75c;
+  --accent-2: #e6bd7a;
+  --accent-ink: #1c150c;
+  --accent-soft: rgba(214, 167, 92, 0.13);
+  --accent-line: rgba(214, 167, 92, 0.42);
+  --info: #8db0cf;
+  --info-soft: rgba(141, 176, 207, 0.12);
+  --special: #baa2da;
+  --special-soft: rgba(186, 162, 218, 0.12);
+  --danger: #e58a72;
+  --danger-soft: rgba(229, 138, 114, 0.14);
+  --ok: #9cc48a;
+  --ok-soft: rgba(156, 196, 138, 0.13);
+  --warn: #e3b75e;
+  /* mana registers */
+  --mana: #e6bd7a;
+  --field: var(--bg-2);
+  --pop: var(--panel-2);
+  --raised: var(--panel-3);
+  --shadow: 0 18px 50px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3);
+  --radius: 12px;
+  --radius-sm: 8px;
+  --radius-xs: 6px;
+  --radius-xxs: 4px;
+  --font-ui: 'Atkinson Hyperlegible Next Variable', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, 'Cascadia Code', Menlo, Consolas, monospace;
+  --font-display: var(--font-ui);
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+button,
+select,
+input {
+  font: inherit;
+  color: var(--text);
+}
+
+button {
+  min-height: 30px;
+  padding: 3px 11px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-xs);
+  background: var(--panel-2);
+  cursor: pointer;
+}
+button:hover:not(:disabled) {
+  background: var(--panel-3);
+}
+button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+button.primary:hover {
+  background: var(--accent-2);
+}
+button.quiet {
+  background: none;
+  border-color: transparent;
+  color: var(--text-2);
+}
+button:focus-visible,
+select:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--accent-line);
+  outline-offset: 1px;
+}
+
+select,
+input[type='number'],
+input:not([type]) {
+  min-height: 30px;
+  padding: 3px 8px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-xs);
+  background: var(--field);
+}
+
+input[type='range'],
+input[type='checkbox'] {
+  accent-color: var(--accent);
+}
+
+code,
+.mono {
+  font-family: var(--font-mono);
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.empty {
+  color: var(--muted);
+  font-size: 13px;
+}

@@ -40,6 +40,36 @@ export function adept(): CasterStats {
   }
 }
 
+/** A child with the gift: a small body and a mind with 8 registers. It can't hold Shapes.ball as written. */
+export function child(): CasterStats {
+  return {
+    body: {
+      capacity: s(150),
+      baseline: s(30),
+      drain: s(8),
+      focus: s(3),
+      streams: s(2),
+      affinity: [s(0.3), s(0.3), s(0.3), s(0.3)],
+    },
+    mind: { speed: s(120), registers: s(8), memory: s(32) },
+  }
+}
+
+/** A master: years of training on top of an adept's body and mind. */
+export function master(): CasterStats {
+  return {
+    body: {
+      capacity: s(600, 12000),
+      baseline: s(60, 40),
+      drain: s(15, 10),
+      focus: s(6, 6),
+      streams: s(4, 4),
+      affinity: [s(0.6, 0.25), s(0.6, 0.25), s(0.6, 0.25), s(0.6, 0.25)],
+    },
+    mind: { speed: s(300, 1200), registers: s(32), memory: s(256) },
+  }
+}
+
 /** What the caster wills: the live input a spell reads through its ports. */
 export type Will = { aim: Vec; amount: number; force: number; maintain: boolean }
 

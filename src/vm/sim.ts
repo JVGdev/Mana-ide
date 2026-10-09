@@ -38,7 +38,7 @@ export type SimEvent = {
 }
 
 /** A thinking frame: a mind casting a spell, or a weave's cell running its order. */
-type Frame = {
+export type Frame = {
   n: Float64Array
   /** How many of `n` exist. */
   limit: number
@@ -65,6 +65,10 @@ export type Cast = {
   beats: number
   /** Where they went: how many times each instruction ran, and its beats, by address. */
   profile: Map<number, { runs: number; beats: number }>
+  /** Beats left in the tick being thought. */
+  left: number
+  /** Done thinking for this tick: out of beats, or it said `TICK`. */
+  yielded: boolean
 }
 
 /** What one cell's order asked for this tick. */
@@ -89,6 +93,8 @@ export class Sim {
   casts: Cast[] = []
   events: SimEvent[] = []
   private nextWeave = 1
+  /** Partway through a tick: some minds may still be thinking, and the world hasn't moved yet. */
+  midTick = false
   /** Matter weaves hold, per world cell, as of the start of this tick's orders. */
   private carried: Float64Array
 
@@ -120,6 +126,8 @@ export class Sim {
       startedAt: this.tick,
       beats: 0,
       profile: new Map(),
+      left: 0,
+      yielded: true,
     }
     this.casts.push(cast)
     this.log({ kind: 'cast', caster: caster.name, detail: name })
@@ -136,9 +144,66 @@ export class Sim {
   }
 
   step() {
+    this.startThinking()
+    this.endTick()
+  }
+
+  /**
+   * Runs one instruction of `cast`'s mind. When that's its last for this tick, the tick ends: the other minds finish
+   * thinking and the world moves. Returns false if the cast has nothing left to run.
+   */
+  stepInstruction(cast: Cast): boolean {
+    for (let tries = 0; tries < 2 && cast.state === 'running'; tries++) {
+      this.startThinking()
+      const ran = this.think(cast, { max: 1 })
+      if (!cast.yielded) this.think(cast, { max: 0 }) // will the next one fit in this tick?
+      if (cast.yielded || cast.state !== 'running') this.endTick()
+      if (ran) return true
+    }
+    return false
+  }
+
+  /**
+   * Runs until `stop` is true just before one of `cast`'s instructions, and leaves the machine there, partway through a
+   * tick. The instruction it's resuming from doesn't count. Returns true if it stopped, false if `ticks` ran out or
+   * the cast ended.
+   */
+  runUntil(cast: Cast, stop: (addr: number) => boolean, ticks = 1): boolean {
+    let from = this.midTick ? cast.frame.pc : -1
+    const check = (addr: number) => {
+      if (addr === from) {
+        from = -1
+        return false
+      }
+      from = -1
+      return stop(addr)
+    }
+    for (let t = 0; t < ticks && cast.state === 'running'; t++) {
+      this.startThinking()
+      this.think(cast, { stop: check })
+      if (!cast.yielded && cast.state === 'running') return true
+      this.endTick()
+    }
+    return false
+  }
+
+  /** The start of a tick: every running mind gets its beats. */
+  private startThinking() {
+    if (this.midTick) return
+    this.midTick = true
+    for (const cast of this.casts)
+      if (cast.state === 'running') {
+        cast.left = cast.caster.speed * (1 + (cast.caster.conditioning.get(cast.name) ?? 0))
+        cast.yielded = false
+      }
+  }
+
+  /** The rest of a tick: minds still thinking finish, then bodies, weaves and the world. */
+  private endTick() {
     const w = this.world
     // 1. Minds think.
     for (const cast of this.casts) if (cast.state === 'running') this.think(cast)
+    this.midTick = false
     // 2–4. Bodies: holds run down, flows drain, overcharge.
     for (const c of this.casters) this.breathe(c)
     // 5. Weaves leak, and take hold of what matter they can.
@@ -183,33 +248,41 @@ export class Sim {
 
   // The mind
 
-  private think(cast: Cast) {
-    const caster = cast.caster
-    let beats = caster.speed * (1 + (caster.conditioning.get(cast.name) ?? 0))
-    while (cast.state === 'running') {
+  /**
+   * Thinks with what's left of this tick's beats, until they run out or it says `TICK`. It can stop sooner: after `max`
+   * instructions, or before one `stop` picks. Returns how many it ran.
+   */
+  private think(cast: Cast, opts: { max?: number; stop?: (addr: number) => boolean } = {}): number {
+    let ran = 0
+    while (cast.state === 'running' && !cast.yielded) {
       let instr: Instr
       try {
         instr = fetch(cast.program, cast.frame.pc)
       } catch (e) {
         this.end(cast, 'fault', e instanceof Fault ? e.message : String(e))
-        return
+        return ran
       }
-      if (beats < instr.op.beats) return
-      beats -= instr.op.beats
+      if (cast.left < instr.op.beats) {
+        cast.yielded = true
+        return ran
+      }
+      if (opts.max !== undefined && ran >= opts.max) return ran
+      if (opts.stop?.(instr.addr)) return ran
+      cast.left -= instr.op.beats
+      ran++
       cast.beats += instr.op.beats
       const spent = cast.profile.get(instr.addr) ?? { runs: 0, beats: 0 }
       spent.runs++
       spent.beats += instr.op.beats
       cast.profile.set(instr.addr, spent)
       try {
-        const done = this.execMind(cast, instr)
-        if (done === 'tick') return
+        if (this.execMind(cast, instr) === 'tick') cast.yielded = true
       } catch (e) {
         if (!(e instanceof Fault)) throw e
         this.end(cast, 'fault', e.message)
-        return
       }
     }
+    return ran
   }
 
   private end(cast: Cast, state: Cast['state'], detail?: string) {
@@ -355,7 +428,7 @@ export class Sim {
         const i = this.world.clampedCellOf(pos)
         const [x, y, z] = this.world.coords(i)
         const inside = this.world.cellOf(pos) >= 0 ? pos : this.world.centre(x, y, z)
-        this.world.loose.push({ pos: [...inside], vel: vec(3), parts })
+        if (total(parts) > PHYSICS.epsilon) this.world.loose.push({ pos: [...inside], vel: vec(3), parts })
         return next()
       }
 

@@ -11,6 +11,16 @@ npm install
 npm test
 ```
 
+## The spell tester
+
+```
+npm run tester
+```
+
+Opens at http://localhost:5175. Edit a spell or a library, Cast it, then Play, Step one instruction (F10) or run to the end
+of the Tick (Shift+F10). Click the gutter for a breakpoint; the second gutter shows what each line has cost in beats. Click
+the world to aim. Ctrl+S saves the file back to `spells/` or `lib/`.
+
 ## Assemble a spell
 
 ```

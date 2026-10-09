@@ -872,6 +872,7 @@ Gust:
         SEND  m1, n6, n0:2, n3:5  ; SEND: all of it, from the hand
         GATH  m1, n17
         JOIN  m0, m1              ; a fresh breath for the next pass
+        CIRC  m0                  ; held as one: the fresh breath wasn't
         TICK
         JMP   .loop
 .end:   HALT                      ; the residue joins the flow
@@ -993,23 +994,35 @@ The language is designed after the machine is built, and §7's versions are a sk
 
 ## 9. The spell tester
 
-One screen, four parts:
+A browser app (Svelte 5, Vite, CodeMirror 6) in `tester/`. `npm run tester` opens it; in development it reads and saves
+the `.masm` files in `spells/` and `lib/` directly.
 
-- **Code**: the editor (CodeMirror 6), with highlighting, hover, completion and live errors.
-- **Machine**: the assembly, line for line with the code, and the bytes in hex.
-  - registers: the mind's `n` and the body's `m`, each `m` as four coloured parts with its hold running down;
-  - the stack;
-  - each weave's registers;
-  - step by instruction, by tick, or into a weave's order for one cell.
-- **World**: the spell being cast, in 2D first and 3D later. You see air mana as a haze, matter, weaves cell by cell, loose
-  mana and wind.
-- **Caster**:
-  - the body's gauge: baseline, flow, held mana, weaves in hand, and the capacity line;
-  - the harm from overcharge;
-  - the ledger;
-  - who is casting: their stats, and conditioning per spell.
+- **Code**: the spell and the libraries it uses, one tab each.
+  - Highlighting, completion, and a hover that says what an instruction does and what it costs, or what a register
+    holds right now.
+  - Errors from the assembler as you type, on their lines.
+  - Breakpoints in the gutter, and a second gutter with the beats each line has cost so far.
+  - The line the mind runs next is lit, and the editor follows it into whichever library it's in.
+- **Running it**: Cast (a fresh world, and the spell), Play at a chosen number of ticks a second, Step one instruction,
+  Tick to the end of the tick. Stepping can stop partway through a tick: the mind has thought, but the world hasn't
+  moved yet.
+- **World**: a 2D view, or a slice of a 3D world. Matter by its dominant part, weave cells outlined in the colour of their
+  mana, the matter weaves hold, loose mana, thin and thick air, bodies, the hand and the aim. Click to aim; hover a cell to
+  read it.
+- **Panels**:
+  - *Mind*: what it runs next, beats left this tick, flags, `n0`–`n31` (the ones that changed are lit; ones this mind
+    doesn't have are dimmed), return addresses, the stack and memory.
+  - *Body*: load against capacity, flow, drain, focus, harm, condition, and `m0`–`m7` as four coloured parts, each with
+    how long it's still held or that it's slipping.
+  - *Weaves*: each weave's state, locks, order, cells, mana, the matter it holds, and `w0`–`w7`.
+  - *Profile*: beats by routine and the costliest lines (D18).
+  - *Events* and the ledger.
+  - *Caster*: child, adept or master; every stat as genetics and training, with what it comes to now; condition; how
+    many times they've cast this spell before; and the will (amount, force, maintain), which a running spell reads live.
+  - *Bytes*: the assembled program, with where the mind is.
+  - *Reference*: every instruction and port.
 
-Your will drives the cast: click to aim, hold a key to maintain, sliders for amount and force.
+Not yet: stepping into one cell's order.
 
 ---
 
@@ -1024,6 +1037,8 @@ src/
   cli/       mas.ts, mvm.ts
   scenes.ts  test worlds for the four spells, in 2D and 3D
   render.ts  a slice of the world as text
+  profile.ts where a cast's beats went
+tester/      the spell tester: Svelte 5, Vite, CodeMirror 6
 lib/         Elements, Basics, Shapes, Reactions, Transformations, in .masm
 spells/      StoneWall, Fireball, Gust, WaterShield, in .masm
 test/        the assembler, the machine, the four spells
@@ -1032,6 +1047,7 @@ test/        the assembler, the machine, the four spells
 ```
 npm install
 npm test                                   the tests
+npm run tester                             the spell tester, at http://localhost:5175
 npx tsx src/cli/mas.ts spells/Fireball.masm  the listing: addresses, bytes, instructions
 npx tsx src/cli/mvm.ts spells/StoneWall.masm cast it in its test world, in the terminal
 npx tsx src/cli/mvm.ts spells/Gust.masm --ticks 40 --maintain 30
@@ -1046,7 +1062,8 @@ npx tsx src/cli/mvm.ts spells/Gust.masm --ticks 40 --maintain 30
    - The libraries and the four spells in `.masm`.
    - Tests: the wall stands and leaves a trench, then crumbles back into it; the fireball bursts on touch; the shield follows
      its maker and falls in a splash; Gust pushes and, kept up too long, overcharges; the ledger balances every tick.
-2. **The tester, first cut.** Assembly editing, stepping, registers, a 2D world, the caster panel.
+2. **The tester, first cut.** *Built.* Editing with live errors, breakpoints, stepping by instruction or tick, the mind,
+   the body, weaves, the profile, the ledger, the caster and their will, and the world in 2D or a 3D slice.
 3. **The language**, compiling to what phase 1 runs by hand.
 4. Casters, spells and libraries read from Quire.
 5. **Other notations** (later): runes, circuits and scores.

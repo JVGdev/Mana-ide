@@ -111,6 +111,38 @@ slow:   DIV   n0, #2
     expect(cast.profile.get(cast.program.labels.get('slow')!)).toEqual({ runs: 1, beats: 4 })
   })
 
+  it('steps one instruction at a time, and the world moves when its beats for the tick run out', () => {
+    const { sim, cast } = setup('LDI n0, #1\nLDI n1, #2\nLDI n2, #3\nHALT', (s) => (s.mind.speed.genetics = 2))
+    expect(sim.stepInstruction(cast)).toBe(true)
+    expect(cast.frame.n[0]).toBe(1)
+    expect(sim.tick).toBe(0) // one more fits in this tick
+    sim.stepInstruction(cast)
+    expect(cast.frame.n[1]).toBe(2)
+    expect(sim.tick).toBe(1) // that was the last: the tick ended
+    sim.stepInstruction(cast)
+    expect(cast.frame.n[2]).toBe(3)
+    expect(sim.tick).toBe(1)
+  })
+
+  it('stops before a breakpoint, partway through a tick, and goes on from it', () => {
+    const { sim, cast } = setup(`
+main:   LDI   n0, #0
+.loop:  ADD   n0, #1
+here:   CMP   n0, #5
+        JLT   main.loop
+        HALT`)
+    const here = cast.program.labels.get('here')!
+    expect(sim.runUntil(cast, (a) => a === here, 10)).toBe(true)
+    expect(sim.midTick).toBe(true)
+    expect(cast.frame.n[0]).toBe(1)
+    expect(sim.runUntil(cast, (a) => a === here, 10)).toBe(true)
+    expect(cast.frame.n[0]).toBe(2)
+    sim.step() // finish the tick
+    expect(sim.midTick).toBe(false)
+    expect(cast.state).toBe('halted')
+    expect(cast.frame.n[0]).toBe(5)
+  })
+
   it('counts a cast toward conditioning when it halts', () => {
     const { sim, cast, caster } = setup('HALT')
     sim.runCasts()

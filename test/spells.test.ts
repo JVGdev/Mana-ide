@@ -154,6 +154,16 @@ describe('Gust', () => {
     expect(s.caster.harm).toBe(0)
   })
 
+  it('sends a breath every tick it is kept up', () => {
+    // JOIN holds only as long as the weaker register; Gust re-holds what it joined, or it would send once and stop.
+    const s = gust(2)
+    s.sim.cast(s.caster, spell('Gust'))
+    const sent: number[] = []
+    run(s, 6, () => sent.push(s.sim.world.loose.reduce((t, p) => t + p.parts[2], 0)))
+    expect(s.sim.world.loose.length).toBeGreaterThanOrEqual(4)
+    expect(sent.at(-1)).toBeGreaterThan(sent[0] * 3)
+  })
+
   it('overcharges a caster who keeps it up too long', () => {
     const s = gust(2)
     s.sim.cast(s.caster, spell('Gust'))
