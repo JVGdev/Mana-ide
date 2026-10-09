@@ -58,7 +58,7 @@
     <li><span class="mono">n0</span>–<span class="mono">n15</span> are a routine's to use; <span class="mono">n16</span>–<span class="mono">n31</span> are kept for the caller. Shapes take their mana in <span class="mono">m1</span>.</li>
     <li><span class="mono">n4:6</span> is a triple: three registers in a row, for a position or a direction.</li>
     <li>Mana is four parts, 0–3. <span class="mono">.use Elements</span> names them <span class="mono">#FIRE #WATER #AIR #EARTH</span>.</li>
-    <li>An order runs in every cell of its weave, every tick, with 64 beats to spend. It starts with <span class="mono">n0:2</span> the cell's place, <span class="mono">n3</span> its mana and <span class="mono">n4</span> the weave's age.</li>
+    <li>An order runs in every cell of its weave, every tick, with 64 beats to spend. It starts with <span class="mono">n3</span> its particle's mana and <span class="mono">n4</span> the weave's age, and knows only what its particle feels (<span class="mono">VEL</span>, <span class="mono">DENS</span>, <span class="mono">GRAD</span>, <span class="mono">NVEL</span>, <span class="mono">TUCH</span>) and its weave's registers: not where it is.</li>
   </ul>
 {/if}
 

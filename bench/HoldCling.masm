@@ -1,0 +1,12 @@
+; Held by its own order: where the mana around it thins past the ball's edge, it kicks itself back toward thicker mana. The caster ingrains it and walks away.
+        .use  Bench, Orders
+
+HoldCling:
+        CALL  pour
+        ORDR  n16, .order
+        CALL  release
+        MOV   n0, n16
+        HALT
+
+.order: CALL  cling
+        RET

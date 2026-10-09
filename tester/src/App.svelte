@@ -16,7 +16,6 @@
   import { session, SCENE_NAMES, PANELS, type SceneName } from './lib/session.svelte.ts'
   import { num, PART_COLORS, PART_NAMES } from './lib/format.ts'
   import { SCENES } from '../../src/scenes.ts'
-  import { PHYSICS } from '../../src/vm/physics.ts'
 
   let ready = $state(false)
   let note = $state('')
@@ -86,10 +85,8 @@
     session.spell = path
     session.open = path
     const name = baseName(path).replace(/\.masm$/, '')
-    // The bench's spells: a ball held in front of the caster, or thrown at the Fireball's pillar. Its orders that only
-    // feel are run where orders aren't told where their centre is.
+    // The bench's spells: a ball held in front of the caster, or thrown at the Fireball's pillar.
     const bench = path.startsWith('bench/')
-    PHYSICS.orderKnowsCentre = !(bench && name.endsWith('Feel'))
     const scene = bench ? (name.startsWith('Hold') ? 'Hold' : 'Fireball') : name
     if (scene in SCENES) session.loadScene(scene as SceneName)
     else session.reset()

@@ -1,7 +1,7 @@
-; Thrown by hand, held by its own order: it knows where it is from the centre, and pulls back in when it strays (the Fireball).
-        .use  Bench, Shapes, Reactions, Transformations, Orders
+; Thrown by hand, held by its own order: it kicks itself back toward thicker mana when it strays past the edge (the Fireball).
+        .use  Bench, Reactions, Transformations, Orders
 
-ThrowPull:
+ThrowCling:
         CALL  pour
         ORDR  n16, .order
         CALL  release
@@ -18,7 +18,7 @@ ThrowPull:
         CALL  touch
         CMP   n5, #0
         JNE   .hit
-        CALL  pull
+        CALL  cling
         RET
 .hit:   PUTW  #0, n5              ; the whole weave bursts from the next tick
         PUTW  #4, n4

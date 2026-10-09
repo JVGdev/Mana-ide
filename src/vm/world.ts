@@ -37,8 +37,10 @@ export type Particle = {
   dvLeft: number
   /** The tick it was last pushed, by its caster or its order. */
   pushedAt: number
-  /** How dense the mana around it is (M/m³), which way it thickens, and how its neighbours move: what it can feel. */
+  /** How dense the mana around it is (M/m³), as its pressure works it out (the spiky kernel). */
   rho: number
+  /** How dense it feels the mana around it is, which way it thickens, and how its neighbours move: what DENS, GRAD and NVEL read. */
+  felt: number
   grad: Vec
   nvel: Vec
   /** How dense the matter held around it is: its mass per m³. */
@@ -227,6 +229,7 @@ export class World {
         dvLeft: PHYSICS.pushRate,
         pushedAt: -1,
         rho: 0,
+        felt: 0,
         grad: [0, 0, 0],
         nvel: [0, 0, 0],
         rhoM: 0,
