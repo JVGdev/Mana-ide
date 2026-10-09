@@ -6,12 +6,12 @@
 Ikozu's Mana is already written like code in Quire's *Codefied Modern Formulae* notation, but nothing runs it. This project
 makes it real:
 
-1. a **machine** whose instructions are what a caster's body can actually do with mana: the Core, as close to machine code as
-   it gets;
-2. a **language**, in the style of the codified spells (braces for declarations, Fortran for control flow, `!` comments), that
-   compiles to that machine;
-3. a **spell tester**: an editor, the compiled assembly beside it, and a world where the spell is cast, watched and stepped
-   through.
+1. a **machine** that is a caster: a **mind** that computes with numbers and a **body** that moves mana. Its instructions are
+   all a caster can do, and nothing more;
+2. **libraries** written for that machine: the elements, the shapes, the reactions. A ball is a loop that lays mana out cell by
+   cell inside a radius. A shield is `sin` and `cos` around a circle;
+3. a **language**, in the style of the codified spells, that compiles to the machine and calls the libraries;
+4. a **spell tester**: an editor, the assembly beside it, and a world where the spell is cast, watched and stepped through.
 
 The examples throughout are the four spells of Ikozu: **Stone Wall**, **Fireball**, **Gust** and **Water Shield**.
 
@@ -21,353 +21,633 @@ The examples throughout are the four spells of Ikozu: **Stone Wall**, **Fireball
 
 | # | Decision |
 |---|---|
-| D1 | The Core is rethought: no more one operation per aspect (FILTER·Fire, FILTER·Earth, SEND·Wall, LOCK·Shield…). Aspects become **operands**, and the Core is a machine with registers and instructions. |
-| D2 | The Core is as close to machine code as possible: fixed mnemonics, registers, labels, jumps, and a byte encoding. |
-| D3 | Mana works in **3D**. A **2D** world is a 3D world one cell thick, so every spell runs in both unchanged. |
-| D4 | Keep the codified style: `Type name(params) { }` declarations, `IF (…) DO … END IF`, `WHILE (…) DO … END DO`, `.NOT.`, `!` comments, optional `CALL`. |
-| D5 | Mana that isn't maintained **joins the body's natural flow** and follows it. Held mana plus the flow above the body's capacity is an **overcharge**. |
-| D6 | **LOCK comes after manifest**. It locks something of the manifestation: its shape, its input, its position. |
-| D7 | **Affinities** are the caster's capacity to filter and circulate each element. Filtering loses mana in proportion to the lack of affinity, and a weaker charge makes a weaker spell. |
-| D8 | The tester is a practical tool, maybe the kind of spell tester Ikozu's mage-engineers would have, but not dressed up in lore. Errors are technical and name the law they break. |
-| D9 | Aspect costs are left out. A spell's strength comes from how much mana it carries, not from a price list. |
+| D1 | The old Core (one operation per aspect: FILTER·Fire, SEND·Wall, LOCK·Shield…) is replaced by a machine. |
+| D2 | The machine is as close to machine code as possible. It knows **nothing** of elements, shapes or reactions: those are **libraries**, written in its assembly. |
+| D3 | The machine runs on a person. The **mind** has number registers. The **body** has mana registers. Registers hold numbers or mana, nothing else: weaves, positions and elements are numbers. |
+| D4 | Mana works in **3D**. A **2D** world is a 3D world one cell deep. Libraries read the world's depth and lay out a disc where they'd lay out a ball. |
+| D5 | Keep the codified style for the language: `Type name(params) { }` declarations, `IF (…) DO … END IF`, `WHILE (…) DO … END DO`, `.NOT.`, `!` comments, optional `CALL`. |
+| D6 | Mana that isn't maintained **joins the body's natural flow** and follows it. If held mana plus the flow goes over the body's capacity, the caster is **overcharged**: they are harmed. Nothing else in the machine depends on it. |
+| D7 | **LOCK comes after manifest.** It locks something of the manifestation: its shape, its input, its order. |
+| D8 | **Affinities** set how much is lost when filtering, and only then. Less affinity means less filtered mana, so a weaker spell. |
+| D9 | How long a hold lasts (**focus**), how many mana registers there are (**streams**) and how fast the flow drains (**drain**) are all stats of the caster's body. |
+| D10 | Aspect costs are left out. A spell's strength is the mana it carries. |
+| D11 | The tester is a practical tool, maybe the kind Ikozu's mage-engineers would have, but not dressed up in lore. |
 
 ---
 
-## 2. The world
-
-### Space
-
-- The world is a 3D grid of **cells** (say 0.25 m each). A 2D world has depth 1.
-- Each cell holds:
-  - **air mana**: how much mana floats there, as an element vector (below);
-  - **matter**: none, earth, water or air, and how much.
-- Positions are vectors `(x, y, z)`. In 2D, `z` is always 0.
-- Time moves in **ticks**. Every instruction takes one tick unless it says otherwise.
-
-### Mana is a vector of four elements
-
-The Law of Equality says *M = Ma + Mf + Mw + Me*, each a quarter of a particle's volume. So every amount of mana, wherever it
-is, is a vector `[F, W, A, E]`:
-
-- **raw** mana, gathered from the air, is `[¼, ¼, ¼, ¼]` of its amount;
-- **filtered** mana is pure: `[0, 0, 0, E]` is earth mana;
-- **residue** is what's left after filtering: raw mana missing one or more parts.
-
-The Law of the Four becomes a type rule: only **pure** mana (one element) can be given a shape.
-
-The Law of Conservation is a property of the machine, not a rule a spell can break. No instruction creates or destroys mana.
-Every instruction moves it between places, and the tester's **ledger** always balances:
+## 2. Layers
 
 ```
-Σ air + Σ body + Σ registers + Σ vessels = constant
+  spells        Fireball, Stone Wall…           .mana, or .masm by hand
+  ─────────────────────────────────────────────
+  language      the codified style               compiles to assembly, calls libraries
+  ─────────────────────────────────────────────
+  libraries     Elements, Shapes, Reactions,     assembly: loops, sin, cos, sqrt
+                Transformations, Basics
+  ─────────────────────────────────────────────
+  machine       mind + body                      ~60 instructions, numbers and mana
+  ─────────────────────────────────────────────
+  world         cells, air mana, matter          physics: not programmable
 ```
 
-### The caster's body
+Every layer can be read and stepped through in the tester, down to the bytes.
 
-A caster is a body with:
+---
+
+## 3. The world
+
+### Space and time
+
+- The world is a 3D grid of **cells** (0.25 m by default; the `CELL` port says). A 2D world is one cell deep (`DEPTH` = 1).
+- Positions are three numbers `(x, y, z)` in metres, with **y up**. In 2D, `z` is 0.
+- Time moves in **ticks**.
+
+### Mana is four parts
+
+The Law of Equality says *M = Mf + Mw + Ma + Me*, each a quarter of a particle. Every amount of mana, anywhere, is four
+amounts, one per part. The machine numbers the parts **0, 1, 2, 3**. Calling part 3 "earth" is what the Elements library does.
+
+- **Raw** mana, gathered from the air: a quarter in each part.
+- **Pure** mana: one part only. Filtering makes it.
+- **Residue**: raw mana with one or more parts taken out.
+
+Mana answers to only four names (the Law of the Four), so the machine has no part 4. Filtering by anything else fails.
+
+The Law of Conservation is a property of the machine. No instruction creates or destroys mana, and the tester's **ledger**
+always balances:
+
+```
+Σ air + Σ flow + Σ mana registers + Σ weaves + Σ loose mana = constant
+```
+
+### Matter
+
+Each cell may hold matter of one of the four parts: flame, water, air (always there unless displaced) or earth.
+
+### What mana does to matter (the physics)
+
+These rules belong to the world, not to the machine:
+
+1. **Pure mana binds matter of its own part** in the cell it's in: earth mana takes hold of earth, water mana of water. Fire
+   mana *is* its own matter: where fire mana is, there's flame. How much matter a cell's mana can bind depends on how much mana
+   is there. Too little, and some matter is left behind.
+2. **Bound matter moves with its mana.** A cell of earth mana that moves up carries its earth with it, and the ground it left
+   is empty.
+3. **Loose mana** (sent, or let go) keeps its velocity, slows down, and spreads back into the air. Moving air mana pushes air:
+   **wind**, which pushes whatever is light enough.
+4. **Matter blocks matter.** A cell can't move into a cell holding matter that isn't its own. Running into it is a **touch**.
+
+Each of these rules has numbers to tune (how much earth 1 M binds, how fast loose mana slows, and so on). Where water comes
+from is an open question (§11).
+
+---
+
+## 4. The caster
+
+The machine is a person, and its limits are their stats.
+
+### The body
 
 | Stat | Meaning |
 |---|---|
-| `capacity` C | How much mana the body can bear at once. |
-| `flow` | The body's natural flow: mana circulating on its own. It rests at a **baseline** B. Above B, it drains back to the air at a natural rate *d* per tick. |
-| `affinity[e]` | 0–100% for each element: how well the caster filters and circulates it. |
-| `focus` W | How many ticks a CIRCULATE keeps mana held before it has to be done again. |
-| `streams` | How many mana registers the caster can work with (2 for an apprentice, 8 for a master). |
+| `capacity` | The most mana the body can bear. Past it, **overcharge**: the caster is harmed, and the tester counts how much. |
+| `baseline` | The body's own flow, before any spell. |
+| `drain` | How much flow above the baseline leaves the body each tick, back into the air. |
+| `affinity[0..3]` | 0–100% per part: how much of that part filtering keeps. |
+| `focus` | How many ticks a CIRCULATE holds a mana register. |
+| `streams` | How many mana registers (`m0`… up to `m7`) the caster can use. |
 
-Each tick, the machine does this:
+### The mind
 
-1. **Holds run down.** A held mana register whose hold has run out (W ticks after its last CIRC) **joins the flow**. Its mana
-   isn't lost: it is now the body's.
-2. **The flow drains.** Flow above the baseline drains to the air around the caster, at most *d* per tick.
-3. **Overcharge check.** If `flow + held registers + vessels still in hand > capacity`, the body is **overcharged**: an
-   `OVERCHARGE` fault, with the excess.
+| Stat | Meaning |
+|---|---|
+| `speed` | **Beats** of thought per tick. |
+| `conditioning` | Per spell: how many times the caster has cast it. |
 
-The residue left after a filter doesn't need any special handling. If the spell doesn't hold it, it joins the flow and leaves
-the body on its own. If the spell holds too much, or gathers too much too fast, the body overcharges.
+**The Law of Conditioning.** A tick holds `speed × (1 + c)` beats, where `c` is the conditioning for the spell being cast.
+- Mind instructions take 1 beat.
+- Body and reach instructions take 4 beats.
+- `TICK` ends the tick.
 
-### Filtering and affinity
+So a spell that takes 12 ticks the first time takes about 1 tick after a lot of practice. That's `t / (1 + c)`, and it falls
+out of the machine without being written anywhere.
 
-`FILT` takes one element's part out of a mana register:
+### Each tick
 
-```
-part   = source[e]                    ! at most ¼ of raw mana
-out    = part × affinity[e]           ! what the caster manages to filter
-loss   = part × (1 − affinity[e])     ! slips into the body's flow
-source = source without its e part    ! the residue stays where it was
-```
-
-A caster with 40% earth affinity who gathers 100 M gets 10 M of earth (25 × 0.4). Another 15 M slips into their flow, and 75 M
-of residue is left in the register. A Stone Wall charged with 10 M is lower and weaker than one charged with 25 M.
-
-### Vessels
-
-A **vessel** is anything that holds mana and can be ordered:
-
-- a **construct**: mana given a shape, made from nothing but mana (a fireball, a shield);
-- **matter** taken hold of: the earth under a Stone Wall, a pool of water.
-
-A vessel is **in hand** from the moment it is made or taken hold of until it is manifested. While in hand, its mana counts
-toward the body's load. **Manifesting** sets it loose in the world. From then on it lives on its own mana, and its orders can
-be **locked**.
+1. **The mind thinks:** it runs instructions until the tick's beats run out or a `TICK`.
+2. **Holds run down.** A mana register whose hold has run out (`focus` ticks after its last CIRC) **joins the flow**.
+3. **The flow drains:** whatever is above the baseline leaves, at most `drain` per tick, into the air around the caster.
+4. **Overcharge:** if `flow + held mana + weaves still in hand > capacity`, the excess is counted as harm.
+5. **Weaves set loose run their orders** (§5).
+6. **The world moves:** loose mana, wind, bound matter.
 
 ---
 
-## 3. The machine (the Core)
+## 5. The machine
 
 ### Registers
 
-| Registers | Holds | Notes |
+| | Registers | Holds |
 |---|---|---|
-| `r0`–`r15` | numbers | Amounts, forces, counters, flags. |
-| `v0`–`v7` | vectors | Positions and directions in space. |
-| `m0`–`m7` | mana | Each holds an element vector. **Linear**: mana can be moved, split and joined, never copied. The number usable is the caster's `streams`. |
-| `h0`–`h7` | vessel handles | 0 means no vessel. |
-| `flags` | result of `CMP` | Read by the conditional jumps. |
+| Mind | `n0`–`n31` | Numbers (floating point). Also positions, weaves, element parts: everything that isn't mana. |
+| Body | `m0`–`m7` | Mana: four parts each, and how long it is still held. **Linear**: mana is moved, split and joined, never copied. Only the first `streams` exist. |
+| Mind | `flags` | The result of the last `CMP`. |
 
-### Ports (the caster's will and the caster's sheet)
+**Triples.** Where an instruction takes a position or a direction, it names the first of three registers. `n4:6` is `n4, n5,
+n6` read as `(x, y, z)`.
 
-`IN` reads a port. The caster's will is live input, read again every time. In the tester, it comes from the mouse, the
-keyboard and sliders.
+**Calling convention.** Arguments go in `n0`–`n15`, and a routine may change any of them. `n16`–`n31` belong to the caller and
+a routine keeps them. A routine that lays out mana takes it in **`m1`**, so a caster with only two streams can still use it.
 
-| Port | Type | What |
-|---|---|---|
-| `AIM` | v | Where the caster means it to go (`data.coordinate`). |
-| `HAND` | v | The casting hand. |
-| `SELF` | v | The caster's body (centre). |
-| `AMOUNT` | r | How much the caster means to gather. |
-| `FORCE` | r | How hard. |
-| `MAINTAIN` | r | 1 while the caster keeps the spell going. |
-| `AFF_F`, `AFF_W`, `AFF_A`, `AFF_E` | r | The caster's affinities. |
-| `LOAD`, `CAPACITY` | r | The body's current load and capacity. |
+### Weaves
 
-### Operand constants
+A **weave** is mana laid out in the world as a thing: a fireball, a wall, a shield. A weave is a number, its id, like a file
+handle. Each weave has:
 
-| Kind | Values |
+- an **origin**, and a **frame** (x right, y up, z forward) that `TURN` rotates about the vertical. Positions given to `EMIT`
+  are in the weave's frame, from its origin. A library can lay a ball out around `(0, 0, 0)` without knowing where it is.
+- **cells**: the mana it holds, cell by cell, and the matter that mana binds;
+- **registers** `w0`–`w7`, numbers its order can read and write (a velocity, a phase);
+- an **order**: a routine every cell runs, every tick, once the weave is manifested.
+
+A weave is **in hand** from `WEAV` until `MANI`, and its mana counts toward the body's load. `MANI` sets it loose. From then on
+it runs its order on its own mana, and `LOCK` can fix its shape (its cells move together, as one body), its input (no more
+mana goes into it) or its order (it can't be given another one).
+
+### The order: mana running code
+
+ORDER, in the old Core, was *give an order to the mana particles*. Here it is literal. A weave's order is an assembly routine
+that **each of its cells runs every tick**, like a tiny mind inside the mana. A cell thinks with `n0`–`n15` of its own and
+has no mana registers. When it starts, a cell's registers hold:
+
+| Register | |
 |---|---|
-| element | `RAW` 0, `FIRE` 1, `WATER` 2, `AIR` 3, `EARTH` 4 |
-| property (`ORD`) | `POS` 0, `VEL` 1, `SHAPE` 2, `SIZE` 3, `GROW` 4, `ANCHOR` 5 |
-| lock (`LOCK`) | `SHAPE` 0, `INPUT` 1, `POS` 2, `ALL` 7 |
-| trigger (`REACT`) | `TOUCH` 0, `AFTER` 1 (ticks), `EMPTY` 2 (charge ran out) |
-| shape | indices into the **shape table** that libraries compile into (`BALL`, `WALL`, `SHIELD`, `BOLT`, `BLADE`, `SPIKE`, `WAVE`…) |
+| `n0:2` | The cell's position from the weave's origin. |
+| `n3` | How much mana the cell holds. |
+| `n4` | The weave's age, in ticks since it was manifested. |
+
+An order can do arithmetic and jumps, read its weave's registers and the ports below, and use the **order** instructions
+(`MOVE`, `TUCH`, `GETW`, `PUTW`, `DISS`). It ends with `RET`. An order that runs more than 64 instructions in one tick
+**frays**: the weave comes apart, and its mana goes loose.
+
+### Ports
+
+`IN` reads the caster's will and senses. The will is live: it comes from the person casting (in the tester: the mouse, the
+keyboard, sliders).
+
+| Port | Size | What |
+|---|---|---|
+| `AIM` | 3 | Where the caster means it to go. |
+| `HAND` | 3 | The casting hand. |
+| `SELF` | 3 | The caster's body. |
+| `AMOUNT` | 1 | How much the caster means to gather. |
+| `FORCE` | 1 | How hard. |
+| `MAINTAIN` | 1 | 1 while the caster keeps the spell going. |
+| `CELL`, `DEPTH` | 1 | The world's cell size, and its depth in cells (1 = 2D). |
+| `LOAD`, `CAPACITY` | 1 | The body's load now, and its capacity. |
+| `ORIGIN` | 3 | *In an order:* where the weave's origin is now. |
+| `MAKER` | 3 | *In an order:* where the weave's caster is now. |
 
 ### Instructions
 
-`d` is a destination, `s` a source, `#` an immediate. **Mana** instructions are the old Core, with aspects as operands.
+`d` is a destination register, `s` a source register or an immediate (`#3.5`), `n:3` a triple, `L` a label.
 
-#### Control
-
-| Op | Mnemonic | Does |
-|---|---|---|
-| `00` | `NOP` | Nothing, for one tick. |
-| `01` | `HALT` | Ends the spell. |
-| `02` | `FAIL #code` | Ends the spell as a failure (`Metadata.fail`). |
-| `03` | `JMP label` | Jump. |
-| `04` | `JZ r, label` / `JZ h, label` | Jump if zero / no vessel. |
-| `05` | `JNZ r, label` | Jump if not zero. |
-| `06` | `CMP a, b` | Compare, set flags. |
-| `07` | `JEQ` `JNE` `JLT` `JGE label` | Jump on flags. |
-| `08` | `CALL label` | Call a routine (library code). |
-| `09` | `RET [h]` | Return, optionally with a vessel whose metadata is the spell's result. |
-| `0A` | `TICK [#n]` | Wait one tick (or n). |
-
-#### Data
+#### Mind
 
 | Op | Mnemonic | Does |
 |---|---|---|
-| `10` | `MOV d, s` | Copy a number, vector or handle. **Not allowed on mana registers.** |
-| `11` | `LDI d, #imm` | Load an immediate. |
-| `12`–`15` | `ADD` `SUB` `MUL` `DIV d, s` | Arithmetic on numbers and vectors. |
-| `16` | `VEC v, rx, ry, rz` | Build a vector. |
-| `17` | `IN d, PORT` | Read the caster's will or sheet. |
+| `00` | `NOP` | |
+| `01` | `HALT` | The spell ends. Its result is the weave in `n0`, if any. |
+| `02` | `FAIL #code` | The spell ends, failed. |
+| `03` | `TICK` | End this tick's thinking. |
+| `08` | `JMP L` | |
+| `09`–`0E` | `JEQ` `JNE` `JLT` `JLE` `JGT` `JGE L` | Jump on the flags. |
+| `0F` | `CALL L` / `RET` (`07`) | |
+| `10` | `LDI d, #imm` | |
+| `11` | `MOV d, s` | Numbers only: **no instruction copies mana.** |
+| `12`–`16` | `ADD` `SUB` `MUL` `DIV` `MOD d, s` | `d = d op s`. Dividing by 0 gives 0. |
+| `17`–`1B` | `NEG` `ABS` `SQRT` `FLOOR` `ROUND d` | |
+| `1C`–`1F` | `SIN` `COS` `TAN` `ATAN d` | Radians. |
+| `20` | `ATN2 d, s` | `d = atan2(d, s)` |
+| `21`–`22` | `MIN` `MAX d, s` | |
+| `23` | `CMP a, s` | Set the flags. |
+| `24`–`25` | `PUSH` `POP n` | The mind's stack. |
+| `26`–`27` | `LD d, [n]` / `ST s, [n]` | The mind's memory: 256 numbers. |
+| `28` | `IN d, PORT` | Read a port (into a triple, for size-3 ports). |
 
-#### Mana
+#### Body
 
-| Op | Mnemonic | Lore name | Does |
+| Op | Mnemonic | Lore | Does |
 |---|---|---|---|
-| `20` | `GATH m, r[, v]` | GATHER | Draw `r` M from the air around the caster (or around `v`) into `m`. Draws less if the air is thin. |
-| `21` | `CIRC m` | CIRCULATE | Hold `m` for the caster's focus W ticks. |
-| `22` | `FILT md, ms, elem` | FILTER | Take `elem`'s part of `ms` into `md`. Lack of affinity loses some to the flow (§2). |
-| `23` | `SPLT md, ms, r` | | Move `r` M of `ms` into `md`. |
-| `24` | `JOIN md, ms` | | Move all of `ms` into `md`. |
-| `25` | `MEAS r, m[, elem]` | | How much `m` holds (of `elem`). Reading isn't using: `m` stays. |
-| `26` | `SEND m, v[, r]` | SEND | Let `m` out at `v`, pushed with force `r`. It's raw release: wind, heat, splash. |
-| `27` | `VENT m` | | Let `m` out into the air around the caster, gently. |
+| `30` | `GATH m, s` | GATHER | Draw `s` M of air mana from around the body into `m`, raw. Draws less if the air is thin. |
+| `31` | `CIRC m` | CIRCULATE | Hold `m` for `focus` ticks. |
+| `32` | `FILT md, ms, s` | FILTER | Move part `s` (0–3) of `ms` into `md`: `md += part × affinity[s]`. The rest of the part, `part × (1 − affinity[s])`, slips into the flow. The other parts stay in `ms`. |
+| `33` | `SPLT md, ms, s` | | Move `s` M of `ms` into `md`, keeping its proportions. |
+| `34` | `JOIN md, ms` | | Move all of `ms` into `md`. |
+| `35` | `MEAS d, m` | | How much `m` holds. Feeling it doesn't spend it. |
+| `36` | `PART d, m, s` | | How much of part `s` `m` holds. |
+| `37` | `VENT m` | | Let all of `m` out, gently, around the body. |
 
-#### Sense
+#### Reach
 
-| Op | Mnemonic | Lore name | Does |
+| Op | Mnemonic | Lore | Does |
 |---|---|---|---|
-| `30` | `PROB r, v, what` | PROBE | How much `what` (an element of air mana, or a matter) is at `v`. A little mana goes out and comes back. |
-| `31` | `FIND v, s, what` | PROBE | The nearest cell to `s` that holds `what` (`v = s` if none). |
+| `40` | `PROB d, n:3, s` | PROBE | How much matter of part `s` is in the cell at `n:3`. |
+| `41` | `AIRM d, n:3, s` | PROBE | How much air mana of part `s` floats at `n:3`. |
+| `42` | `SEND m, s, n:3, n:3` | SEND | Let `s` M of `m` out at a position, with a velocity, loose. |
 
-#### Vessels
+#### Weave
 
-| Op | Mnemonic | Lore name | Does |
+| Op | Mnemonic | Lore | Does |
 |---|---|---|---|
-| `40` | `MAKE h` | | A blank construct, in hand. |
-| `41` | `GRAB h, v, matter` | | Take hold of the matter at `v` (`h = 0` if there's none). In hand. |
-| `42` | `INFU h, m` | | Move all of `m` into the vessel. |
-| `43` | `DRAW m, h, r` | | Move `r` M out of the vessel back into `m`. |
-| `44` | `ORD h, prop, s` | ORDER / POSITION | Set a property: position, velocity, shape, size… |
-| `45` | `REACT h, trigger, label` | REACT | When `trigger` happens to the vessel, run `label` with the vessel in `h0`. |
-| `46` | `MANI h` | SEND (manifest) | Set the vessel loose in the world. It leaves the body's load. |
-| `47` | `LOCK h, what` | LOCK | Lock a property of a **manifested** vessel. |
-| `48` | `RELS h` | | Dissolve the vessel: its mana returns to the air where it is. |
+| `50` | `WEAV d, n:3` | | Begin a weave with its origin at `n:3`. Its id goes into `d`. In hand. |
+| `51` | `TURN w, n:3` | POSITION | Turn the weave's frame so forward points along `n:3` (about the vertical). |
+| `52` | `EMIT m, s, w, n:3` | | Move `s` M of `m` into the weave, at `n:3` in the weave's frame. Gives what there is if `m` holds less. |
+| `53` | `WSET w, #k, s` / `WGET d, w, #k` (`54`) | | Write and read a weave's registers. |
+| `55` | `ORDR w, L` | ORDER | Give the weave its order: the routine at `L`. |
+| `56` | `MANI w` | SEND | Set the weave loose. It leaves the body's load and starts running its order. |
+| `57` | `LOCK w, SHAPE \| INPUT \| ORDER` | LOCK | Lock it. Only after `MANI`. |
+| `58` | `RELS w` | | Let the weave go: its mana goes loose where it is. |
+
+#### Order (only inside an order)
+
+| Op | Mnemonic | Does |
+|---|---|---|
+| `60` | `MOVE n:3` | Move this cell by `n:3` this tick, in the weave's frame, with the matter it binds. With `LOCK SHAPE`, the weave moves as one, by the average of its cells' moves. |
+| `61` | `TUCH d` | `d = 1` if this cell is against matter, or a body, that isn't its own or its maker's. |
+| `62` | `GETW d, #k` / `PUTW #k, s` (`63`) | Read and write this weave's registers. |
+| `64` | `DISS` | The whole weave comes apart. Its mana goes loose where it is. |
 
 ### Encoding
 
-Each instruction is one opcode byte followed by its operands:
+One opcode byte, then the operands:
 
-- a register: one byte, with the class in the high nibble (`0` r, `1` v, `2` m, `3` h) and the number in the low one;
-- a constant (element, property, port…): one byte;
-- an immediate: two bytes, little-endian, fixed point 8.8;
-- a label: two bytes, the address.
-
-```
-GATH m0, r0        →  20 20 00
-FILT m1, m0, EARTH →  22 21 20 04
-ORD  h0, SHAPE, #1 →  44 30 02 00 01
-```
-
-The bytecode is what `mvm` runs. Whoever wants to can write `.masm` by hand. The language also has inline assembly:
+- a register: one byte, with `0` in the top bit for `n0`–`n31` and `1` for `m0`–`m7`;
+- a triple: its first register;
+- a port, or `SHAPE`/`INPUT`/`ORDER`: one byte;
+- a label: two bytes, the address;
+- an immediate: four bytes (float32, little-endian). An instruction whose last operand is an immediate sets the opcode's top
+  bit.
 
 ```
-ASM DO
-  FILT m1, m0, EARTH
-END ASM
+GATH m0, n17               →  30 80 11
+FILT m1, m0, #3            →  B2 81 80 00 00 40 40
+EMIT m1, n6, n4, n13:15    →  52 81 06 04 0D
 ```
 
 ### Faults
 
 | Fault | When |
 |---|---|
-| `OVERCHARGE` | The body's load goes past its capacity (§2). |
-| `THIN_AIR` | `GATH` found less mana than asked. A warning, not a stop. |
-| `MOVED` | A mana register was used after it was emptied. |
-| `IMPURE` | `ORD SHAPE` on a vessel whose mana isn't one element (Law of the Four). |
-| `NOT_MANIFESTED` | `LOCK` before `MANI` (D6). |
-| `LOCKED` | `ORD` on a property that is locked. |
 | `NO_STREAM` | A mana register beyond the caster's `streams`. |
+| `NO_NAME` | `FILT` by a part other than 0–3. Mana doesn't answer (the Law of the Four). |
+| `NOT_LOOSE` | `LOCK` before `MANI`. |
+| `LOCKED` | `EMIT` into a weave with locked input, or `ORDR` on one with a locked order. |
+| `FRAYED` | An order ran too long in one tick. The weave comes apart. |
 
-What a fault does (stop the spell, burst at the caster, or hurt and go on) is an open question (§9).
-
----
-
-## 4. The language
-
-### Shape of a file
-
-```
-from Shapes use wall            ! imports from libraries
-from Elements use earth
-
-Metadata StoneWall(Metadata data) {   ! <ReturnType> <Name>(<params>) { }
-  …                                   ! a return type of `spell` means none
-}
-```
-
-- Declarations use braces: spells, routines, `class`, `Shape`.
-- Control flow is Fortran-style: `IF (c) DO … ELSE DO … END IF`, `WHILE (c) DO … END DO`, `.NOT.`, `.AND.`, `.OR.`.
-- `!` starts a comment. `CALL` may come before a call whose result isn't used.
-
-### Types
-
-| Type | What | Machine |
-|---|---|---|
-| `num` | A number, with an optional unit (`4 M`, `2 m`, `3 ticks`). | `r` |
-| `bool` | | `r` |
-| `space3d` | A position or direction (also in 2D worlds). | `v` |
-| `mu`, `mu<Fire>`… | Mana: raw, or pure in one element. **Linear.** | `m` |
-| `ManaConstruct` | A construct. | `h` |
-| `Matter` | Matter taken hold of. | `h` |
-| `Reading` | What a probe found. | `r`, `v` |
-| `Metadata` | The cast: what the caster wills going in, and what the spell leaves coming out. | ports / `RET` |
-
-### Mana is linear
-
-A `mu` value can be used once. Passing it to `filter`, `add_mana`, `infuse` or `send` **moves** it, and the compiler rejects
-a second use:
-
-```
-spell.add_mana(active_mana)
-other.add_mana(active_mana)     ! error: active_mana was moved into spell on line 12
-```
-
-`filter` is the exception that proves the rule. It takes its source by reference, because the residue stays in it.
-
-### `self` and `data`
-
-- **`self`** is the caster: `class Caster` in the Basics library. A character's own class can extend it.
-- **`data`** is the caster's will, read live. `data.maintain` asked in a loop is asked again each time, so `self.update_data()`
-  isn't needed any more.
-
-| Code | Compiles to |
-|---|---|
-| `self.gather(n)` | `GATH` |
-| `self.circulate(m)` | `CIRC` |
-| `self.filter(m, earth)` | `FILT` |
-| `self.send(m, at, force)` | `SEND` |
-| `self.sense(at, earth)` | `PROB` / `FIND` |
-| `self.grab(at, earth)` | `GRAB` |
-| `self.blank_spell()` | `MAKE` |
-| `x.add_mana(m)`, `x.infuse(m)` | `INFU` |
-| `x.reposition(p)`, `x.set_shape(s)`, `x.throw(at, f)` | `ORD` |
-| `x.add_react(t, f)` | `REACT` |
-| `x.manifest()` | `MANI` |
-| `x.lock(shape)`, `x.lock(input)` | `LOCK` |
-| `tick` | `TICK` |
-| `data.coordinate`, `data.maintain`… | `IN` |
-
-### Libraries
-
-Libraries are what Quire already calls libraries (`from Shapes use wall`). Each compiles into:
-
-- **shape table** entries: `Shape wall(height = 2 m, length = 4 m, thickness = 0.5 m)`, defined in any number of dimensions;
-- **routines**: assembly subroutines. A reaction such as `expand` is a routine that a `REACT` jumps to.
-
-What a caster knows (Quire's *Knows* links, schools…) decides which libraries are in reach. That comes later, with the Quire
-link.
-
-### What the compiler checks
-
-- Names, imports and members: `manisfest` → *ManaConstruct has no member `manisfest`: `manifest`?*
-- Types: a shape needs pure mana (`mu<Earth>`, not `mu`).
-- Linearity: no mana used twice.
-- Order: no `lock` before `manifest`, and no order on a locked property.
-- Holds: a warning when mana is used after its hold has surely run out (more than W ticks since its last circulate).
-- Streams: a warning when a spell needs more mana registers at once than a caster may have.
+Overcharge is not a fault (D6). It's harm, counted by the tester.
 
 ---
 
-## 5. The four spells
+## 6. The libraries
 
-Each spell appears twice: in the language, and the assembly it compiles to. Compared with the writings in Quire:
+Libraries are written in assembly, or in the language once it exists. They are Quire's libraries: what a caster knows decides
+which they can use. The machine has no shapes or elements. Change `Shapes.ball` and every fireball changes. Someone's own ball,
+`Correni.Shapes`, can be rounder.
 
-- `Mana[:, :, :] = self.scan()` is gone, because gathering reads the air itself;
-- `scan_with_eligible_mana`, `match`, `blank_influence`, `infuse`, `assert` became **one** idea: take hold of matter, infuse it,
-  order it;
-- residue is left alone: it isn't held, so it joins the body's flow.
+### Elements
+
+```
+; Elements: the four names mana answers to (the Law of the Four)
+        .const FIRE   0
+        .const WATER  1
+        .const AIR    2
+        .const EARTH  3
+```
+
+Compound aspects, like Quire's Plant (born from Water and Earth), would be routines here that filter two parts and join them.
+What mixed mana does in the world is open (§11).
+
+### Basics
+
+```
+; toward: a velocity from n0:2 to n3:5 at speed n6. Out: n3:5
+toward: SUB   n3, n0
+        SUB   n4, n1
+        SUB   n5, n2
+        MOV   n7, n3
+        MUL   n7, n3
+        MOV   n8, n4
+        MUL   n8, n4
+        ADD   n7, n8
+        MOV   n8, n5
+        MUL   n8, n5
+        ADD   n7, n8
+        SQRT  n7                  ; the distance
+        DIV   n6, n7              ; speed per metre of it
+        MUL   n3, n6
+        MUL   n4, n6
+        MUL   n5, n6
+        RET
+
+; fly (an order): every cell moves by the weave's velocity, kept in w1–w3
+fly:    GETW  n0, #1
+        GETW  n1, #2
+        GETW  n2, #3
+        MOVE  n0:2
+        RET
+
+; anchor (an order): the weave follows its maker
+anchor: IN    n5:7, MAKER
+        IN    n8:10, ORIGIN
+        SUB   n5, n8
+        SUB   n6, n9
+        SUB   n7, n10
+        MOVE  n5:7
+        RET
+```
+
+### Shapes
+
+A shape lays the mana in `m1` out in the weave, around its origin. It's plain geometry.
+
+```
+; ball: the mana in m1, spread through a ball around the weave's origin
+;   in: n0 radius (m), n4 weave
+ball:   IN    n5, CELL
+        MOV   n7, n0
+        DIV   n7, n5
+        FLOOR n7                  ; n7 = r, in cells
+        MOV   n0, n7
+        MUL   n0, n7              ; n0 = r²
+        MOV   n12, n0
+        MUL   n12, #3.14159       ; π r²: the cells in a disc
+        IN    n11, DEPTH
+        CMP   n11, #1
+        JEQ   .flat
+        MUL   n12, n7
+        MUL   n12, #1.33333       ; 4/3 π r³: the cells in a ball
+        MOV   n11, n7             ; z runs over [−r, r]
+        JMP   .share
+.flat:  LDI   n11, #0             ; 2D: z is 0
+.share: MEAS  n6, m1
+        DIV   n6, n12             ; n6 = mana per cell
+        MOV   n10, n11
+        NEG   n10                 ; z = −zmax
+.z:     MOV   n9, n7
+        NEG   n9                  ; y = −r
+.y:     MOV   n8, n7
+        NEG   n8                  ; x = −r
+.x:     MOV   n12, n8
+        MUL   n12, n8
+        MOV   n13, n9
+        MUL   n13, n9
+        ADD   n12, n13
+        MOV   n13, n10
+        MUL   n13, n10
+        ADD   n12, n13            ; x² + y² + z²
+        CMP   n12, n0
+        JGT   .next               ; outside the ball
+        MOV   n13, n8
+        MUL   n13, n5
+        MOV   n14, n9
+        MUL   n14, n5
+        MOV   n15, n10
+        MUL   n15, n5
+        EMIT  m1, n6, n4, n13:15  ; this cell's share
+.next:  ADD   n8, #1
+        CMP   n8, n7
+        JLE   .x
+        ADD   n9, #1
+        CMP   n9, n7
+        JLE   .y
+        ADD   n10, #1
+        CMP   n10, n11
+        JLE   .z
+        MEAS  n6, m1              ; what the rounding left
+        LDI   n13, #0
+        LDI   n14, #0
+        LDI   n15, #0
+        EMIT  m1, n6, n4, n13:15  ; goes to the centre
+        RET
+```
+
+```
+; shield: the mana in m1, as a shell around the weave's origin
+;   in: n0 radius (m), n4 weave
+shield: IN    n5, CELL
+        MOV   n6, n5
+        DIV   n6, n0              ; dθ: one cell of arc
+        MEAS  n7, m1
+        IN    n8, DEPTH
+        CMP   n8, #1
+        JEQ   .ring
+        MOV   n9, n0              ; 3D: a sphere, about 4π r² / cell² points
+        MUL   n9, n0
+        MUL   n9, #12.5664
+        DIV   n9, n5
+        DIV   n9, n5
+        DIV   n7, n9              ; mana per point
+        LDI   n10, #0             ; φ, from the top down
+.phi:   MOV   n12, n10
+        SIN   n12                 ; sin φ
+        LDI   n11, #0             ; θ, around
+.theta: MOV   n13, n11
+        COS   n13
+        MUL   n13, n12
+        MUL   n13, n0             ; x = r sinφ cosθ
+        MOV   n14, n10
+        COS   n14
+        MUL   n14, n0             ; y = r cosφ
+        MOV   n15, n11
+        SIN   n15
+        MUL   n15, n12
+        MUL   n15, n0             ; z = r sinφ sinθ
+        EMIT  m1, n7, n4, n13:15
+        ADD   n11, n6
+        CMP   n11, #6.28319
+        JLT   .theta
+        ADD   n10, n6
+        CMP   n10, #3.14159
+        JLE   .phi
+        JMP   .rest
+.ring:  MOV   n9, n0              ; 2D: a circle, about 2π r / cell points
+        MUL   n9, #6.28319
+        DIV   n9, n5
+        DIV   n7, n9
+        LDI   n11, #0
+        LDI   n15, #0             ; z = 0
+.arc:   MOV   n13, n11
+        COS   n13
+        MUL   n13, n0             ; x = r cosθ
+        MOV   n14, n11
+        SIN   n14
+        MUL   n14, n0             ; y = r sinθ
+        EMIT  m1, n7, n4, n13:15
+        ADD   n11, n6
+        CMP   n11, #6.28319
+        JLT   .arc
+.rest:  MEAS  n7, m1              ; what's left goes to the last point
+        EMIT  m1, n7, n4, n13:15
+        RET
+```
+
+This shield is uneven: near the poles, θ steps by the same angle on a smaller circle, so points crowd together. That's the
+kind of thing a better library version fixes. It's also the kind of thing a mage could be known for.
+
+```
+; wall: a block of the ground under the weave's origin, given the order to rise
+;   in: n0 height, n1 length, n2 thickness (m), n4 weave (on the ground, turned to face out)
+wall:   IN    n5, CELL
+        DIV   n0, n5
+        FLOOR n0                  ; H, in cells
+        DIV   n1, n5
+        FLOOR n1                  ; L
+        DIV   n2, n5
+        FLOOR n2                  ; T
+        IN    n3, DEPTH
+        CMP   n3, #1
+        JNE   .size
+        LDI   n1, #1              ; 2D: its length runs into the page, one cell
+.size:  MOV   n6, n0
+        MUL   n6, n1
+        MUL   n6, n2              ; cells to lift
+        MEAS  n7, m1
+        DIV   n7, n6              ; mana per cell
+        MOV   n10, n1
+        SUB   n10, #1
+        DIV   n10, #2             ; (L − 1) / 2, to centre the length
+        MOV   n11, n2
+        SUB   n11, #1
+        DIV   n11, #2             ; (T − 1) / 2, to centre the thickness
+        LDI   n9, #0              ; d: 0 … H−1, down into the ground
+.d:     LDI   n8, #0              ; t: across
+.t:     LDI   n3, #0              ; a: along
+.a:     MOV   n13, n3
+        SUB   n13, n10
+        MUL   n13, n5             ; x = (a − (L−1)/2) · cell
+        MOV   n14, n9
+        NEG   n14
+        MUL   n14, n5             ; y = −d · cell
+        MOV   n15, n8
+        SUB   n15, n11
+        MUL   n15, n5             ; z = (t − (T−1)/2) · cell
+        EMIT  m1, n7, n4, n13:15
+        ADD   n3, #1
+        CMP   n3, n1
+        JLT   .a
+        ADD   n8, #1
+        CMP   n8, n2
+        JLT   .t
+        ADD   n9, #1
+        CMP   n9, n0
+        JLT   .d
+        MUL   n0, n5              ; H, back in metres
+        WSET  n4, #0, n0          ; how far to rise, for the order
+        ORDR  n4, rise
+        RET
+
+; rise (an order): each cell climbs one cell a tick, until the weave has risen w0 metres
+rise:   IN    n5, CELL
+        MOV   n6, n4
+        MUL   n6, n5              ; risen so far
+        GETW  n7, #0
+        CMP   n6, n7
+        JGE   .done
+        LDI   n0, #0
+        MOV   n1, n5
+        LDI   n2, #0
+        MOVE  n0:2                ; up one cell, carrying its earth
+.done:  RET
+```
+
+The wall isn't made of mana. It's the ground, lifted: the earth mana binds the earth in each cell and carries it up, and the
+ground it came from is left as a trench. A caster with poor earth affinity puts less mana in each cell, binds less earth, and
+the wall rises full of holes.
+
+### Reactions
+
+```
+; touch: n5 = 1 if this cell is against something that isn't its own
+touch:  TUCH  n5
+        RET
+```
+
+### Transformations
+
+```
+; expand (an order): each cell flies out from the origin, twice as far each tick.
+; After 3 ticks the weave lets go. It reads when it began from w4.
+expand: GETW  n5, #4
+        MOV   n6, n4
+        SUB   n6, n5              ; ticks since it began
+        CMP   n6, #3
+        JGE   .gone
+        MOVE  n0:2                ; out along its own position: twice as far
+        RET
+.gone:  DISS                      ; its mana goes loose: the flare
+        RET
+```
+
+---
+
+## 7. The four spells
+
+Each spell is written in assembly, with the old Core's lore names in the comments. After it comes the same spell in the
+language, which compiles to roughly the same thing (§8). Every spell begins `.use Elements, Basics, Shapes, Reactions,
+Transformations`, or whichever it needs.
 
 ### Stone Wall
 
-The ground heaves up into a wall of rock. It infuses matter and builds no construct.
+The ground heaves up into a wall of rock.
+
+```
+StoneWall:
+        IN    n16:18, AIM         ; a point on the ground
+        PROB  n0, n16:18, #EARTH  ; PROBE: is there earth there?
+        CMP   n0, #0
+        JEQ   .fail
+        IN    n19, AMOUNT
+        GATH  m0, n19             ; GATHER
+        CIRC  m0                  ; CIRCULATE
+        FILT  m1, m0, #EARTH      ; FILTER: earth × affinity; the residue stays in m0
+        WEAV  n20, n16:18         ; a weave on the ground at the aim
+        IN    n0:2, SELF
+        MOV   n3, n16
+        MOV   n4, n17
+        MOV   n5, n18
+        SUB   n3, n0
+        SUB   n4, n1
+        SUB   n5, n2
+        TURN  n20, n3:5           ; POSITION: facing away from the caster
+        MOV   n4, n20
+        LDI   n0, #2              ; 2 m high
+        LDI   n1, #4              ; 4 m long
+        LDI   n2, #0.5            ; 0.5 m thick
+        CALL  wall                ; ORDER: the ground is laid out to rise
+        MANI  n20                 ; SEND: it rises
+        LOCK  n20, SHAPE          ; LOCK: it stays a wall
+        MOV   n0, n20
+        HALT                      ; m0 isn't held any more: it joins the flow
+.fail:  FAIL  #1                  ; no earth there
+```
 
 ```
 from Shapes use wall
 from Elements use earth
 
 Metadata StoneWall(Metadata data) {
-  Matter ground = self.grab(data.coordinate, earth)   ! there has to be earth where the caster aims
-  IF (.NOT. ground.found) DO
-    return Metadata.fail(ground)
+  IF (.NOT. self.probe(data.coordinate, earth)) DO
+    return Metadata.fail(data)
   END IF
 
   mu mana_pool = self.gather(data.amount)
   CALL self.circulate(mana_pool)
   mu<Earth> active_mana = self.filter(mana_pool, earth)
 
-  ground.infuse(active_mana)
-  ground.set_shape(wall)
+  ManaConstruct ground = self.weave(data.coordinate)
+  ground.face_away(self)
+  ground.lay(active_mana, wall(2 m, 4 m, 0.5 m))
   ground.manifest()
   ground.lock(shape)
 
@@ -375,26 +655,47 @@ Metadata StoneWall(Metadata data) {
 }
 ```
 
-```
-StoneWall:
-        IN    v0, AIM
-        GRAB  h0, v0, EARTH      ; PROBE: take hold of the earth at the aim
-        JZ    h0, .fail
-        IN    r0, AMOUNT
-        GATH  m0, r0             ; GATHER
-        CIRC  m0                 ; CIRCULATE
-        FILT  m1, m0, EARTH      ; FILTER: m1 = earth × affinity, the residue stays in m0
-        INFU  h0, m1
-        ORD   h0, SHAPE, WALL
-        MANI  h0                 ; SEND: the wall rises
-        LOCK  h0, SHAPE          ; LOCK: it stays a wall
-        RET   h0                 ; m0 isn't held any more: it joins the flow
-.fail:  FAIL  #1                 ; no earth there
-```
-
 ### Fireball
 
-A sphere of fire, gathered, shaped and thrown. It is a construct that reacts.
+A sphere of fire, gathered, shaped and thrown. On touch, it bursts.
+
+```
+Fireball:
+        IN    n17, AMOUNT
+        GATH  m0, n17             ; GATHER
+        CIRC  m0                  ; CIRCULATE
+        FILT  m1, m0, #FIRE       ; FILTER
+        IN    n1:3, HAND
+        WEAV  n16, n1:3           ; POSITION: a weave at the hand
+        MOV   n4, n16
+        LDI   n0, #0.5
+        CALL  ball                ; ORDER: the fire laid out as a ball, 0.5 m
+        IN    n0:2, HAND
+        IN    n3:5, AIM
+        IN    n6, FORCE
+        CALL  toward              ; n3:5 = its velocity
+        WSET  n16, #1, n3
+        WSET  n16, #2, n4
+        WSET  n16, #3, n5
+        ORDR  n16, .order         ; REACT: fly, and on touch, expand
+        MANI  n16                 ; SEND: it leaves the hand
+        LOCK  n16, INPUT          ; LOCK: cut from the caster
+        MOV   n0, n16
+        HALT
+
+.order: GETW  n5, #0              ; w0, the phase: 0 flying, 1 bursting
+        CMP   n5, #0
+        JNE   .burst
+        CALL  fly
+        CALL  touch               ; n5 = 1 if this cell touched something
+        CMP   n5, #0
+        JEQ   .end
+        PUTW  #0, n5              ; the whole weave bursts from the next tick
+        PUTW  #4, n4              ; counting from now
+.end:   RET
+.burst: CALL  expand
+        RET
+```
 
 ```
 from Shapes use ball
@@ -406,105 +707,99 @@ Metadata Fireball(Metadata data) {
   CALL self.circulate(mana_pool)
   mu<Fire> active_mana = self.filter(mana_pool, fire)
 
-  ManaConstruct spell = self.blank_spell()
-  spell.add_mana(active_mana)
-  spell.reposition(self.hand)
-  spell.set_shape(ball)
+  ManaConstruct spell = self.weave(self.hand)
+  spell.lay(active_mana, ball(0.5 m))
   spell.throw(data.coordinate, data.force)
   spell.add_react(touch, expand)
   spell.manifest()
-  spell.lock(input)                 ! cut from the caster: it lives on what it carries
+  spell.lock(input)
 
   return spell.metadata
 }
 ```
 
-```
-Fireball:
-        IN    r0, AMOUNT
-        GATH  m0, r0
-        CIRC  m0
-        FILT  m1, m0, FIRE
-        MAKE  h0
-        INFU  h0, m1
-        IN    v0, HAND
-        ORD   h0, POS, v0
-        ORD   h0, SHAPE, BALL
-        IN    v1, AIM
-        SUB   v1, v0             ; direction: hand → aim
-        IN    r1, FORCE
-        MUL   v1, r1
-        ORD   h0, VEL, v1
-        REACT h0, TOUCH, expand  ; library routine
-        MANI  h0
-        LOCK  h0, INPUT
-        RET   h0
-
-expand:                          ; from Transformations, with the vessel in h0
-        LDI   r0, #4
-        ORD   h0, GROW, r0       ; bursts out to 4× its size
-        TICK  #2
-        RELS  h0                 ; and its mana returns to the air
-        RET
-```
+The shape is **not locked**. `expand` moves each cell out along its own position, so the ball has to be free to come apart.
 
 ### Gust
 
-A sudden push of wind. It is a channelled spell: it runs while the caster maintains it.
+A sudden push of wind, for as long as the caster keeps it up. It makes no weave: it sends loose air mana, and moving air mana
+is wind.
+
+```
+Gust:
+        IN    n17, AMOUNT
+        GATH  m0, n17             ; GATHER
+.loop:  IN    n18, MAINTAIN
+        CMP   n18, #0
+        JEQ   .end
+        CIRC  m0                  ; CIRCULATE
+        FILT  m1, m0, #AIR        ; FILTER
+        IN    n0:2, HAND
+        IN    n3:5, AIM
+        IN    n6, FORCE
+        CALL  toward              ; n3:5 = the push
+        MEAS  n6, m1
+        SEND  m1, n6, n0:2, n3:5  ; SEND: all of it, from the hand
+        GATH  m1, n17
+        JOIN  m0, m1              ; a fresh breath for the next pass
+        TICK
+        JMP   .loop
+.end:   HALT                      ; the residue joins the flow
+```
 
 ```
 from Elements use air
 
 spell Gust(Metadata data) {
   mu mana_pool = self.gather(data.amount)
-
   WHILE (data.maintain) DO
     CALL self.circulate(mana_pool)
     mu<Air> active_mana = self.filter(mana_pool, air)
-    CALL self.send(active_mana, data.coordinate, data.force)
-    mana_pool += self.gather(data.amount)          ! fresh air for the next breath
+    CALL self.send(active_mana, self.hand, data.coordinate, data.force)
+    mana_pool += self.gather(data.amount)
     tick
   END DO
 }
 ```
 
-```
-Gust:
-        IN    r0, AMOUNT
-        GATH  m0, r0
-.loop:  IN    r2, MAINTAIN
-        JZ    r2, .end
-        CIRC  m0
-        FILT  m1, m0, AIR
-        IN    v0, AIM
-        IN    r1, FORCE
-        SEND  m1, v0, r1         ; the push of wind
-        GATH  m2, r0
-        JOIN  m0, m2
-        TICK
-        JMP   .loop
-.end:   HALT                     ; the residue in m0 joins the flow
-```
-
-Every pass keeps the residue (raw mana without its air) and adds a fresh gather. If the caster gathers more than the flow can
-drain, the body's load climbs, and a long Gust can **overcharge** them. That's the price of channelling.
+Each pass keeps the residue and adds a fresh gather. If the body drains slower than the caster gathers, its load climbs, and a
+long Gust overcharges. It needs only two streams.
 
 ### Water Shield
 
-A skin of moving water around the caster. It is a construct anchored to the caster, with its shape locked.
+A skin of moving water around the caster that turns blades and flame.
+
+```
+WaterShield:
+        IN    n16, AMOUNT
+        GATH  m0, n16             ; GATHER
+        CIRC  m0                  ; CIRCULATE
+        FILT  m1, m0, #WATER      ; FILTER
+        IN    n1:3, SELF
+        WEAV  n17, n1:3           ; POSITION: a weave around the caster
+        MOV   n4, n17
+        LDI   n0, #1.2
+        CALL  shield              ; ORDER: a shell of water, 1.2 m
+        ORDR  n17, anchor         ; it follows its maker
+        MANI  n17                 ; SEND
+        LOCK  n17, SHAPE          ; LOCK: it stays a shell
+        LOCK  n17, INPUT
+        MOV   n0, n17
+        HALT
+```
 
 ```
 from Shapes use shield
+from Basics use anchor
 
 Metadata WaterShield(Metadata data) {
   mu mana_pool = self.gather(data.amount)
   CALL self.circulate(mana_pool)
   mu<Water> active_mana = self.filter(mana_pool, water)
 
-  ManaConstruct spell = self.blank_spell()
-  spell.add_mana(active_mana)
-  spell.anchor(self)                ! it moves with the caster
-  spell.set_shape(shield)
+  ManaConstruct spell = self.weave(self.position)
+  spell.lay(active_mana, shield(1.2 m))
+  spell.order(anchor)
   spell.manifest()
   spell.lock(shape)
   spell.lock(input)
@@ -513,24 +808,9 @@ Metadata WaterShield(Metadata data) {
 }
 ```
 
-```
-WaterShield:
-        IN    r0, AMOUNT
-        GATH  m0, r0
-        CIRC  m0
-        FILT  m1, m0, WATER
-        MAKE  h0
-        INFU  h0, m1
-        IN    v0, SELF
-        ORD   h0, ANCHOR, v0
-        ORD   h0, SHAPE, SHIELD
-        MANI  h0
-        LOCK  h0, SHAPE
-        LOCK  h0, INPUT
-        RET   h0
-```
+### What compiling the writings in Quire would say
 
-### What the compiler would have said about the writings in Quire
+The language will be strict where the old writings were loose:
 
 ```
 WaterShield:7   error    circulate() needs the mana to circulate: mana_pool (line 6)?
@@ -543,87 +823,98 @@ Gust:4          error    `mana_pool` has no type: `mu mana_pool`?
 Gust:7          error    `active_mana` has no type: `mu<Air> active_mana`?
 ```
 
-### Matching Quire's Programs
+---
 
-Each spell in Quire has a **Program** in the old Core. The compiled assembly, read back through the lore names, should cover
-the same steps:
+## 8. The language
 
-| Spell | Quire's Program | Compiled, by lore name |
-|---|---|---|
-| Stone Wall | GATHER, CIRCULATE, FILTER·Earth, PROBE·Earth, POSITION, SEND·Wall, LOCK·Wall | PROBE (`GRAB`), GATHER, CIRCULATE, FILTER (EARTH), ORDER (WALL), SEND (`MANI`), LOCK (SHAPE) |
-| Fireball | GATHER, CIRCULATE, FILTER·Fire, POSITION, SEND·Ball, REACT·Touch·Expand, LOCK | GATHER, CIRCULATE, FILTER (FIRE), POSITION, ORDER (BALL), REACT (TOUCH), SEND, LOCK (INPUT) |
-| Gust | GATHER, CIRCULATE, FILTER·Air, POSITION, SEND·Air | GATHER, CIRCULATE, FILTER (AIR), SEND (at AIM), in a loop |
-| Water Shield | GATHER, CIRCULATE, FILTER·Water, POSITION, SEND·Shield, LOCK·Shield | GATHER, CIRCULATE, FILTER (WATER), POSITION (ANCHOR), ORDER (SHIELD), SEND, LOCK (SHAPE, INPUT) |
+The language is written in the codified style. Its compiler does what a person writing the assembly does by hand:
 
-The order differs in one place: Stone Wall probes **before** it gathers, so a caster aiming at empty air doesn't gather for
-nothing.
+- gives registers to variables (mind for numbers, body for `mu`), keeping them out of `n0`–`n15` across calls;
+- lays out calls by the calling convention;
+- turns `add_react(touch, expand)` into an order: a phase in `w0`, with a jump on it;
+- checks what the machine can't, before it runs:
+  - names and members;
+  - types (a shape needs pure mana: `mu<Earth>`, not `mu`);
+  - linearity (no mana used twice);
+  - that `lock` comes after `manifest`;
+  - holds that will surely have run out;
+  - how many streams the spell needs at once.
+
+| Type | Lives in |
+|---|---|
+| `num`, `bool` | `n` |
+| `space3d` | three `n` |
+| `mu`, `mu<Fire>` | `m`. Linear: passing it on moves it. `filter` takes its source by reference, because the residue stays. |
+| `ManaConstruct` | `n` (a weave id) |
+| `Metadata` | The will going in (ports), the weave coming out. |
+
+The language is designed after the machine is built, and §7's versions are a sketch of it.
 
 ---
 
-## 6. The spell tester
+## 9. The spell tester
 
 One screen, four parts:
 
-- **Code**: the editor (CodeMirror 6), with highlighting, hover (what a name is and where it's from), completion and live
-  errors.
-- **Machine**: the compiled assembly, line by line beside the code, with the bytes in hex. Click a line on one side to find it
-  on the other.
-- **World**: the spell being cast, in 2D (a slice) first and 3D later. You see air mana as a haze, matter, and constructs
-  with their shapes. Mana is drawn moving: drawn in, circling the body, filtered, set loose.
+- **Code**: the editor (CodeMirror 6), with highlighting, hover, completion and live errors.
+- **Machine**: the assembly, line for line with the code, and the bytes in hex.
+  - registers: the mind's `n` and the body's `m`, each `m` as four coloured parts with its hold running down;
+  - the stack;
+  - each weave's registers;
+  - step by instruction, by tick, or into a weave's order for one cell.
+- **World**: the spell being cast, in 2D first and 3D later. You see air mana as a haze, matter, weaves cell by cell, loose
+  mana and wind.
 - **Caster**:
-  - the body's gauge: baseline, flow, held, vessels in hand, and the capacity line where overcharge begins;
-  - the registers (`m0`–`m7` as four-colour bars, `r`, `v`, `h`);
+  - the body's gauge: baseline, flow, held mana, weaves in hand, and the capacity line;
+  - the harm from overcharge;
   - the ledger;
-  - who is casting: pick a caster (affinities, capacity, focus, streams) and see the same spell cast by someone else.
+  - who is casting: their stats, and conditioning per spell.
 
-**Controls:**
-- Cast, and step one instruction or one tick at a time, with breakpoints on code or assembly lines.
-- The caster's will comes from you: click to aim, hold a key to maintain, sliders for amount and force.
+Your will drives the cast: click to aim, hold a key to maintain, sliders for amount and force.
 
 ---
 
-## 7. How it's built
+## 10. How it's built
 
-TypeScript throughout, like Quire, so the compiler can later run inside Quire too.
+TypeScript throughout, like Quire, so it can run inside Quire later.
 
 ```
 packages/
-  lang/      lexer, parser, checker, code generator: .mana → .masm
+  vm/        the world and the machine: ticks, mind, body, weaves, orders, ledger
   asm/       assembler and disassembler: .masm ⇄ .mbc
-  vm/        the machine and the world: runs .mbc, ticks, faults, ledger
-  cli/       manac, mas, mvm
+  lib/       the libraries, in .masm
+  lang/      lexer, parser, checker, code generator (phase 3)
+  cli/       mas, mvm, manac
 apps/
   tester/    the spell tester (Svelte 5 + Vite)
-spells/      the four spells, as .mana, with the expected .masm
+spells/      the four spells, in .masm (and .mana later)
 ```
 
-Tests (vitest) compile the four spells and compare the result with the expected assembly. They also run each spell in a test
-world and check the ledger balances, the wall stands, and the fireball bursts on touch.
+### Phases
+
+1. **The machine.**
+   - The world (2D first, the engine 3D throughout), the caster, the tick.
+   - Every instruction. Orders running per cell.
+   - The ledger, the assembler and disassembler.
+   - The libraries and the four spells in `.masm`.
+   - Tests: the wall stands and leaves a trench, the fireball bursts on touch, the shield follows its maker, the ledger
+     balances, a long Gust overcharges.
+2. **The tester, first cut.** Assembly editing, stepping, registers, a 2D world, the caster panel.
+3. **The language**, compiling to what phase 1 runs by hand.
+4. **3D**, and casters, spells and libraries read from Quire.
+5. **Other notations** (later): runes, circuits and scores.
 
 ---
 
-## 8. Phases
+## 11. Open questions
 
-1. **Machine.** The VM and the world with no language yet: registers, every instruction, the body (holds, flow, overcharge),
-   the ledger. The assembler and disassembler. The four spells hand-written in `.masm`, running in tests.
-2. **Language.** Lexer, parser and checker for the codified style. A code generator to `.masm`. The four spells compile to the
-   hand-written assembly.
-3. **Tester, first cut.** Editor and machine view, a 2D world, the caster panel, stepping.
-4. **Libraries.** Shapes, Elements, Reactions and Transformations as real libraries (shape tables and routines). Inline `ASM`.
-5. **3D world**, and casters from Quire: read the Ikozu system, its spells, libraries and casters from a Quire export.
-6. **Other notations** (later): render compiled spells as runes, a Manatech circuit, a Bardic score.
-
----
-
-## 9. Open questions
-
-1. **Holds.** Is the focus W (ticks a CIRCULATE lasts) a caster stat? And is `streams` (how many mana registers) one too?
-2. **Overcharge.** Does the spell stop and the excess burst out at the caster? Or does the caster take harm and the spell go
-   on?
-3. **The body's flow.** How fast does flow above the baseline drain? Is the baseline the caster's own mana, there before any
-   spell?
-4. **Affinity and circulation.** Does low affinity also lose mana while it's held (a slow slip each tick), or only when
-   filtering?
-5. **Matter.** How much earth does a wall need for its size? Does infusing more mana make it higher, harder, or both?
-6. **Runes.** Elvish *Runic Magic* is written "their own way". Could runes be the machine code itself, one glyph per opcode,
-   so that elves have always written spells in assembly?
+1. **Water and flame.** Earth mana lifts earth that is already there. Where does a Water Shield's water come from: water
+   nearby, the air's moisture, or does water mana condense it? Does fire need fuel, or is fire mana its own flame?
+2. **How long does a weave last?** Does a set-loose weave keep its mana until it's dissolved (a Stone Wall stands for ever),
+   or leak a little each tick?
+3. **Mixed mana.** What do two parts joined (Plant: water and earth) do in the world?
+4. **Is the mind a stat too?** `speed` is. Should the number of mind registers be one as well, so a child thinks with 8?
+5. **Runes as machine code.** Elvish *Runic Magic* is written "their own way", and a glyph already means a step. Glyphs could
+   be **opcodes**, and the marks around them (the lattice, its families) the **operands**. A carved ring would then be a
+   program the elves have always read straight, with no language in between. This needs its own design pass, after the
+   machine.
