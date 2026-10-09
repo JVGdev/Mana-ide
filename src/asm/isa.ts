@@ -22,8 +22,6 @@ export type Op = {
   beats: number
   /** Only inside a weave's order. */
   order?: boolean
-  /** Not an instruction anyone teaches. */
-  illegal?: boolean
 }
 
 const MIND = 1
@@ -100,8 +98,6 @@ export const OPS: Op[] = [
   { code: 0x63, name: 'PUTW', operands: ['K', 's'], beats: MIND, order: true },
   { code: 0x64, name: 'DISS', operands: [], beats: MIND, order: true },
   { code: 0x65, name: 'CNDS', operands: ['s'], beats: MIND, order: true },
-  // Nobody teaches this one. It frees condensed matter back into free mana.
-  { code: 0x6f, name: 'LOOS', operands: ['s'], beats: MIND, order: true, illegal: true },
 ]
 
 export const IMMEDIATE_BIT = 0x80

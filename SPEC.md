@@ -8,8 +8,8 @@ makes it real:
 
 1. a **machine** that is a caster: a **mind** that computes with numbers and a **body** that moves mana. Its instructions are
    all a caster can do, and nothing more;
-2. **libraries** written for that machine: the elements, the shapes, the reactions. A ball is a loop that lays mana out cell by
-   cell inside a radius. A shield is `sin` and `cos` around a circle;
+2. **libraries** written for that machine: the elements, the shapes, the reactions. A ball is shells out to a radius, each laid out
+   ring by ring around its axis with `sin`, `cos` and the circumference, 2πr. A shield is one such shell;
 3. a **language**, in the style of the codified spells, that compiles to the machine and calls the libraries;
 4. a **spell tester**: an editor, the assembly beside it, and a world where the spell is cast, watched and stepped through.
 
@@ -35,7 +35,7 @@ The examples throughout are the four spells of Ikozu: **Stone Wall**, **Fireball
 | D13 | A spell can **influence** an element already in the world (move the ground, push the air) or **make** it from its own mana (condense water out of water mana). |
 | D14 | A weave set loose **slowly leaks** its mana back into the air. A wall stands while its mana holds the earth, then crumbles. |
 | D15 | Every stat of a caster, body and mind, comes from **genetics**, their **condition** right now, and **training**. |
-| D16 | Matter can be freed back into free mana, but it's **a hack**: an instruction nobody teaches (`LOOS`, an illegal opcode). |
+| D16 | Matter can be freed back into free mana, but only through **a flaw**: no instruction does it. `CNDS` checks that an amount fits the room a cell has, and never that it's above nothing. Condensing less than nothing runs backwards (§5, *The flaw*). |
 | D17 | **Burning doesn't free anything.** What fire burns is still matter, and so is the fire. |
 | D11 | The tester is a practical tool, maybe the kind Ikozu's mage-engineers would have, but not dressed up in lore. |
 
@@ -118,8 +118,8 @@ These rules belong to the world, not to the machine:
    and the ground it left is empty. Matter that is no longer bound follows its nature again: lifted earth falls.
 3. **Mana can condense** (*make*): a weave's order can turn some of a cell's free mana into matter of the same parts (`CNDS`).
    Condensed matter is real. It stays when the weave is gone. Nothing natural frees it again: burning only changes what
-   matter is mixed with fire, and a flame thins out into warmth that is still matter. Freeing it is possible, but only as a
-   hack (`LOOS`, §5).
+   matter is mixed with fire, and a flame thins out into warmth that is still matter. Freeing it is possible, but only through a
+   flaw in condensing (§5, *The flaw*).
 4. **Loose mana** (sent, or let go) keeps its velocity, slows down, and spreads back into the air. Moving air mana pushes air:
    **wind**, which pushes whatever is light enough.
 5. **Matter blocks matter.** A cell can't move into a cell holding matter that isn't its own. Running into it is a **touch**.
@@ -333,7 +333,27 @@ keyboard, sliders).
 | `62` | `GETW d, #k` / `PUTW #k, s` (`63`) | Read and write this weave's registers. |
 | `64` | `DISS` | The whole weave comes apart. Its mana goes loose where it is. |
 | `65` | `CNDS s` | Condense `s` M of this cell's free mana into matter of the same parts (*make*). The matter stays in the cell, bound by whatever free mana is left. Only as much as the cell has room for. |
-| `6F` | `LOOS s` | **Not taught.** Free `s` M of the matter this cell holds back into free mana. The assembler warns whoever writes it. |
+
+#### The flaw
+
+Every instruction that takes an amount of mana treats an amount below nothing as nothing: `GATH m0, #-50` gathers nothing.
+Every instruction except one.
+
+`CNDS` asks one question of its amount: does the cell have room for it? It never asks whether the amount is above nothing,
+because nobody thought to condense less than nothing. Below nothing, condensing runs backwards. The matter the cell holds
+comes apart into free mana of the same parts, as much of it as asked:
+
+```
+unmake: CNDS  #-10                ; 10 M of the matter this weave binds, back to free mana
+        RET
+```
+
+It only frees what the weave holds, so a weave has to take hold of the matter first: an earth weave in the ground, a water
+weave in a lake. The Law of Conservation still holds; no mana is made, it just stops being matter.
+
+It is not an instruction. There is no opcode for it, nothing in the assembler knows about it, and nothing in a library uses
+it. A tester shows it only the way it shows anything: the ledger's condensed mana goes down. Whoever finds it finds it by
+reading what the body does, not what it's taught to do.
 
 ### Encoding
 
@@ -433,72 +453,93 @@ anchor: IN    n5:7, MAKER
 ### Shapes
 
 A shape lays the mana in `m1` out in the weave, around its origin. It's plain geometry. A big shape takes a mind many
-ticks to lay out, longer than a hold lasts, so each shape re-`CIRC`s its mana in its outer loop. Without that, the mana slips
-into the body's flow halfway through, and half a wall is laid out with nothing.
+ticks to lay out, longer than a hold lasts, so each shape re-`CIRC`s its mana as it goes. Without that, the mana slips into
+the body's flow halfway through, and half a wall is laid out with nothing.
+
+The ball is built the way you'd draw one by hand. Take the radius, and go out from the centre in shells. Each shell is
+rings around the up axis, from its top to its bottom: a ring at angle φ down the shell has radius `ρ sin φ` and height
+`ρ cos φ`, and as many points as its circumference, `2πs`, has steps. Each point is `(s cos θ, y, s sin θ)`. In 2D the page
+cuts every ring at two points, `θ = 0` and `π`, and the same walk draws a disc.
+
+Points land in cells, and a cell takes whatever points fall in it. Spaced a whole cell apart, the points miss cells and the
+ball has holes, so they're spaced half a cell apart. To give every point the same share, the ball walks itself twice: once
+to count its points, once to lay them out.
+
+That's thorough, and slow. An adept's mind takes about 26 ticks to lay out a 3D ball of 0.5 m, where a 2D one takes 10. A
+fireball the caster has thrown a few times is quicker (the Law of Conditioning). A faster ball is a different ball:
+one that tests every cell of a cube against `x² + y² + z² ≤ r²` takes 8 ticks, but it isn't drawn around an axis.
 
 ```
-; ball: the mana in m1, spread through a ball around the weave's origin
+; ball: the mana in m1, spread through a ball around the weave's origin. A ball is shells, from the centre out to the
+; radius. Each shell is rings around the up axis, from its top to its bottom, and each ring is points along its
+; circumference, 2πs. In 2D the page cuts each ring at two points: a disc.
+; It walks the ball twice: once to count the points, once to give each its share.
 ;   in: n0 radius (m), n4 weave
 ball:   IN    n5, CELL
-        MOV   n7, n0
-        DIV   n7, n5
-        FLOOR n7                  ; n7 = r, in cells
-        MOV   n0, n7
-        MUL   n0, n7              ; n0 = r²
-        MOV   n12, n0
-        MUL   n12, #3.14159       ; π r²: the cells in a disc
-        IN    n11, DEPTH
-        CMP   n11, #1
-        JEQ   .flat
-        MUL   n12, n7
-        MUL   n12, #1.33333       ; 4/3 π r³: the cells in a ball
-        MOV   n11, n7             ; z runs over [−r, r]
-        JMP   .share
-.flat:  LDI   n11, #0             ; 2D: z is 0
-.share: MEAS  n6, m1
-        DIV   n6, n12             ; n6 = mana per cell
-        MOV   n10, n11
-        NEG   n10                 ; z = −zmax
-.z:     CIRC  m1                  ; keep holding it: a big ball takes a while
-        MOV   n9, n7
-        NEG   n9                  ; y = −r
-.y:     MOV   n8, n7
-        NEG   n8                  ; x = −r
-.x:     MOV   n12, n8
-        MUL   n12, n8
-        MOV   n13, n9
-        MUL   n13, n9
-        ADD   n12, n13
-        MOV   n13, n10
-        MUL   n13, n10
-        ADD   n12, n13            ; x² + y² + z²
-        CMP   n12, n0
-        JGT   .next               ; outside the ball
-        MOV   n13, n8
-        MUL   n13, n5
-        MOV   n14, n9
-        MUL   n14, n5
-        MOV   n15, n10
-        MUL   n15, n5
-        EMIT  m1, n6, n4, n13:15  ; this cell's share
-.next:  ADD   n8, #1
-        CMP   n8, n7
-        JLE   .x
-        ADD   n9, #1
-        CMP   n9, n7
-        JLE   .y
-        ADD   n10, #1
-        CMP   n10, n11
-        JLE   .z
+        MUL   n5, #0.5            ; h: points half a cell apart, so that no cell is missed
+        IN    n2, DEPTH           ; 1 in 2D
+        LDI   n1, #1              ; the centre is a point
+        LDI   n6, #0              ; nothing to give yet: the first walk only counts, into n1
+        CALL  .walk
+        MEAS  n6, m1
+        DIV   n6, n1              ; n6 = mana per point
+        LDI   n13, #0
+        LDI   n14, #0
+        LDI   n15, #0
+        EMIT  m1, n6, n4, n13:15  ; the centre: a shell of radius 0
+        CALL  .walk
         MEAS  n6, m1              ; what the rounding left
         LDI   n13, #0
         LDI   n14, #0
         LDI   n15, #0
         EMIT  m1, n6, n4, n13:15  ; goes to the centre
         RET
-```
+.walk:  MOV   n7, n5              ; ρ: the first shell, one step out
+.shell: LDI   n8, #0              ; φ: from the top of the shell down
+.lat:   CIRC  m1                  ; keep holding it, ring by ring: a big ball takes a while
+        MOV   n9, n8
+        SIN   n9
+        MUL   n9, n7              ; s = ρ sinφ: this ring's radius
+        MOV   n10, n8
+        COS   n10
+        MUL   n10, n7             ; y = ρ cosφ: its height
+        MOV   n12, n9
+        MUL   n12, #6.28319
+        DIV   n12, n5
+        ROUND n12                 ; points: the ring's circumference, 2πs, in steps of h
+        MAX   n12, #1
+        CMP   n2, #1
+        JNE   .count
+        MIN   n12, #2             ; 2D: the two points where the ring crosses the page
+.count: CMP   n6, #0
+        JNE   .ring
+        ADD   n1, n12             ; counting: just add them up
+        JMP   .down
+.ring:  LDI   n3, #6.28319
+        DIV   n3, n12             ; dθ
+        LDI   n11, #0             ; θ: around the axis
+.point: MOV   n13, n11
+        COS   n13
+        MUL   n13, n9             ; x = s cosθ
+        MOV   n14, n10            ; y
+        MOV   n15, n11
+        SIN   n15
+        MUL   n15, n9             ; z = s sinθ: 0 in 2D, where θ is 0 or π
+        EMIT  m1, n6, n4, n13:15
+        ADD   n11, n3
+        SUB   n12, #1
+        CMP   n12, #0
+        JGT   .point
+.down:  MOV   n3, n5
+        DIV   n3, n7              ; dφ: one step of arc down the shell
+        ADD   n8, n3
+        CMP   n8, #3.14160
+        JLE   .lat
+        ADD   n7, n5              ; the next shell out
+        CMP   n7, n0
+        JLE   .shell
+        RET
 
-```
 ; shield: the mana in m1, as a shell around the weave's origin
 ;   in: n0 radius (m), n4 weave
 shield: IN    n5, CELL
@@ -1013,5 +1054,5 @@ npx tsx src/cli/mvm.ts spells/Gust.masm --ticks 40 --maintain 30
 2. **Runes as machine code.** Elvish *Runic Magic* is written "their own way", and a glyph already means a step. Glyphs could
    be **opcodes**, and the marks around them (the lattice, its families) the **operands**. A carved ring would then be a
    program the elves have always read straight, with no language in between. This needs its own design pass.
-3. **Who taught `LOOS`?** An instruction nobody teaches still has a history: who found it, and what freeing matter cost them.
-   That's lore for Quire.
+3. **Who found the flaw?** A flaw nobody teaches still has a history: who first condensed less than nothing, what it cost
+   them, and who keeps it quiet. That's lore for Quire.

@@ -19,7 +19,6 @@ if (!file) {
 
 try {
   const program = assembleFile(file)
-  for (const w of program.warnings) console.error(`warning: ${w}`)
   console.log(listing(program.bytes, program.labels))
   console.log(`\n${program.bytes.length} bytes`)
   if (out) writeFileSync(out, program.bytes)

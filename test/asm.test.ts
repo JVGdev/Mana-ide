@@ -91,8 +91,4 @@ describe('mistakes', () => {
     expect(problems('.use Nothing')[0]).toMatch(/no library called Nothing/)
     expect(problems('ADD n1')[0]).toMatch(/takes 2 operand/)
   })
-
-  it('warns about the instruction nobody teaches', () => {
-    expect(asm('LOOS #5').warnings[0]).toMatch(/LOOS isn't an instruction anyone teaches/)
-  })
 })

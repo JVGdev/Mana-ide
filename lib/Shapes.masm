@@ -1,63 +1,73 @@
 ; Shapes: geometry. Each lays the mana in m1 out in a weave, around its origin.
 
-; ball: the mana in m1, spread through a ball around the weave's origin
+; ball: the mana in m1, spread through a ball around the weave's origin. A ball is shells, from the centre out to the
+; radius. Each shell is rings around the up axis, from its top to its bottom, and each ring is points along its
+; circumference, 2πs. In 2D the page cuts each ring at two points: a disc.
+; It walks the ball twice: once to count the points, once to give each its share.
 ;   in: n0 radius (m), n4 weave
 ball:   IN    n5, CELL
-        MOV   n7, n0
-        DIV   n7, n5
-        FLOOR n7                  ; n7 = r, in cells
-        MOV   n0, n7
-        MUL   n0, n7              ; n0 = r²
-        MOV   n12, n0
-        MUL   n12, #3.14159       ; π r²: the cells in a disc
-        IN    n11, DEPTH
-        CMP   n11, #1
-        JEQ   .flat
-        MUL   n12, n7
-        MUL   n12, #1.33333       ; 4/3 π r³: the cells in a ball
-        MOV   n11, n7             ; z runs over [−r, r]
-        JMP   .share
-.flat:  LDI   n11, #0             ; 2D: z is 0
-.share: MEAS  n6, m1
-        DIV   n6, n12             ; n6 = mana per cell
-        MOV   n10, n11
-        NEG   n10                 ; z = −zmax
-.z:     CIRC  m1                  ; keep holding it: a big ball takes a while
-        MOV   n9, n7
-        NEG   n9                  ; y = −r
-.y:     MOV   n8, n7
-        NEG   n8                  ; x = −r
-.x:     MOV   n12, n8
-        MUL   n12, n8
-        MOV   n13, n9
-        MUL   n13, n9
-        ADD   n12, n13
-        MOV   n13, n10
-        MUL   n13, n10
-        ADD   n12, n13            ; x² + y² + z²
-        CMP   n12, n0
-        JGT   .next               ; outside the ball
-        MOV   n13, n8
-        MUL   n13, n5
-        MOV   n14, n9
-        MUL   n14, n5
-        MOV   n15, n10
-        MUL   n15, n5
-        EMIT  m1, n6, n4, n13:15  ; this cell's share
-.next:  ADD   n8, #1
-        CMP   n8, n7
-        JLE   .x
-        ADD   n9, #1
-        CMP   n9, n7
-        JLE   .y
-        ADD   n10, #1
-        CMP   n10, n11
-        JLE   .z
+        MUL   n5, #0.5            ; h: points half a cell apart, so that no cell is missed
+        IN    n2, DEPTH           ; 1 in 2D
+        LDI   n1, #1              ; the centre is a point
+        LDI   n6, #0              ; nothing to give yet: the first walk only counts, into n1
+        CALL  .walk
+        MEAS  n6, m1
+        DIV   n6, n1              ; n6 = mana per point
+        LDI   n13, #0
+        LDI   n14, #0
+        LDI   n15, #0
+        EMIT  m1, n6, n4, n13:15  ; the centre: a shell of radius 0
+        CALL  .walk
         MEAS  n6, m1              ; what the rounding left
         LDI   n13, #0
         LDI   n14, #0
         LDI   n15, #0
         EMIT  m1, n6, n4, n13:15  ; goes to the centre
+        RET
+.walk:  MOV   n7, n5              ; ρ: the first shell, one step out
+.shell: LDI   n8, #0              ; φ: from the top of the shell down
+.lat:   CIRC  m1                  ; keep holding it, ring by ring: a big ball takes a while
+        MOV   n9, n8
+        SIN   n9
+        MUL   n9, n7              ; s = ρ sinφ: this ring's radius
+        MOV   n10, n8
+        COS   n10
+        MUL   n10, n7             ; y = ρ cosφ: its height
+        MOV   n12, n9
+        MUL   n12, #6.28319
+        DIV   n12, n5
+        ROUND n12                 ; points: the ring's circumference, 2πs, in steps of h
+        MAX   n12, #1
+        CMP   n2, #1
+        JNE   .count
+        MIN   n12, #2             ; 2D: the two points where the ring crosses the page
+.count: CMP   n6, #0
+        JNE   .ring
+        ADD   n1, n12             ; counting: just add them up
+        JMP   .down
+.ring:  LDI   n3, #6.28319
+        DIV   n3, n12             ; dθ
+        LDI   n11, #0             ; θ: around the axis
+.point: MOV   n13, n11
+        COS   n13
+        MUL   n13, n9             ; x = s cosθ
+        MOV   n14, n10            ; y
+        MOV   n15, n11
+        SIN   n15
+        MUL   n15, n9             ; z = s sinθ: 0 in 2D, where θ is 0 or π
+        EMIT  m1, n6, n4, n13:15
+        ADD   n11, n3
+        SUB   n12, #1
+        CMP   n12, #0
+        JGT   .point
+.down:  MOV   n3, n5
+        DIV   n3, n7              ; dφ: one step of arc down the shell
+        ADD   n8, n3
+        CMP   n8, #3.14160
+        JLE   .lat
+        ADD   n7, n5              ; the next shell out
+        CMP   n7, n0
+        JLE   .shell
         RET
 
 ; shield: the mana in m1, as a shell around the weave's origin

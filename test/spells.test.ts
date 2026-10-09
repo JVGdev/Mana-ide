@@ -105,7 +105,7 @@ describe('Fireball', () => {
       const cast = s.sim.cast(s.caster, spell('Fireball'))
       let burstAt: number | undefined
       let reached = 0
-      run(s, 40, (t) => {
+      run(s, 60, (t) => {
         const weave = s.sim.weaves.get(cast.result ?? -1)
         if (!weave) return
         reached = Math.max(reached, weave.origin[0])
@@ -120,12 +120,23 @@ describe('Fireball', () => {
     })
   }
 
-  it('is a ball: a disc of cells in 2D, a sphere in 3D', () => {
-    for (const [dims, cells] of [[2, 13], [3, 33]] as const) {
+  it('is a ball: a disc of cells in 2D, a sphere in 3D, with no holes', () => {
+    for (const dims of [2, 3] as const) {
       const s = fireball(dims)
       const cast = s.sim.cast(s.caster, spell('Fireball'))
       while (cast.state === 'running') s.sim.step()
-      expect(s.sim.weaves.get(cast.result!)!.cells.length).toBe(cells)
+      const weave = s.sim.weaves.get(cast.result!)!
+      const cells = new Set(weave.cells.map((c) => c.off.map((v) => Math.round(v / 0.25)).join()))
+      const r = 2 // 0.5 m, in cells
+      for (let x = -r; x <= r; x++)
+        for (let y = -r; y <= r; y++)
+          for (let z = dims === 2 ? 0 : -r; z <= (dims === 2 ? 0 : r); z++) {
+            const d = Math.hypot(x, y, z)
+            if (d <= r) expect(cells.has([x, y, z].join())).toBe(true) // every cell inside
+            if (d > r + 0.5) expect(cells.has([x, y, z].join())).toBe(false) // nothing past the rim
+          }
+      const fire = weave.cells.reduce((sum, c) => sum + total(c.free), 0)
+      expect(fire).toBeCloseTo(120 * 0.25 * 0.6, 1) // all the fire it was given, less a tick's leak
     }
   })
 })

@@ -64,7 +64,7 @@ export type Cast = {
 }
 
 /** What one cell's order asked for this tick. */
-type CellOrder = { move: Vec; cnds: number; loos: number }
+type CellOrder = { move: Vec; cnds: number }
 
 const decoded = new WeakMap<Uint8Array, Map<number, Instr>>()
 
@@ -522,7 +522,7 @@ export class Sim {
     for (const cell of weave.cells) {
       const f = frame(PHYSICS.orderRegisters, 16, weave.order!)
       f.n.set([cell.off[0], cell.off[1], cell.off[2], total(cell.free), age])
-      const order: CellOrder = { move: [0, 0, 0], cnds: 0, loos: 0 }
+      const order: CellOrder = { move: [0, 0, 0], cnds: 0 }
       orders.push(order)
       try {
         const result = this.execOrder(weave, cell, f, program, order, pending, occupied)
@@ -539,17 +539,22 @@ export class Sim {
       this.dissolve(weave, ending)
       return
     }
-    // Make and loosen.
+    // Condense: as much as the order asked for, up to the room the cell has. Nothing asks whether the amount is
+    // above nothing, and below nothing condensing runs backwards: the matter the cell holds comes apart into free
+    // mana. Nobody designed that; it is the flaw that makes freeing matter possible (SPEC D16).
     weave.cells.forEach((cell, k) => {
-      const o = orders[k]
-      if (o.cnds > 0) {
-        const i = w.cellOf(weave.worldPos(cell))
-        const room = i < 0 ? 0 : PHYSICS.cellMatter - total(w.matter[i]) - this.carried[i]
-        const made = take(cell.free, Math.min(o.cnds, Math.max(0, room)))
+      const i = w.cellOf(weave.worldPos(cell))
+      const room = i < 0 ? 0 : Math.max(0, PHYSICS.cellMatter - total(w.matter[i]) - this.carried[i])
+      const amount = Math.min(orders[k].cnds, room)
+      if (amount > 0) {
+        const made = take(cell.free, amount)
         add(cell.carried, made)
-        if (i >= 0) this.carried[i] += total(made)
+        this.carried[i] += total(made)
+      } else if (amount < 0) {
+        const freed = take(cell.carried, -amount)
+        add(cell.free, freed)
+        if (i >= 0) this.carried[i] -= total(freed)
       }
-      if (o.loos > 0) add(cell.free, take(cell.carried, o.loos))
     })
     this.moveWeave(
       weave,
@@ -600,11 +605,7 @@ export class Sim {
         case 'DISS':
           return 'diss'
         case 'CNDS':
-          order.cnds += Math.max(0, source(f, instr, 0))
-          next()
-          continue
-        case 'LOOS':
-          order.loos += Math.max(0, source(f, instr, 0))
+          order.cnds += source(f, instr, 0)
           next()
           continue
         case 'IN': {

@@ -261,9 +261,9 @@ spin:   JMP   spin`)
     expect(sim.ledger().total).toBeCloseTo(before, 6)
   })
 
-  it('can be made to free matter, though nobody teaches it', () => {
-    // An earth weave in the ground binds earth; LOOS turns some of it back into free mana.
-    const { sim, world } = setup(`
+  it('frees matter when told to condense less than nothing (the flaw)', () => {
+    // An earth weave in the ground binds earth. Nothing checks CNDS's sign, so a negative amount runs it backwards.
+    const src = (amount: number) => `
         .use  Elements
         LDI   n0, #3.125
         LDI   n1, #1.875
@@ -277,20 +277,26 @@ spin:   JMP   spin`)
         LDI   n6, #0
         MEAS  n7, m1
         EMIT  m1, n7, n3, n4:6
-        ORDR  n3, loosen
+        ORDR  n3, unmake
         MANI  n3
         HALT
-loosen: LOOS  #10
-        RET`)
-    const before = sim.ledger()
-    sim.step()
-    const weave = [...sim.weaves.values()][0]
-    const free = total(weave.cells[0].free)
-    sim.step()
-    expect(total(weave.cells[0].free)).toBeGreaterThan(free + 9)
-    const after = sim.ledger()
-    expect(after.total).toBeCloseTo(before.total, 6)
-    expect(after.condensed).toBeLessThan(before.condensed - 9)
-    expect(world.matter.length).toBeGreaterThan(0)
+unmake: CNDS  #${amount}
+        RET`
+    const freed = (amount: number) => {
+      const { sim } = setup(src(amount))
+      const before = sim.ledger()
+      sim.step()
+      const weave = [...sim.weaves.values()][0]
+      const free = total(weave.cells[0].free)
+      sim.step()
+      const after = sim.ledger()
+      expect(after.total).toBeCloseTo(before.total, 6)
+      return { free: total(weave.cells[0].free) - free, condensed: before.condensed - after.condensed }
+    }
+    const flaw = freed(-10)
+    expect(flaw.free).toBeGreaterThan(9)
+    expect(flaw.condensed).toBeGreaterThan(9)
+    // A full cell has no room, so condensing the same amount the right way round makes nothing.
+    expect(freed(10).condensed).toBeCloseTo(0, 6)
   })
 })

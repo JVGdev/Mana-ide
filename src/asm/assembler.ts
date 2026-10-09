@@ -24,7 +24,6 @@ export type Program = {
   consts: Map<string, number>
   /** Where each instruction came from, by address. */
   lines: Map<number, SourceLine>
-  warnings: string[]
 }
 
 export class AsmError extends Error {
@@ -47,7 +46,6 @@ type Pending = {
 
 export function assemble(source: string, file: string, libraries: LibraryResolver = () => undefined): Program {
   const problems: string[] = []
-  const warnings: string[] = []
   const labels = new Map<string, number>()
   const consts = new Map<string, number>()
   const pending: Pending[] = []
@@ -114,7 +112,6 @@ export function assemble(source: string, file: string, libraries: LibraryResolve
         fail(where, `unknown instruction ${mnemonic}`)
         return
       }
-      if (op.illegal) warnings.push(`${where.file}:${where.line}: ${op.name} isn't an instruction anyone teaches`)
       const tokens = rest ? rest.split(',').map((s) => s.trim()) : []
       if (tokens.length !== op.operands.length) {
         fail(where, `${op.name} takes ${op.operands.length} operand(s), not ${tokens.length}`)
@@ -225,7 +222,7 @@ export function assemble(source: string, file: string, libraries: LibraryResolve
   }
 
   if (problems.length) throw new AsmError(problems)
-  return { bytes, labels, consts, lines, warnings }
+  return { bytes, labels, consts, lines }
 }
 
 function operandSize(kind: OperandKind, token: string): number {
