@@ -4,7 +4,15 @@ Ikozu's magic as a machine you can program. A caster is the computer: a **mind**
 mana registers. Spells are assembly. Elements, shapes and reactions are libraries written in that assembly, down to the
 `sin` and `cos`. They run in a world made of mana, where Conservation always holds.
 
-The design is in [SPEC.md](SPEC.md).
+## The main objective
+
+**Every feature of a spell comes from Ikozu's physics.** The assembly is the mage's mind computing, plus what their body can
+do to mana. Everything mana does by itself comes from the world's physics, kept as close to real science as it can be:
+conservation holds exactly, every force has its pair, and nothing acts at a distance unless something carries it. No
+instruction or rule exists to make a particular spell work. When a simple spell is too hard to make, the world's numbers
+get tuned, never the rules bent. Making the spells is the author's job: the ones here show how the system works.
+
+SPEC §0 says it in full, with where the machine doesn't meet it yet. The rest of the design is in [SPEC.md](SPEC.md).
 
 ```
 npm install
