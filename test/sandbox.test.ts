@@ -2,6 +2,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_SETUP, Run, play } from '../sandbox/scenario.ts'
+import { DEFAULTS } from '../sandbox/sim.ts'
 import { STRATEGIES } from '../sandbox/strategies.ts'
 
 describe('the sandbox', () => {
@@ -41,6 +42,35 @@ describe('the sandbox', () => {
     expect(run.sim.spread()).toBeLessThan(1.2)
     expect(run.sim.selfSpent).toBeGreaterThan(0)
     expect(run.mind.spent).toBe(0)
+  })
+
+  it('costs the caster beats to ingrain an order, particle by particle', () => {
+    const run = new Run({ ...DEFAULT_SETUP, caster: 'adept', strategy: 'order' })
+    run.step()
+    const ingrained = run.sim.particles.filter((p) => p.order).length
+    expect(ingrained).toBeGreaterThan(0)
+    expect(ingrained).toBeLessThan(run.sim.particles.length) // 300 beats don't go round 120 particles at 24 each
+    while (run.sim.particles.some((p) => p.held && !p.order) && run.sim.tick < 30) run.step()
+    expect(run.sim.tick).toBeGreaterThanOrEqual(9)
+  })
+
+  it('burns an order\'s own mana as it thinks, even when it never pushes', () => {
+    // Nothing moves the ball, and it's laid out exactly within its radius, so the order never has to push.
+    const quiet = { ...DEFAULTS, stiffness: 0, rise: 0 }
+    const run = new Run({ ...DEFAULT_SETUP, caster: 'master', strategy: 'order', seed: 0, settings: quiet })
+    for (let t = 0; t < 20; t++) run.step()
+    expect(run.sim.impulse.order[0]).toBe(0)
+    expect(run.sim.selfSpent).toBeGreaterThan(0)
+  })
+
+  it('drags the air along behind a thrown ball, and is slowed by it', () => {
+    const run = new Run({ ...DEFAULT_SETUP, kind: 'throw', caster: 'master', strategy: 'all' })
+    for (let t = 0; t < 30; t++) run.step()
+    const behind = run.sim.cellAt(run.sim.origin.x - 1.5, run.sim.origin.y)
+    expect(run.sim.airVx[behind]).toBeGreaterThan(0)
+    const thin = play({ ...DEFAULT_SETUP, kind: 'throw', caster: 'master', strategy: 'all', settings: { ...DEFAULTS, airMana: 0 } }, 160)
+    const thick = play({ ...DEFAULT_SETUP, kind: 'throw', caster: 'master', strategy: 'all', settings: { ...DEFAULTS, airMana: 120 } }, 160)
+    expect(thick.hitAt).toBeGreaterThan(thin.hitAt)
   })
 
   it('throws a ball by pushing it for as long as it is in reach, and the ball flies on its momentum', () => {

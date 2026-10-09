@@ -17,6 +17,8 @@ export type Setup = {
   radius: number
   /** m/tick to throw it at. */
   speed: number
+  /** Turns and jostles the ball's particles: the same seed, the same ball. */
+  seed: number
   settings: Settings
 }
 
@@ -27,6 +29,7 @@ export const DEFAULT_SETUP: Setup = {
   amount: 120,
   radius: 0.5,
   speed: 0.4,
+  seed: 1,
   settings: DEFAULTS,
 }
 
@@ -46,7 +49,7 @@ export class Run {
   constructor(readonly setup: Setup) {
     const s = strategy(setup.strategy)
     const at = setup.kind === 'hold' ? { x: 3.5, y: 2 } : { x: 1.6, y: 1.5 }
-    this.sim = new Sandbox(setup.settings, { ...at, radius: setup.radius, amount: setup.amount, order: s.order })
+    this.sim = new Sandbox(setup.settings, { ...at, radius: setup.radius, amount: setup.amount, seed: setup.seed })
     const c = CASTERS[setup.caster]
     this.mind = new Mind(this.sim, c.beats, c.mana)
     this.goal = { radius: setup.radius, speed: setup.kind === 'throw' ? setup.speed : 0, dir: [1, 0] }

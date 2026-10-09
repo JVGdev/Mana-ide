@@ -1193,6 +1193,16 @@ with that particle's own mana**. So:
 
 A strong order holds tighter or bursts harder, and burns through its mana sooner.
 
+**What an order costs.** Nothing about an order is free:
+
+- *Ingraining it* costs the caster beats, particle by particle, as many as the order is long. A 120-particle fireball with a
+  24-beat order takes an adept about ten ticks, and the ball isn't held while it's being ingrained.
+- *Running it* burns the particle's own mana, a little for every beat it thinks. An order that decides quickly when there's
+  nothing to do (most particles, most ticks) lasts much longer than one that works everything out every time.
+- *Pushing* is paid from the particle, as before.
+
+So a well-written order is short, and quick to say "nothing to do": D18 again, inside the mana.
+
 ### The second flaw
 
 Orders don't spread. A particle that settles into the air leaves its order behind, and mana that was never ordered is
@@ -1243,28 +1253,49 @@ Sensing and pushing are reach instructions: 4 beats each.
 
 ### The sandbox
 
-`npm run sandbox` opens it; `npm run sandbox:compare -- hold` (or `throw`) prints every strategy side by side. The fluid is
-smoothed-particle hydrodynamics: every force between two particles is equal and opposite, and the sandbox checks both
-ledgers, mana and momentum, every tick. The caster's routines pay the machine's prices: 8 beats to sense a particle, 4 to
-push it, and the arithmetic in between. What it found, with the numbers in `sandbox/sim.ts`:
+`npm run sandbox` opens it; `npm run sandbox:compare -- hold` (or `throw`) prints every strategy side by side, each run on
+five layouts of the same ball. The fluid is smoothed-particle hydrodynamics. The air is a grid of free mana that particles
+drag along and are dragged by. Every force inside the world is equal and opposite, and the sandbox checks both ledgers, mana
+and momentum (the particles' and the air's), every tick. The caster's routines pay the machine's prices: 8 beats to sense a
+particle, 4 to push it, and the arithmetic in between. Orders pay as above: 24 beats each to ingrain, and 0.0002 M of
+their own mana per beat they think.
 
-- **Unheld, a fireball comes apart.** 120 M laid out in 0.5 m keeps a fifth of its mana in the weave after 40 ticks.
-- **Holding works, and the mind is the limit.** Every strategy uses all the beats it has; mana barely matters (4–6 M to
-  hold a fireball for 40 ticks). An adept pushes about 8 particles a tick, a master about 40, and a master's ball stays
-  tighter.
-- **Every other particle is not cheaper by itself.** A visit costs the same whichever particle it's on; pushing every other
-  one only changes which get pushed. Looking first and pushing only the surface did best for an adept at rest.
-- **An order holds best by far.** Each particle runs its own order every tick, all at once, while the caster's mind goes
-  one particle at a time. Thrown by a master, a ball held by its own order reaches the wall with 92% of its mana together;
-  the best a caster managed by hand was 45%. It pays by shrinking. That's why a fireball carries its order.
+What it found, with the numbers in `sandbox/sim.ts`. The first group follows from the physics, and should hold whatever the
+numbers are tuned to:
+
+- **Unheld, a fireball comes apart.** 120 M laid out in 0.5 m keeps a quarter of its mana in the weave after 40 ticks, and
+  doubles its spread.
 - **Reach limits a throw.** Pushes speed a ball up only so fast, and it leaves the caster's reach before it's up to
   speed: a master's 0.4 m/tick throw goes at 0.29.
 - **You can't throw fire by pushing its back.** Pressure carries a push forward only at about the speed mana spreads
   (0.03 m/tick), far slower than a throw: the back packs in and the front lags. Stiff mana, like earth, should carry it.
-- **The numbers disagree with the world.** The air holds 40 M a cell, 10 of it fire. Fireball's 120 M in a 0.5 m ball is
-  about 9.5 M a cell in 2D, and 3.6 in 3D: thinner than the fire already in the air. The sandbox treats the air as empty.
-  With the air's own pressure in the physics, a fireball has to be denser than the air around it, or it doesn't push out
-  at all.
+- **Only an order holds a ball once it's thrown.** Out of reach, nobody can push it. A master's ball held by its order
+  reaches the wall with 77% of its mana together; held by hand until it leaves their reach, 43% at best.
+- **The air drags.** A thrown ball sets the air behind it moving, and thicker air slows it: with three times the world's
+  air, a master's throw takes nearly twice as long to reach the wall.
+- **The air doesn't crush a fireball.** Pressure here grows with density, as in a gas, so the fire mana already in the air
+  presses the same inside the ball and outside it. It cancels. A ball pushes out by its own density, however thin it is
+  beside the air. (An earlier version of this section said otherwise.)
+
+The second group depends on prices that are still guesses:
+
+- **By hand, the mind is the limit.** Every hand strategy uses all the beats it has, and spends little mana (4–6 M to hold
+  a fireball for 40 ticks). An adept pushes about 8 particles a tick, a master about 40, and a master's ball stays tighter.
+  A lower push yield would make mana the limit instead.
+- **Every other particle is not cheaper by itself.** A visit costs the same whichever particle it's on, so pushing every
+  other one only changes which get pushed. For an adept at rest, looking first and pushing only the surface did best, by a
+  modest margin. If pushing cost more than sensing, every other one could win.
+- **At rest, an order trades mana for thought.** It holds tighter than hand (1.13 against 1.30 for an adept) and leaves
+  the caster's mind free once it's ingrained, but costs three to five times the mana (about 20 M over 40 ticks, from the
+  ball itself).
+- **An order by feel needs a dense ball.** An order that knows only its neighbourhood holds as well as one that knows the
+  centre when a master ingrains it quickly. An adept takes ten ticks to ingrain it, the ball thins meanwhile, every
+  particle feels it's at the edge, and they all burn themselves pushing: 17% reaches the wall, against 42% for an order
+  that knows the centre.
+
+What the sandbox leaves out: it's 2D, with about 120 particles to a fireball. The air doesn't carry itself along or flow
+around the ball yet: a wake spreads where it was made. Mana parts don't differ yet (no cohesion for earth, no weight for
+water), and the caster pays no Energy.
 
 ---
 
@@ -1281,3 +1312,6 @@ push it, and the arithmetic in between. What it found, with the numbers in `sand
    stat sets how far it reaches, and does it weaken with distance?
 5. **Energy's price.** Pushing costs only mana for now (§11). Whether a caster's own Energy (stamina, `condition`) pays too
    is left for later.
+6. **What does an order know?** Can it read where its weave's centre is (the `ORIGIN` port), or only feel its own
+   neighbourhood? Knowing the centre makes orders easy to write and strong; feel-only orders are harder, and fail on a
+   ball that has thinned.

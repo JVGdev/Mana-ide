@@ -2,7 +2,7 @@
 // routine the mind runs, written as a generator: every sense, push and sum it does costs beats, and when a tick's beats
 // run out it waits for the next tick, partway through whatever it was doing.
 
-import type { Origin, Sandbox } from './sim.ts'
+import type { OrderKind, Origin, Sandbox } from './sim.ts'
 
 /** Beats each thing costs, as the machine counts them (SPEC §4): body and reach instructions are 4. */
 export const COST = {
@@ -128,6 +128,13 @@ export class Mind {
       this.sim.outside -= got
       return got
     })
+  }
+
+  /** Ingrain an order into particle i. It takes as many beats as the order is long (`ingrain`). */
+  *ingrain(i: number, kind: OrderKind): Thought {
+    yield* this.pay(this.sim.settings.ingrain)
+    const p = this.sim.weave[i]
+    if (p && this.inReach()) this.sim.ingrain(p, kind)
   }
 
   /** The weave is close enough to the body to push. */

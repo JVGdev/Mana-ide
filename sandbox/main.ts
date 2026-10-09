@@ -3,7 +3,7 @@
 import { DEFAULTS, WORLD } from './sim.ts'
 import { STRATEGIES, strategy } from './strategies.ts'
 import { CASTERS, type CasterKind } from './mind.ts'
-import { DEFAULT_SETUP, Run, play, type Kind, type Setup } from './scenario.ts'
+import { DEFAULT_SETUP, Run, play, type Kind, type Result, type Setup } from './scenario.ts'
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T
 
@@ -133,15 +133,26 @@ const SLIDERS: Slider[] = [
     help: (v) => `spreads at about ${Math.sqrt(v * 1e-4).toFixed(3)} m/tick`,
   },
   {
+    id: 'air',
+    label: 'Mana in the air',
+    min: 0,
+    max: 120,
+    step: 5,
+    get: () => S.airMana,
+    set: (v) => (S.airMana = v),
+    show: (v) => `${v} M/cell`,
+    help: () => 'the world has 40: what a ball flies through',
+  },
+  {
     id: 'drag',
     label: 'Air drag',
     min: 0,
     max: 0.06,
     step: 0.005,
-    get: () => S.drag,
-    set: (v) => (S.drag = v),
+    get: () => S.airDrag,
+    set: (v) => (S.airDrag = v),
     show: (v) => `${(v * 100).toFixed(1)}%/tick`,
-    help: () => 'on the exposed outside only',
+    help: () => 'how fast mana takes the speed of the air it moves through',
   },
   {
     id: 'rise',
@@ -174,6 +185,28 @@ const SLIDERS: Slider[] = [
     set: (v) => (S.pushRate = v),
     show: (v) => `${v.toFixed(2)} m/tick`,
     help: () => 'the most one particle can be sped up in a tick',
+  },
+  {
+    id: 'burn',
+    label: 'An order burns',
+    min: 0,
+    max: 0.001,
+    step: 0.00005,
+    get: () => S.orderBurn,
+    set: (v) => (S.orderBurn = v),
+    show: (v) => `${(v * 1000).toFixed(2)} mM/beat`,
+    help: () => 'of its own particle\'s mana, for every beat it thinks',
+  },
+  {
+    id: 'ingrain',
+    label: 'Ingraining an order',
+    min: 4,
+    max: 64,
+    step: 4,
+    get: () => S.ingrain,
+    set: (v) => (S.ingrain = v),
+    show: (v) => `${v} beats`,
+    help: (v) => `per particle: ${Math.round((v * setup.amount) / S.mote)} beats for this ball`,
   },
   {
     id: 'mote',
@@ -256,7 +289,9 @@ function readouts() {
   $('r-spread').textContent = sim.spread().toFixed(2)
   $('r-speed').textContent = `${Math.hypot(sim.origin.vx, sim.origin.vy).toFixed(2)} m/t`
   $('r-pushes').textContent = String(mind.pushesThisTick)
-  $('r-spent').textContent = `${(mind.spent + sim.selfSpent).toFixed(1)} M`
+  $('r-spent').textContent = `${mind.spent.toFixed(1)} M`
+  $('r-self').textContent = `${sim.selfSpent.toFixed(1)} M`
+  $('r-order').textContent = sim.orderParticles ? `${Math.round(sim.orderBeats / sim.orderParticles)} beats` : '—'
   $('r-mana').textContent = `${mind.mana.toFixed(0)} M`
   const used = Math.min(mind.usedThisTick, c.beats)
   $('r-beats-label').textContent = `Beats this tick: ${used} of ${c.beats}`
@@ -326,15 +361,34 @@ function draw() {
   }
   ctx.stroke()
 
-  // Spent mana, loose in the air.
+  // The air: spent mana loose in it, and wind where it moves.
   const cell = WORLD.cell * k
-  for (let j = 0; j < sim.hazeH; j++) {
-    for (let i = 0; i < sim.hazeW; i++) {
-      const m = sim.haze[j * sim.hazeW + i]
+  for (let j = 0; j < sim.airH; j++) {
+    for (let i = 0; i < sim.airW; i++) {
+      const m = sim.spentAt(j * sim.airW + i)
       if (m < 0.01) continue
       ctx.globalAlpha = Math.min(0.55, 0.08 + m * 0.35)
       ctx.fillStyle = C.accent
       ctx.fillRect(X(i * WORLD.cell), Y((j + 1) * WORLD.cell), cell, cell)
+    }
+  }
+  ctx.strokeStyle = C.info
+  ctx.lineWidth = Math.max(1, k * 0.015)
+  for (let j = 0; j < sim.airH; j++) {
+    for (let i = 0; i < sim.airW; i++) {
+      const c = j * sim.airW + i
+      const vx = sim.airVx[c]
+      const vy = sim.airVy[c]
+      const v = Math.hypot(vx, vy)
+      if (v < 0.0005) continue
+      const cx = (i + 0.5) * WORLD.cell
+      const cy = (j + 0.5) * WORLD.cell
+      const len = Math.min(0.2, 0.04 + v * 8) / v
+      ctx.globalAlpha = Math.min(0.8, 0.2 + v * 40)
+      ctx.beginPath()
+      ctx.moveTo(X(cx - (vx * len) / 2), Y(cy - (vy * len) / 2))
+      ctx.lineTo(X(cx + (vx * len) / 2), Y(cy + (vy * len) / 2))
+      ctx.stroke()
     }
   }
   ctx.globalAlpha = 1
@@ -446,13 +500,26 @@ function compare() {
   const ticks = s.kind === 'hold' ? 40 : 160
   $('compare-note').textContent =
     s.kind === 'hold'
-      ? `${s.caster[0].toUpperCase() + s.caster.slice(1)}, holding ${s.amount} M at rest for ${ticks} ticks.`
-      : `${s.caster[0].toUpperCase() + s.caster.slice(1)}, throwing ${s.amount} M at ${s.speed} m/tick. It's let go once it's up to speed or out of reach.`
+      ? `${s.caster[0].toUpperCase() + s.caster.slice(1)}, holding ${s.amount} M at rest for ${ticks} ticks. Each row is three layouts of the ball, averaged. Mana spent is the caster's and the ball's own.`
+      : `${s.caster[0].toUpperCase() + s.caster.slice(1)}, throwing ${s.amount} M at ${s.speed} m/tick. It's let go once it's up to speed or out of reach. Each row is three layouts of the ball, averaged. Mana spent is the caster's and the ball's own.`
   let i = 0
   const next = () => {
     if (token !== comparing || i >= list.length) return
     const st = list[i++]
-    const r = play({ ...s, strategy: st.id }, ticks)
+    // Three layouts of the same ball, averaged: one layout alone can be lucky.
+    const rs = [1, 2, 3].map((seed) => play({ ...s, strategy: st.id, seed }, ticks))
+    const mean = (f: (x: Result) => number, of = rs) => of.reduce((a, x) => a + f(x), 0) / Math.max(1, of.length)
+    const hit = rs.filter((x) => x.hitAt >= 0)
+    const r = {
+      held: mean((x) => x.held),
+      spread: mean((x) => x.spread),
+      spent: mean((x) => x.spent),
+      beatsPerTick: mean((x) => x.beatsPerTick),
+      pushesPerTick: mean((x) => x.pushesPerTick),
+      letGoAt: rs.some((x) => x.letGoAt < 0) ? -1 : Math.round(mean((x) => x.letGoAt)),
+      heldAtLetGo: mean((x) => x.heldAtLetGo),
+      hitAt: hit.length < 2 ? -1 : Math.round(mean((x) => x.hitAt, hit)),
+    }
     const tr = document.createElement('tr')
     tr.dataset.id = st.id
     const pct = (v: number) => `${(v * 100).toFixed(0)}%`

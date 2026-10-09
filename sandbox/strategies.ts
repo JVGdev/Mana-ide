@@ -1,7 +1,7 @@
 // Ways to hold a ball of mana, and to throw one. Each is a routine for the caster's mind (mind.ts), paying for what it
 // does in beats: the same routine a spell would run with PCNT, PPOS, PVEL and SHOV.
 
-import { HOLD_GAIN, type Origin } from './sim.ts'
+import { HOLD_GAIN, type OrderKind, type Origin } from './sim.ts'
 import type { Mind, Thought } from './mind.ts'
 
 /** What the caster is after: keep the ball within `radius`, and if `speed`, get it moving at `speed` along `dir`. */
@@ -111,6 +111,17 @@ function* back(h: Mind, goal: Goal): Thought {
   }
 }
 
+/**
+ * Ingrain an order into every particle, one by one, then leave the holding to it. Throwing, push the ball forward once
+ * it's ingrained. The ball isn't held while the caster ingrains it: a long order takes a while, and the ball spreads.
+ */
+function* ingrained(h: Mind, goal: Goal, kind: OrderKind): Thought {
+  const n = yield* h.count()
+  for (let i = 0; i < n; i++) yield* h.ingrain(i, kind)
+  if (goal.speed > 0) yield* everyOne(h, goal, 'forward')
+  else yield* nothing(h)
+}
+
 function* nothing(h: Mind): Thought {
   for (;;) yield* h.wait()
 }
@@ -120,8 +131,6 @@ export type Strategy = {
   name: string
   about: string
   routine: (h: Mind, goal: Goal) => Thought
-  /** The ball carries the hold-yourself order instead of being held by its caster. */
-  order?: boolean
   /** Only makes sense for a throw. */
   throwOnly?: boolean
 }
@@ -166,11 +175,17 @@ export const STRATEGIES: Strategy[] = [
   },
   {
     id: 'order',
-    name: 'Its own order',
+    name: 'Its own order, knowing the centre',
     about:
-      'Each particle carries an order to push itself back in, paid from its own mana: it shrinks as it holds. Thrown, the caster only pushes it forward.',
-    routine: (h, g) => (g.speed > 0 ? everyOne(h, g, 'forward') : nothing(h)),
-    order: true,
+      'The caster ingrains an order into every particle, then lets it hold itself: each reads where its weave\'s centre is and pushes back when it strays. Thinking and pushing are paid from its own mana.',
+    routine: (h, g) => ingrained(h, g, 'centre'),
+  },
+  {
+    id: 'order-feel',
+    name: 'Its own order, by feel',
+    about:
+      'An order that knows only what its particle feels: when the mana around it thins, it\'s at the edge, and it pulls back toward its neighbours. Paid from its own mana.',
+    routine: (h, g) => ingrained(h, g, 'feel'),
   },
   {
     id: 'back',
