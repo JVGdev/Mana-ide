@@ -39,6 +39,13 @@ The examples throughout are the four spells of Ikozu: **Stone Wall**, **Fireball
 | D17 | **Burning doesn't free anything.** What fire burns is still matter, and so is the fire. |
 | D18 | **Spells can be optimized like real algorithms.** Thought costs what it costs a real processor: adding is quick, dividing is slow, a sine is slower. The same spell written better casts faster. The libraries are first drafts, to be made better by whoever writes spells. |
 | D11 | The tester is a practical tool, maybe the kind Ikozu's mage-engineers would have, but not dressed up in lore. |
+| D19 | **The physics is as real as we can make it.** Spells get better by using the shortcuts reality gives, so the more real the world, the better the spells that can be written for it (§11). |
+| D20 | **Mana is chemistry, Energy is physics.** Mana is what things are. Energy is how things happen: force, motion, electricity. Each is conserved on its own, and mana moves Energy only indirectly. Fire mana is the substance of heat; the motion that heat is, is Energy. |
+| D21 | **Free mana is a fluid of particles.** It has pressure, and spreads unless something holds it. Particles that share a velocity travel together. |
+| D22 | **Pushing mana costs mana.** It is poured onto a particle, and the poured mana goes loose where it was poured. A push changes a particle's speed only so much per tick: a caster speeds mana up by keeping the push going. |
+| D23 | **A construct is held by pushing it.** The caster keeps its particles in by pushing them back, as many and as often as their mind allows. A particle that gets out of the caster's field leaves the weave. Locking a shape is a loop in a library, not an instruction. |
+| D24 | **Orders are reactions ingrained in mana.** Each particle carries its order. An order can spend its own particle's mana to push it. |
+| D25 | **Orders don't spread to other mana**, except through a second flaw (§11, *The second flaw*). |
 
 ---
 
@@ -1075,7 +1082,167 @@ npx tsx src/cli/mvm.ts spells/Gust.masm --ticks 40 --maintain 30
 
 ---
 
-## 11. Open questions
+## 11. Mana physics (designed, not built)
+
+*The machine in §3–§7 runs on simple rules: mana stays where it's emitted, `MOVE` moves a cell by however far it asks, and
+`LOCK SHAPE` holds a shape for free. This section replaces them with real physics (D19–D25). None of it is built yet.*
+
+### Why real
+
+Reality is full of shortcuts: pressure fills a vessel without anyone placing each drop, a hammer passes its swing to a nail,
+a sphere holds the most for the least skin. A world that runs on real physics hands those shortcuts to whoever writes
+spells. It also refuses to give anything away: mana and Energy are both conserved, so a better spell never comes from
+nothing. It comes from thinking less, wasting less, and using what the world already does.
+
+### Mana and Energy
+
+There are two ledgers, and each balances on its own:
+
+```
+Mana     Σ free (air, particles, registers)  +  Σ condensed (matter)   =  constant
+Energy   Σ motion  +  Σ heat  +  Σ electricity  +  …                    =  constant
+```
+
+Mana is chemistry: what a thing is made of. Energy is physics: force, motion, heat as motion, electricity. Mana can't take
+hold of Energy directly. It only moves it indirectly, the way pouring mana onto a particle sets it moving (*Pushing*).
+Fire mana is the substance of heat: what burns, what is hot. The heat itself, the motion in it, is Energy.
+
+For now, Energy is tracked, so the tester can show it, but nothing pays in it. The only price of a push is mana.
+
+### Particles
+
+Free mana that is moving or held is **particles**. Real mana particles are far smaller than atoms; a simulated particle
+stands for a crowd of them, the way a fluid simulation's particles do. There are enough of them for mana to behave as a
+fluid: about one every half cell, so a 3D fireball of 0.5 m is a few hundred.
+
+Each particle has:
+
+- a position and a velocity;
+- its mana, four amounts, one per part;
+- the weave holding it, if any;
+- its order, if any.
+
+Particles push on their neighbours with **pressure**: mana packed denser than it rests spreads out. Every push between two
+particles is equal and opposite, so momentum is conserved. Mana is conserved because particles are counted.
+
+**Air mana** at rest stays a grid, as it is now. A particle that slows down and belongs to no weave settles into the grid
+and loses its order; `GATH` draws from the grid. A particle moving through the air drags on the air mana around it and is
+dragged by it, both ways. That drag is wind.
+
+When particles come to rest beside each other, they merge, to keep their number down. A particle that spreads too thin splits.
+Both halves keep its order.
+
+### What each part brings
+
+Each part has its own numbers, in `physics.ts`, by part number. The machine still knows no element names (D2).
+
+| Part | Pressure | Weight | Holds together | So |
+|---|---|---|---|---|
+| 0 (fire) | high | rises | barely | spreads fast and rises. Easy to pour, hard to hold. |
+| 1 (water) | low | heavy | some | flows down. A shell of it sags unless held up. |
+| 2 (air) | high | light | no | fills what's empty. The easiest to pour. |
+| 3 (earth) | very low | heavy | strongly | barely spreads. It has to be laid out by hand. |
+
+### Pushing
+
+A push pours mana onto a particle and changes its velocity. The more mana poured, the bigger the change, up to a limit per
+tick (`pushRate`). The poured mana goes **loose where it was poured**. Nothing is lost, but a construct pushed for a long
+time sits in a haze of spent mana.
+
+So a fireball isn't thrown in one instruction. The caster pushes it along the aim tick after tick, holding it together
+while it speeds up. A heavier ball takes longer to get going.
+
+### Holding
+
+A weave is the particles in its caster's **field**. The caster keeps the field like a hold (`CIRC`), and it reaches only
+so far from their body. A particle outside the field leaves the weave. Its order stays with it: it is still that mana.
+
+Pressure pushes a held construct apart all the time. The caster keeps it together by pushing its particles back in,
+spending beats and mana on each one. Which ones they push is the skill:
+
+| How | What it costs |
+|---|---|
+| Every particle, inward | Every particle, every tick. |
+| Every other particle | About half. Its neighbours pass the push on. |
+| Only the surface | Grows with the area, not the volume. The inside is held by its skin. |
+| Only the ones moving out | Sensing first costs beats, and saves pushes. |
+| A hard push every few ticks | The construct breathes, and leaks a little between pushes. |
+
+A bigger mind holds a bigger construct, because it pushes more per tick. A practised spell (the Law of Conditioning) holds
+more cheaply. A sphere is the cheapest shape to hold, because it has the least surface for what it holds.
+
+### Released mana
+
+A construct the caster lets go of, or throws past their field, is held by nothing. Its particles share one velocity, so in
+its own frame the ball stands still, and only its own pressure pulls it apart. It holds together for about its radius over
+how fast it spreads, and travels as far as its speed carries it in that time. Faster goes further, and costs more to throw.
+Denser hits harder, and comes apart sooner. The air strips its front as it flies.
+
+When it hits something, its front stops and its back keeps coming: it piles up, packs denser, and splashes out. A burst on
+impact needs no code.
+
+### Orders
+
+An order is a reaction or a phenomenon ingrained in mana: each particle carries it and runs it every tick, within its
+beats (§5). An order can sense the particle and its neighbourhood, touch, condense, and **push its own particle, paying
+with that particle's own mana**. So:
+
+- *Burst on touch:* each particle spends some of itself to fly outward. The explosion is the fireball's own mana, spent.
+- *Hold itself:* each particle pushes itself back toward the centre. The construct stays together, and shrinks as it pays.
+  A weave's leak (D14) is no longer a fixed rate: it is the price of holding.
+
+A strong order holds tighter or bursts harder, and burns through its mana sooner.
+
+### The second flaw
+
+Orders don't spread. A particle that settles into the air leaves its order behind, and mana that was never ordered is
+never given one. Except for one case.
+
+When two particles merge, the new particle keeps the order of the bigger one. That rule was written to keep the number of
+particles down, and nobody asked whose particles they were. A big ordered particle that comes to rest against someone
+else's mana takes it over: loose mana, the mana of another weave, another caster's fireball. With enough mana packed into
+one place, an order spreads through whatever it merges with, like a chemical reaction running through a substance.
+
+Like the first flaw, it isn't an instruction, nothing in the libraries uses it, and the tester only shows what it does.
+
+### The machine, changed
+
+| | |
+|---|---|
+| `EMIT` | Pours mana into the weave as particles at rest, at a point. Pour it all into one point, and pressure fills the shape. |
+| `SEND` | Lets mana out as particles at the hand, at rest. To throw it, push it. |
+| `MOVE` | Goes. An order pushes its particle instead. |
+| `LOCK SHAPE` | Goes. Holding a shape is pushing, in a library. |
+| *new* `HOLD w, s` | Keep weave `w`'s field, `s` metres around its origin, as `CIRC` keeps a register. |
+| *new* `PCNT d, w` | How many particles weave `w` holds. |
+| *new* `PPOS n:3, w, s` / `PVEL` | Sense particle `s` of `w`: where it is and how it moves, in the weave's frame. |
+| *new* `SHOV m, w, s, n:3` | Push particle `s` of `w` to change its velocity by `n:3`, paying from `m`. Asks for no more than `pushRate`. |
+| *new, in an order* `KICK n:3` | Push this particle, paying from its own mana. |
+| *new, in an order* `DENS d` | How dense the mana is around this particle: the pressure it feels. |
+
+Sensing and pushing are reach instructions: 4 beats each.
+
+### The four spells, again
+
+- **Fireball** pours its fire into one point at the hand and lets pressure fill the ball, holding it by its surface. It is
+  pushed along the aim until it's fast enough, then let go. Its order bursts it on touch, paid from itself.
+- **Gust** pushes the air mana already there instead of only its own. The same mana spread over more air pushes harder
+  (momentum grows as the root of mass × motion).
+- **Water Shield** is a shell of water held up against its own weight and pushed back in where it sags.
+- **Stone Wall** is lifted earth, and lifted earth falls. A caster can hold it up, pushing, for as long as they can pay, or
+  push earth into the trench beneath it, so that it stands on its own.
+
+### Building it
+
+1. A 2D sandbox, outside the machine: a ball of particles with pressure, and a caster with beats and mana pushing it by each
+   strategy in *Holding*. It should show that holding works, and what each strategy costs, before the machine changes.
+2. Particles in the world, beside the air grid, with the ledger counting them.
+3. The new instructions, and orders on particles.
+4. The libraries and the four spells, rewritten.
+
+---
+
+## 12. Open questions
 
 1. **The numbers.** How much matter 1 M binds, how fast weaves leak, how training grows stats. They start as guesses in
    `src/vm/physics.ts`, to be tuned in the tester.
@@ -1084,3 +1251,7 @@ npx tsx src/cli/mvm.ts spells/Gust.masm --ticks 40 --maintain 30
    program the elves have always read straight, with no language in between. This needs its own design pass.
 3. **Who found the flaw?** A flaw nobody teaches still has a history: who first condensed less than nothing, what it cost
    them, and who keeps it quiet. That's lore for Quire.
+4. **The field.** Is a caster's field a ball around the weave's origin, or the particles they're keeping up with? Which body
+   stat sets how far it reaches, and does it weaken with distance?
+5. **Energy's price.** Pushing costs only mana for now (§11). Whether a caster's own Energy (stamina, `condition`) pays too
+   is left for later.
