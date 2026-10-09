@@ -1,0 +1,31 @@
+; Stone Wall: the ground heaves up into a wall of rock.
+        .use  Elements, Shapes
+
+StoneWall:
+        IN    n16:18, AIM         ; a point on the ground
+        PROB  n0, n16:18, #EARTH  ; PROBE: is there earth there?
+        CMP   n0, #0
+        JEQ   .fail
+        IN    n19, AMOUNT
+        GATH  m0, n19             ; GATHER
+        CIRC  m0                  ; CIRCULATE
+        FILT  m1, m0, #EARTH      ; FILTER: earth × affinity; the residue stays in m0
+        WEAV  n20, n16:18         ; a weave on the ground at the aim
+        IN    n0:2, SELF
+        MOV   n3, n16
+        MOV   n4, n17
+        MOV   n5, n18
+        SUB   n3, n0
+        SUB   n4, n1
+        SUB   n5, n2
+        TURN  n20, n3:5           ; POSITION: facing away from the caster
+        MOV   n4, n20
+        LDI   n0, #2              ; 2 m high
+        LDI   n1, #4              ; 4 m long
+        LDI   n2, #0.5            ; 0.5 m thick
+        CALL  wall                ; ORDER: the ground is laid out to rise
+        MANI  n20                 ; SEND: it rises
+        LOCK  n20, SHAPE          ; LOCK: it stays a wall
+        MOV   n0, n20
+        HALT                      ; m0 isn't held any more: it joins the flow
+.fail:  FAIL  #1                  ; no earth there

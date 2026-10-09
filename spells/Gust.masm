@@ -1,0 +1,22 @@
+; Gust: a sudden push of wind, for as long as the caster keeps it up.
+        .use  Elements, Basics
+
+Gust:
+        IN    n17, AMOUNT
+        GATH  m0, n17             ; GATHER
+.loop:  IN    n18, MAINTAIN
+        CMP   n18, #0
+        JEQ   .end
+        CIRC  m0                  ; CIRCULATE
+        FILT  m1, m0, #AIR        ; FILTER
+        IN    n0:2, HAND
+        IN    n3:5, AIM
+        IN    n6, FORCE
+        CALL  toward              ; n3:5 = the push
+        MEAS  n6, m1
+        SEND  m1, n6, n0:2, n3:5  ; SEND: all of it, from the hand
+        GATH  m1, n17
+        JOIN  m0, m1              ; a fresh breath for the next pass
+        TICK
+        JMP   .loop
+.end:   HALT                      ; the residue joins the flow

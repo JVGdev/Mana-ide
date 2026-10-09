@@ -1,0 +1,185 @@
+; Shapes: geometry. Each lays the mana in m1 out in a weave, around its origin.
+
+; ball: the mana in m1, spread through a ball around the weave's origin
+;   in: n0 radius (m), n4 weave
+ball:   IN    n5, CELL
+        MOV   n7, n0
+        DIV   n7, n5
+        FLOOR n7                  ; n7 = r, in cells
+        MOV   n0, n7
+        MUL   n0, n7              ; n0 = r²
+        MOV   n12, n0
+        MUL   n12, #3.14159       ; π r²: the cells in a disc
+        IN    n11, DEPTH
+        CMP   n11, #1
+        JEQ   .flat
+        MUL   n12, n7
+        MUL   n12, #1.33333       ; 4/3 π r³: the cells in a ball
+        MOV   n11, n7             ; z runs over [−r, r]
+        JMP   .share
+.flat:  LDI   n11, #0             ; 2D: z is 0
+.share: MEAS  n6, m1
+        DIV   n6, n12             ; n6 = mana per cell
+        MOV   n10, n11
+        NEG   n10                 ; z = −zmax
+.z:     CIRC  m1                  ; keep holding it: a big ball takes a while
+        MOV   n9, n7
+        NEG   n9                  ; y = −r
+.y:     MOV   n8, n7
+        NEG   n8                  ; x = −r
+.x:     MOV   n12, n8
+        MUL   n12, n8
+        MOV   n13, n9
+        MUL   n13, n9
+        ADD   n12, n13
+        MOV   n13, n10
+        MUL   n13, n10
+        ADD   n12, n13            ; x² + y² + z²
+        CMP   n12, n0
+        JGT   .next               ; outside the ball
+        MOV   n13, n8
+        MUL   n13, n5
+        MOV   n14, n9
+        MUL   n14, n5
+        MOV   n15, n10
+        MUL   n15, n5
+        EMIT  m1, n6, n4, n13:15  ; this cell's share
+.next:  ADD   n8, #1
+        CMP   n8, n7
+        JLE   .x
+        ADD   n9, #1
+        CMP   n9, n7
+        JLE   .y
+        ADD   n10, #1
+        CMP   n10, n11
+        JLE   .z
+        MEAS  n6, m1              ; what the rounding left
+        LDI   n13, #0
+        LDI   n14, #0
+        LDI   n15, #0
+        EMIT  m1, n6, n4, n13:15  ; goes to the centre
+        RET
+
+; shield: the mana in m1, as a shell around the weave's origin
+;   in: n0 radius (m), n4 weave
+shield: IN    n5, CELL
+        MOV   n6, n5
+        DIV   n6, n0              ; dθ: one cell of arc
+        MEAS  n7, m1
+        IN    n8, DEPTH
+        CMP   n8, #1
+        JEQ   .ring
+        MOV   n9, n0              ; 3D: a sphere, about 4π r² / cell² points
+        MUL   n9, n0
+        MUL   n9, #12.5664
+        DIV   n9, n5
+        DIV   n9, n5
+        DIV   n7, n9              ; mana per point
+        LDI   n10, #0             ; φ, from the top down
+.phi:   CIRC  m1                  ; keep holding it, ring by ring
+        MOV   n12, n10
+        SIN   n12                 ; sin φ
+        LDI   n11, #0             ; θ, around
+.theta: MOV   n13, n11
+        COS   n13
+        MUL   n13, n12
+        MUL   n13, n0             ; x = r sinφ cosθ
+        MOV   n14, n10
+        COS   n14
+        MUL   n14, n0             ; y = r cosφ
+        MOV   n15, n11
+        SIN   n15
+        MUL   n15, n12
+        MUL   n15, n0             ; z = r sinφ sinθ
+        EMIT  m1, n7, n4, n13:15
+        ADD   n11, n6
+        CMP   n11, #6.28319
+        JLT   .theta
+        ADD   n10, n6
+        CMP   n10, #3.14159
+        JLE   .phi
+        JMP   .rest
+.ring:  MOV   n9, n0              ; 2D: a circle, about 2π r / cell points
+        MUL   n9, #6.28319
+        DIV   n9, n5
+        DIV   n7, n9
+        LDI   n11, #0
+        LDI   n15, #0             ; z = 0
+.arc:   MOV   n13, n11
+        COS   n13
+        MUL   n13, n0             ; x = r cosθ
+        MOV   n14, n11
+        SIN   n14
+        MUL   n14, n0             ; y = r sinθ
+        EMIT  m1, n7, n4, n13:15
+        ADD   n11, n6
+        CMP   n11, #6.28319
+        JLT   .arc
+.rest:  MEAS  n7, m1              ; what's left goes to the last point
+        EMIT  m1, n7, n4, n13:15
+        RET
+
+; wall: a block of the ground under the weave's origin, given the order to rise
+;   in: n0 height, n1 length, n2 thickness (m), n4 weave (on the ground, turned to face out)
+wall:   IN    n5, CELL
+        DIV   n0, n5
+        FLOOR n0                  ; H, in cells
+        DIV   n1, n5
+        FLOOR n1                  ; L
+        DIV   n2, n5
+        FLOOR n2                  ; T
+        IN    n3, DEPTH
+        CMP   n3, #1
+        JNE   .size
+        LDI   n1, #1              ; 2D: its length runs into the page, one cell
+.size:  MOV   n6, n0
+        MUL   n6, n1
+        MUL   n6, n2              ; cells to lift
+        MEAS  n7, m1
+        DIV   n7, n6              ; mana per cell
+        MOV   n10, n1
+        SUB   n10, #1
+        DIV   n10, #2             ; (L − 1) / 2, to centre the length
+        MOV   n11, n2
+        SUB   n11, #1
+        DIV   n11, #2             ; (T − 1) / 2, to centre the thickness
+        LDI   n9, #0              ; d: 0 … H−1, down into the ground
+.d:     CIRC  m1                  ; keep holding it, layer by layer
+        LDI   n8, #0              ; t: across
+.t:     LDI   n3, #0              ; a: along
+.a:     MOV   n13, n3
+        SUB   n13, n10
+        MUL   n13, n5             ; x = (a − (L−1)/2) · cell
+        MOV   n14, n9
+        NEG   n14
+        MUL   n14, n5             ; y = −d · cell
+        MOV   n15, n8
+        SUB   n15, n11
+        MUL   n15, n5             ; z = (t − (T−1)/2) · cell
+        EMIT  m1, n7, n4, n13:15
+        ADD   n3, #1
+        CMP   n3, n1
+        JLT   .a
+        ADD   n8, #1
+        CMP   n8, n2
+        JLT   .t
+        ADD   n9, #1
+        CMP   n9, n0
+        JLT   .d
+        MUL   n0, n5              ; H, back in metres
+        WSET  n4, #0, n0          ; how far to rise, for the order
+        ORDR  n4, rise
+        RET
+
+; rise (an order): each cell climbs one cell a tick, until the weave has risen w0 metres
+rise:   IN    n5, CELL
+        MOV   n6, n4
+        MUL   n6, n5              ; risen so far
+        GETW  n7, #0
+        CMP   n6, n7
+        JGE   .done
+        LDI   n0, #0
+        MOV   n1, n5
+        LDI   n2, #0
+        MOVE  n0:2                ; up one cell, carrying its earth
+.done:  RET

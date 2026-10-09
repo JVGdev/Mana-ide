@@ -1,0 +1,22 @@
+; Transformations: what a weave can become.
+
+; expand (an order): each cell flies out from the origin, twice as far each tick.
+; After 3 ticks the weave lets go. It reads when it began from w4.
+expand: GETW  n5, #4
+        MOV   n6, n4
+        SUB   n6, n5              ; ticks since it began
+        CMP   n6, #3
+        JGE   .gone
+        MOVE  n0:2                ; out along its own position: twice as far
+        RET
+.gone:  DISS                      ; its mana goes loose: the flare
+        RET
+
+; condense (an order): on the first tick, half of each cell's mana condenses into matter (make)
+condense:
+        CMP   n4, #0
+        JNE   .done
+        MOV   n5, n3
+        MUL   n5, #0.5
+        CNDS  n5                  ; the other half stays free and holds it
+.done:  RET

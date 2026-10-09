@@ -1,0 +1,6 @@
+; Elements: the four names mana answers to (the Law of the Four).
+; The machine only knows parts 0–3. This is where they get their names.
+        .const FIRE   0
+        .const WATER  1
+        .const AIR    2
+        .const EARTH  3

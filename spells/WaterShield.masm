@@ -1,0 +1,23 @@
+; Water Shield: a skin of moving water around the caster that turns blades and flame.
+        .use  Elements, Basics, Shapes, Transformations
+
+WaterShield:
+        IN    n16, AMOUNT
+        GATH  m0, n16             ; GATHER
+        CIRC  m0                  ; CIRCULATE
+        FILT  m1, m0, #WATER      ; FILTER
+        IN    n1:3, SELF
+        WEAV  n17, n1:3           ; POSITION: a weave around the caster
+        MOV   n4, n17
+        LDI   n0, #1.2
+        CALL  shield              ; ORDER: a shell of water, 1.2 m
+        ORDR  n17, .order
+        MANI  n17                 ; SEND
+        LOCK  n17, SHAPE          ; LOCK: it stays a shell
+        LOCK  n17, INPUT
+        MOV   n0, n17
+        HALT
+
+.order: CALL  condense            ; MAKE: half its mana becomes water, held by the other half
+        CALL  anchor              ; and it follows its maker
+        RET

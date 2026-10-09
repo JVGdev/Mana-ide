@@ -35,6 +35,8 @@ The examples throughout are the four spells of Ikozu: **Stone Wall**, **Fireball
 | D13 | A spell can **influence** an element already in the world (move the ground, push the air) or **make** it from its own mana (condense water out of water mana). |
 | D14 | A weave set loose **slowly leaks** its mana back into the air. A wall stands while its mana holds the earth, then crumbles. |
 | D15 | Every stat of a caster, body and mind, comes from **genetics**, their **condition** right now, and **training**. |
+| D16 | Matter can be freed back into free mana, but it's **a hack**: an instruction nobody teaches (`LOOS`, an illegal opcode). |
+| D17 | **Burning doesn't free anything.** What fire burns is still matter, and so is the fire. |
 | D11 | The tester is a practical tool, maybe the kind Ikozu's mage-engineers would have, but not dressed up in lore. |
 
 ---
@@ -97,7 +99,7 @@ How matter behaves comes from its parts. Each part brings its own properties, an
 
 | Part | Brings | Alone it is |
 |---|---|---|
-| Fire | heat, rises, **unstable** (frees itself back into fire mana quickly) | flame |
+| Fire | heat, rises, spreads thin into warmth | flame |
 | Water | flows, fills what's below it | water |
 | Air | light, fills what's empty, is pushed by moving air mana | air |
 | Earth | heavy, holds together, piles up | stone, soil, sand |
@@ -115,7 +117,9 @@ These rules belong to the world, not to the machine:
 2. **Bound matter moves with its mana**, and is held up by it. A cell of earth mana that moves up carries its earth with it,
    and the ground it left is empty. Matter that is no longer bound follows its nature again: lifted earth falls.
 3. **Mana can condense** (*make*): a weave's order can turn some of a cell's free mana into matter of the same parts (`CNDS`).
-   Condensed matter is real. It stays when the weave is gone, and only fire's quickly frees itself again.
+   Condensed matter is real. It stays when the weave is gone. Nothing natural frees it again: burning only changes what
+   matter is mixed with fire, and a flame thins out into warmth that is still matter. Freeing it is possible, but only as a
+   hack (`LOOS`, §5).
 4. **Loose mana** (sent, or let go) keeps its velocity, slows down, and spreads back into the air. Moving air mana pushes air:
    **wind**, which pushes whatever is light enough.
 5. **Matter blocks matter.** A cell can't move into a cell holding matter that isn't its own. Running into it is a **touch**.
@@ -123,7 +127,12 @@ These rules belong to the world, not to the machine:
    a Stone Wall slowly crumbles as its earth falls free. A weave whose input isn't locked can be fed by its caster (`EMIT`) to
    keep it standing.
 
-Every rule has numbers to tune: how much matter 1 M binds, how fast weaves leak, how fast flame frees itself, and so on.
+Every rule has numbers to tune: how much matter 1 M binds, how fast weaves leak, how fast flame spreads, and so on. They
+live in one table (`src/vm/physics.ts`).
+
+**Earth holds together.** A cell of solid earth with solid earth beside it stays where it is, even over a hole, so the ground
+around a Stone Wall's trench doesn't pour in like sand. Loose earth (less than solid, or with nothing beside it) falls and
+piles.
 
 ---
 
@@ -180,8 +189,12 @@ out of the machine without being written anywhere.
 2. **Holds run down.** A mana register whose hold has run out (`focus` ticks after its last CIRC) **joins the flow**.
 3. **The flow drains:** whatever is above the baseline leaves, at most `drain` per tick, into the air around the caster.
 4. **Overcharge:** if `flow + held mana + weaves still in hand > capacity`, the excess is counted as harm.
-5. **Weaves set loose run their orders** (§5).
-6. **The world moves:** loose mana, wind, bound matter.
+5. **Weaves hold:** each weave set loose leaks a little, then every weave takes hold of the matter its free mana can bind
+   (and lets go of what it no longer can).
+6. **Weaves set loose run their orders** (§5), and move.
+7. **The world moves:** loose mana and wind, pushed bodies, falling and flowing matter, air mana evening out.
+
+Holding comes before the orders, so a Stone Wall has its earth in hand before its first rise.
 
 ---
 
@@ -296,7 +309,7 @@ keyboard, sliders).
 |---|---|---|---|
 | `40` | `PROB d, n:3, s` | PROBE | How much matter of part `s` is in the cell at `n:3`. |
 | `41` | `AIRM d, n:3, s` | PROBE | How much air mana of part `s` floats at `n:3`. |
-| `42` | `SEND m, s, n:3, n:3` | SEND | Let `s` M of `m` out at a position, with a velocity, loose. |
+| `42` | `SEND m, n, n:3, n:3` | SEND | Let `n` M of `m` out at a position, with a velocity, loose. |
 
 #### Weave
 
@@ -304,7 +317,7 @@ keyboard, sliders).
 |---|---|---|---|
 | `50` | `WEAV d, n:3` | | Begin a weave with its origin at `n:3`. Its id goes into `d`. In hand. |
 | `51` | `TURN w, n:3` | POSITION | Turn the weave's frame so forward points along `n:3` (about the vertical). |
-| `52` | `EMIT m, s, w, n:3` | | Move `s` M of `m` into the weave, at `n:3` in the weave's frame. Gives what there is if `m` holds less. |
+| `52` | `EMIT m, n, w, n:3` | | Move `n` M of `m` into the weave, at `n:3` in the weave's frame. Gives what there is if `m` holds less, and nothing at a point outside the world. |
 | `53` | `WSET w, #k, s` / `WGET d, w, #k` (`54`) | | Write and read a weave's registers. |
 | `55` | `ORDR w, L` | ORDER | Give the weave its order: the routine at `L`. |
 | `56` | `MANI w` | SEND | Set the weave loose. It leaves the body's load and starts running its order. |
@@ -319,7 +332,8 @@ keyboard, sliders).
 | `61` | `TUCH d` | `d = 1` if this cell is against matter, or a body, that isn't its own or its maker's. |
 | `62` | `GETW d, #k` / `PUTW #k, s` (`63`) | Read and write this weave's registers. |
 | `64` | `DISS` | The whole weave comes apart. Its mana goes loose where it is. |
-| `65` | `CNDS s` | Condense `s` M of this cell's free mana into matter of the same parts (*make*). The matter stays in the cell, bound by whatever free mana is left. |
+| `65` | `CNDS s` | Condense `s` M of this cell's free mana into matter of the same parts (*make*). The matter stays in the cell, bound by whatever free mana is left. Only as much as the cell has room for. |
+| `6F` | `LOOS s` | **Not taught.** Free `s` M of the matter this cell holds back into free mana. The assembler warns whoever writes it. |
 
 ### Encoding
 
@@ -348,6 +362,10 @@ EMIT m1, n6, n4, n13:15    →  52 81 06 04 0D
 | `NOT_LOOSE` | `LOCK` before `MANI`. |
 | `LOCKED` | `EMIT` into a weave with locked input, or `ORDR` on one with a locked order. |
 | `FRAYED` | An order ran too long in one tick. The weave comes apart. |
+| `NOT_YOURS` | A weave id that isn't one of this caster's. |
+| `ORDER_ONLY` | An order's instruction (`MOVE`, `TUCH`…) in a mind. |
+| `NOT_IN_ORDER` | A body, reach or weave instruction inside an order. The weave frays. |
+| `BAD_PORT` | `ORIGIN` or `MAKER` read by a mind, or a will port read by an order. |
 
 Overcharge is not a fault (D6). It's harm, counted by the tester.
 
@@ -414,7 +432,9 @@ anchor: IN    n5:7, MAKER
 
 ### Shapes
 
-A shape lays the mana in `m1` out in the weave, around its origin. It's plain geometry.
+A shape lays the mana in `m1` out in the weave, around its origin. It's plain geometry. A big shape takes a mind many
+ticks to lay out, longer than a hold lasts, so each shape re-`CIRC`s its mana in its outer loop. Without that, the mana slips
+into the body's flow halfway through, and half a wall is laid out with nothing.
 
 ```
 ; ball: the mana in m1, spread through a ball around the weave's origin
@@ -439,7 +459,8 @@ ball:   IN    n5, CELL
         DIV   n6, n12             ; n6 = mana per cell
         MOV   n10, n11
         NEG   n10                 ; z = −zmax
-.z:     MOV   n9, n7
+.z:     CIRC  m1                  ; keep holding it: a big ball takes a while
+        MOV   n9, n7
         NEG   n9                  ; y = −r
 .y:     MOV   n8, n7
         NEG   n8                  ; x = −r
@@ -494,7 +515,8 @@ shield: IN    n5, CELL
         DIV   n9, n5
         DIV   n7, n9              ; mana per point
         LDI   n10, #0             ; φ, from the top down
-.phi:   MOV   n12, n10
+.phi:   CIRC  m1                  ; keep holding it, ring by ring
+        MOV   n12, n10
         SIN   n12                 ; sin φ
         LDI   n11, #0             ; θ, around
 .theta: MOV   n13, n11
@@ -566,7 +588,8 @@ wall:   IN    n5, CELL
         SUB   n11, #1
         DIV   n11, #2             ; (T − 1) / 2, to centre the thickness
         LDI   n9, #0              ; d: 0 … H−1, down into the ground
-.d:     LDI   n8, #0              ; t: across
+.d:     CIRC  m1                  ; keep holding it, layer by layer
+        LDI   n8, #0              ; t: across
 .t:     LDI   n3, #0              ; a: along
 .a:     MOV   n13, n3
         SUB   n13, n10
@@ -609,7 +632,10 @@ rise:   IN    n5, CELL
 The wall isn't made of the spell's mana. It's the ground, lifted: the earth mana *influences* the earth in each cell, binding
 it and carrying it up, and the ground it came from is left as a trench. A caster with poor earth affinity puts less mana in
 each cell, binds less earth, and the wall rises full of holes. Once set loose, the weave leaks. As its mana thins, it holds
-less earth, and the wall crumbles from the top: the loose earth falls and piles at its foot.
+less earth, and the wall crumbles back into the trench it came from.
+
+Size matters in 3D. The 2D wall is 16 cells of earth; the 3D one, 4 m long, is 256. Binding a full cell takes 5 M of earth
+mana, so the 3D wall needs about 8000 M gathered: far past an adept's capacity of 600. It's a master's spell.
 
 ### Reactions
 
@@ -945,42 +971,47 @@ Your will drives the cast: click to aim, hold a key to maintain, sliders for amo
 TypeScript throughout, like Quire, so it can run inside Quire later.
 
 ```
-packages/
-  vm/        the world and the machine: ticks, mind, body, weaves, orders, ledger
-  asm/       assembler and disassembler: .masm ⇄ .mbc
-  lib/       the libraries, in .masm
-  lang/      lexer, parser, checker, code generator (phase 3)
-  cli/       mas, mvm, manac
-apps/
-  tester/    the spell tester (Svelte 5 + Vite)
-spells/      the four spells, in .masm (and .mana later)
+src/
+  asm/       isa.ts (the instruction table), assembler.ts, disassembler.ts
+  vm/        physics.ts (the numbers), parts.ts, world.ts, caster.ts, weave.ts, sim.ts (the machine and the tick)
+  cli/       mas.ts, mvm.ts
+  scenes.ts  test worlds for the four spells, in 2D and 3D
+  render.ts  a slice of the world as text
+lib/         Elements, Basics, Shapes, Reactions, Transformations, in .masm
+spells/      StoneWall, Fireball, Gust, WaterShield, in .masm
+test/        the assembler, the machine, the four spells
+```
+
+```
+npm install
+npm test                                   the tests
+npx tsx src/cli/mas.ts spells/Fireball.masm  the listing: addresses, bytes, instructions
+npx tsx src/cli/mvm.ts spells/StoneWall.masm cast it in its test world, in the terminal
+npx tsx src/cli/mvm.ts spells/Gust.masm --ticks 40 --maintain 30
 ```
 
 ### Phases
 
-1. **The machine.**
-   - The world (2D first, the engine 3D throughout), the caster, the tick.
+1. **The machine.** *Built.*
+   - The world (2D and 3D), the caster, the tick.
    - Every instruction. Orders running per cell.
    - The ledger, the assembler and disassembler.
    - The libraries and the four spells in `.masm`.
-   - Tests: the wall stands and leaves a trench, the fireball bursts on touch, the shield follows its maker, the ledger
-     balances, a long Gust overcharges.
+   - Tests: the wall stands and leaves a trench, then crumbles back into it; the fireball bursts on touch; the shield follows
+     its maker and falls in a splash; Gust pushes and, kept up too long, overcharges; the ledger balances every tick.
 2. **The tester, first cut.** Assembly editing, stepping, registers, a 2D world, the caster panel.
 3. **The language**, compiling to what phase 1 runs by hand.
-4. **3D**, and casters, spells and libraries read from Quire.
+4. Casters, spells and libraries read from Quire.
 5. **Other notations** (later): runes, circuits and scores.
 
 ---
 
 ## 11. Open questions
 
-1. **Loosening matter.** If matter is condensed mana, can a spell free it again: draw mana out of a stone, leaving dust or
-   nothing? That would be a way to gather where the air is thin, and a dangerous one.
-2. **Fire.** Flame frees itself quickly. Does burning work the other way, fire loosening the mana of what it burns (wood into
-   free mana and ash)?
-3. **The numbers.** How much matter 1 M binds, how fast weaves leak, how fast flame frees itself, how stats grow with training.
-   They'll start as guesses in a table and get tuned in the tester.
-4. **Runes as machine code.** Elvish *Runic Magic* is written "their own way", and a glyph already means a step. Glyphs could
+1. **The numbers.** How much matter 1 M binds, how fast weaves leak, how training grows stats. They start as guesses in
+   `src/vm/physics.ts`, to be tuned in the tester.
+2. **Runes as machine code.** Elvish *Runic Magic* is written "their own way", and a glyph already means a step. Glyphs could
    be **opcodes**, and the marks around them (the lattice, its families) the **operands**. A carved ring would then be a
-   program the elves have always read straight, with no language in between. This needs its own design pass, after the
-   machine.
+   program the elves have always read straight, with no language in between. This needs its own design pass.
+3. **Who taught `LOOS`?** An instruction nobody teaches still has a history: who found it, and what freeing matter cost them.
+   That's lore for Quire.

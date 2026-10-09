@@ -1,0 +1,36 @@
+; Basics: what every caster of the system knows.
+
+; toward: a velocity from n0:2 to n3:5 at speed n6.  Out: n3:5
+toward: SUB   n3, n0
+        SUB   n4, n1
+        SUB   n5, n2
+        MOV   n7, n3
+        MUL   n7, n3
+        MOV   n8, n4
+        MUL   n8, n4
+        ADD   n7, n8
+        MOV   n8, n5
+        MUL   n8, n5
+        ADD   n7, n8
+        SQRT  n7                  ; the distance
+        DIV   n6, n7              ; speed per metre of it
+        MUL   n3, n6
+        MUL   n4, n6
+        MUL   n5, n6
+        RET
+
+; fly (an order): every cell moves by the weave's velocity, kept in w1–w3
+fly:    GETW  n0, #1
+        GETW  n1, #2
+        GETW  n2, #3
+        MOVE  n0:2
+        RET
+
+; anchor (an order): the weave follows its maker
+anchor: IN    n5:7, MAKER
+        IN    n8:10, ORIGIN
+        SUB   n5, n8
+        SUB   n6, n9
+        SUB   n7, n10
+        MOVE  n5:7
+        RET

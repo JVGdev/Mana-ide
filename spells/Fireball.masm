@@ -1,0 +1,38 @@
+; Fireball: a sphere of fire, gathered, shaped and thrown. On touch, it bursts.
+        .use  Elements, Basics, Shapes, Reactions, Transformations
+
+Fireball:
+        IN    n17, AMOUNT
+        GATH  m0, n17             ; GATHER
+        CIRC  m0                  ; CIRCULATE
+        FILT  m1, m0, #FIRE       ; FILTER
+        IN    n1:3, HAND
+        WEAV  n16, n1:3           ; POSITION: a weave at the hand
+        MOV   n4, n16
+        LDI   n0, #0.5
+        CALL  ball                ; ORDER: the fire laid out as a ball, 0.5 m
+        IN    n0:2, HAND
+        IN    n3:5, AIM
+        IN    n6, FORCE
+        CALL  toward              ; n3:5 = its velocity
+        WSET  n16, #1, n3
+        WSET  n16, #2, n4
+        WSET  n16, #3, n5
+        ORDR  n16, .order         ; REACT: fly, and on touch, expand
+        MANI  n16                 ; SEND: it leaves the hand
+        LOCK  n16, INPUT          ; LOCK: cut from the caster
+        MOV   n0, n16
+        HALT
+
+.order: GETW  n5, #0              ; w0, the phase: 0 flying, 1 bursting
+        CMP   n5, #0
+        JNE   .burst
+        CALL  fly
+        CALL  touch               ; n5 = 1 if this cell touched something
+        CMP   n5, #0
+        JEQ   .end
+        PUTW  #0, n5              ; the whole weave bursts from the next tick
+        PUTW  #4, n4              ; counting from now
+.end:   RET
+.burst: CALL  expand
+        RET
