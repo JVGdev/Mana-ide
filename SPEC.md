@@ -31,6 +31,10 @@ The examples throughout are the four spells of Ikozu: **Stone Wall**, **Fireball
 | D8 | **Affinities** set how much is lost when filtering, and only then. Less affinity means less filtered mana, so a weaker spell. |
 | D9 | How long a hold lasts (**focus**), how many mana registers there are (**streams**) and how fast the flow drains (**drain**) are all stats of the caster's body. |
 | D10 | Aspect costs are left out. A spell's strength is the mana it carries. |
+| D12 | **Mana is what the world is made of.** Everything physical is mana, condensed. Earth is condensed earth mana, and a plant is condensed water and earth. |
+| D13 | A spell can **influence** an element already in the world (move the ground, push the air) or **make** it from its own mana (condense water out of water mana). |
+| D14 | A weave set loose **slowly leaks** its mana back into the air. A wall stands while its mana holds the earth, then crumbles. |
+| D15 | Every stat of a caster, body and mind, comes from **genetics**, their **condition** right now, and **training**. |
 | D11 | The tester is a practical tool, maybe the kind Ikozu's mage-engineers would have, but not dressed up in lore. |
 
 ---
@@ -73,38 +77,71 @@ amounts, one per part. The machine numbers the parts **0, 1, 2, 3**. Calling par
 
 Mana answers to only four names (the Law of the Four), so the machine has no part 4. Filtering by anything else fails.
 
-The Law of Conservation is a property of the machine. No instruction creates or destroys mana, and the tester's **ledger**
-always balances:
+### Free and condensed
+
+Mana is what the world is made of, and it is always in one of two states:
+
+- **Free** mana flows. It's in the air, in a body, in a register, in a weave, or loose after a spell.
+- **Condensed** mana is **matter**. Each cell's matter is four amounts too, one per part, and what it *is* comes from that mix.
+
+The Law of Conservation covers both. No instruction creates or destroys mana; it only moves it and condenses it. The tester's
+**ledger** always balances:
 
 ```
-Σ air + Σ flow + Σ mana registers + Σ weaves + Σ loose mana = constant
+Σ free (air, flows, registers, weaves, loose)  +  Σ condensed (all the matter in the world)  =  constant
 ```
 
 ### Matter
 
-Each cell may hold matter of one of the four parts: flame, water, air (always there unless displaced) or earth.
+How matter behaves comes from its parts. Each part brings its own properties, and a mix behaves as their blend:
+
+| Part | Brings | Alone it is |
+|---|---|---|
+| Fire | heat, rises, **unstable** (frees itself back into fire mana quickly) | flame |
+| Water | flows, fills what's below it | water |
+| Air | light, fills what's empty, is pushed by moving air mana | air |
+| Earth | heavy, holds together, piles up | stone, soil, sand |
+
+So **earth and water** together flow slowly and hold some shape: mud, or with the right order, a plant. Names like *mud* and
+*plant* aren't physics. They belong to the Elements library and to lore. The world itself runs as a grid of cells following
+these properties: earth falls and piles, water flows, air fills, flame rises and fades.
 
 ### What mana does to matter (the physics)
 
 These rules belong to the world, not to the machine:
 
-1. **Pure mana binds matter of its own part** in the cell it's in: earth mana takes hold of earth, water mana of water. Fire
-   mana *is* its own matter: where fire mana is, there's flame. How much matter a cell's mana can bind depends on how much mana
-   is there. Too little, and some matter is left behind.
-2. **Bound matter moves with its mana.** A cell of earth mana that moves up carries its earth with it, and the ground it left
-   is empty.
-3. **Loose mana** (sent, or let go) keeps its velocity, slows down, and spreads back into the air. Moving air mana pushes air:
+1. **Pure free mana binds matter of its own part** in the cell it's in (*influence*): earth mana takes hold of the earth there,
+   water mana of the water. How much it can hold depends on how much mana is there. Too little, and some matter is left behind.
+2. **Bound matter moves with its mana**, and is held up by it. A cell of earth mana that moves up carries its earth with it,
+   and the ground it left is empty. Matter that is no longer bound follows its nature again: lifted earth falls.
+3. **Mana can condense** (*make*): a weave's order can turn some of a cell's free mana into matter of the same parts (`CNDS`).
+   Condensed matter is real. It stays when the weave is gone, and only fire's quickly frees itself again.
+4. **Loose mana** (sent, or let go) keeps its velocity, slows down, and spreads back into the air. Moving air mana pushes air:
    **wind**, which pushes whatever is light enough.
-4. **Matter blocks matter.** A cell can't move into a cell holding matter that isn't its own. Running into it is a **touch**.
+5. **Matter blocks matter.** A cell can't move into a cell holding matter that isn't its own. Running into it is a **touch**.
+6. **Weaves leak.** Every tick, a weave set loose loses a little of its free mana to the air. Less mana binds less matter, so
+   a Stone Wall slowly crumbles as its earth falls free. A weave whose input isn't locked can be fed by its caster (`EMIT`) to
+   keep it standing.
 
-Each of these rules has numbers to tune (how much earth 1 M binds, how fast loose mana slows, and so on). Where water comes
-from is an open question (§11).
+Every rule has numbers to tune: how much matter 1 M binds, how fast weaves leak, how fast flame frees itself, and so on.
 
 ---
 
 ## 4. The caster
 
-The machine is a person, and its limits are their stats.
+The machine is a person, and its limits are their stats. Every stat, body or mind, is made of three things:
+
+```
+stat = genetics × condition + training
+```
+
+- **Genetics** is what they were born with: a people, a bloodline, a gift.
+- **Condition** is how they are right now, from 0 to 1. Tired, hurt or drunk lowers it. Overcharge harm lowers it too, which
+  is where harm ends up.
+- **Training** is what they've learned or drilled: a mage who has trained their streams works more of them than they were
+  born with.
+
+The tester shows all three, so the same caster can be tried rested, exhausted or after ten years of study.
 
 ### The body
 
@@ -122,7 +159,12 @@ The machine is a person, and its limits are their stats.
 | Stat | Meaning |
 |---|---|
 | `speed` | **Beats** of thought per tick. |
+| `registers` | How many number registers the mind has (`n0`… up to `n31`). A child might think with 8. |
+| `memory` | How many numbers the mind's memory holds (up to 256), and how deep its stack goes. |
 | `conditioning` | Per spell: how many times the caster has cast it. |
+
+A mind with fewer than 32 registers can't run a routine that needs more. A library says what it needs, so a child's mind can't
+hold `Shapes.ball` as written, but a simpler ball could be written for one.
 
 **The Law of Conditioning.** A tick holds `speed × (1 + c)` beats, where `c` is the conditioning for the spell being cast.
 - Mind instructions take 1 beat.
@@ -149,7 +191,7 @@ out of the machine without being written anywhere.
 
 | | Registers | Holds |
 |---|---|---|
-| Mind | `n0`–`n31` | Numbers (floating point). Also positions, weaves, element parts: everything that isn't mana. |
+| Mind | `n0`–`n31` | Numbers (floating point). Also positions, weaves, element parts: everything that isn't mana. Only the first `registers` exist. |
 | Body | `m0`–`m7` | Mana: four parts each, and how long it is still held. **Linear**: mana is moved, split and joined, never copied. Only the first `streams` exist. |
 | Mind | `flags` | The result of the last `CMP`. |
 
@@ -277,6 +319,7 @@ keyboard, sliders).
 | `61` | `TUCH d` | `d = 1` if this cell is against matter, or a body, that isn't its own or its maker's. |
 | `62` | `GETW d, #k` / `PUTW #k, s` (`63`) | Read and write this weave's registers. |
 | `64` | `DISS` | The whole weave comes apart. Its mana goes loose where it is. |
+| `65` | `CNDS s` | Condense `s` M of this cell's free mana into matter of the same parts (*make*). The matter stays in the cell, bound by whatever free mana is left. |
 
 ### Encoding
 
@@ -300,6 +343,7 @@ EMIT m1, n6, n4, n13:15    →  52 81 06 04 0D
 | Fault | When |
 |---|---|
 | `NO_STREAM` | A mana register beyond the caster's `streams`. |
+| `NO_ROOM` | A number register beyond the mind's `registers`, or the stack or memory past its size. |
 | `NO_NAME` | `FILT` by a part other than 0–3. Mana doesn't answer (the Law of the Four). |
 | `NOT_LOOSE` | `LOCK` before `MANI`. |
 | `LOCKED` | `EMIT` into a weave with locked input, or `ORDR` on one with a locked order. |
@@ -325,8 +369,9 @@ which they can use. The machine has no shapes or elements. Change `Shapes.ball` 
         .const EARTH  3
 ```
 
-Compound aspects, like Quire's Plant (born from Water and Earth), would be routines here that filter two parts and join them.
-What mixed mana does in the world is open (§11).
+Compound aspects, like Quire's Plant (born from Water and Earth), are routines here that filter two parts and join them.
+Mana mixed like that, condensed, is matter of both parts. The Elements library is also where mixes get their names: earth and
+water condensed is *mud* or *plant*, depending on how they're ordered.
 
 ### Basics
 
@@ -561,9 +606,10 @@ rise:   IN    n5, CELL
 .done:  RET
 ```
 
-The wall isn't made of mana. It's the ground, lifted: the earth mana binds the earth in each cell and carries it up, and the
-ground it came from is left as a trench. A caster with poor earth affinity puts less mana in each cell, binds less earth, and
-the wall rises full of holes.
+The wall isn't made of the spell's mana. It's the ground, lifted: the earth mana *influences* the earth in each cell, binding
+it and carrying it up, and the ground it came from is left as a trench. A caster with poor earth affinity puts less mana in
+each cell, binds less earth, and the wall rises full of holes. Once set loose, the weave leaks. As its mana thins, it holds
+less earth, and the wall crumbles from the top: the loose earth falls and piles at its foot.
 
 ### Reactions
 
@@ -574,6 +620,17 @@ touch:  TUCH  n5
 ```
 
 ### Transformations
+
+```
+; condense (an order): on the first tick, half of each cell's mana condenses into matter (make)
+condense:
+        CMP   n4, #0
+        JNE   .done
+        MOV   n5, n3
+        MUL   n5, #0.5
+        CNDS  n5                  ; the other half stays free and holds it
+.done:  RET
+```
 
 ```
 ; expand (an order): each cell flies out from the origin, twice as far each tick.
@@ -780,17 +837,22 @@ WaterShield:
         MOV   n4, n17
         LDI   n0, #1.2
         CALL  shield              ; ORDER: a shell of water, 1.2 m
-        ORDR  n17, anchor         ; it follows its maker
+        ORDR  n17, .order
         MANI  n17                 ; SEND
         LOCK  n17, SHAPE          ; LOCK: it stays a shell
         LOCK  n17, INPUT
         MOV   n0, n17
         HALT
+
+.order: CALL  condense            ; MAKE: half its mana becomes water, held by the other half
+        CALL  anchor              ; and it follows its maker
+        RET
 ```
 
 ```
 from Shapes use shield
 from Basics use anchor
+from Transformations use condense
 
 Metadata WaterShield(Metadata data) {
   mu mana_pool = self.gather(data.amount)
@@ -799,7 +861,7 @@ Metadata WaterShield(Metadata data) {
 
   ManaConstruct spell = self.weave(self.position)
   spell.lay(active_mana, shield(1.2 m))
-  spell.order(anchor)
+  spell.order(condense, anchor)
   spell.manifest()
   spell.lock(shape)
   spell.lock(input)
@@ -807,6 +869,10 @@ Metadata WaterShield(Metadata data) {
   return spell.metadata
 }
 ```
+
+This shield *makes* its water instead of finding it. The water is real: as the weave leaks and its free mana thins, it holds
+less of it, and the shield sags and falls apart in a splash at the caster's feet. A shield cast beside a river could
+*influence* the river's water instead, and keep all of its mana free to hold it.
 
 ### What compiling the writings in Quire would say
 
@@ -908,13 +974,13 @@ spells/      the four spells, in .masm (and .mana later)
 
 ## 11. Open questions
 
-1. **Water and flame.** Earth mana lifts earth that is already there. Where does a Water Shield's water come from: water
-   nearby, the air's moisture, or does water mana condense it? Does fire need fuel, or is fire mana its own flame?
-2. **How long does a weave last?** Does a set-loose weave keep its mana until it's dissolved (a Stone Wall stands for ever),
-   or leak a little each tick?
-3. **Mixed mana.** What do two parts joined (Plant: water and earth) do in the world?
-4. **Is the mind a stat too?** `speed` is. Should the number of mind registers be one as well, so a child thinks with 8?
-5. **Runes as machine code.** Elvish *Runic Magic* is written "their own way", and a glyph already means a step. Glyphs could
+1. **Loosening matter.** If matter is condensed mana, can a spell free it again: draw mana out of a stone, leaving dust or
+   nothing? That would be a way to gather where the air is thin, and a dangerous one.
+2. **Fire.** Flame frees itself quickly. Does burning work the other way, fire loosening the mana of what it burns (wood into
+   free mana and ash)?
+3. **The numbers.** How much matter 1 M binds, how fast weaves leak, how fast flame frees itself, how stats grow with training.
+   They'll start as guesses in a table and get tuned in the tester.
+4. **Runes as machine code.** Elvish *Runic Magic* is written "their own way", and a glyph already means a step. Glyphs could
    be **opcodes**, and the marks around them (the lattice, its families) the **operands**. A carved ring would then be a
    program the elves have always read straight, with no language in between. This needs its own design pass, after the
    machine.
