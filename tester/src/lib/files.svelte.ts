@@ -1,7 +1,7 @@
 // The .masm files: spells and libraries. In development they come from disk and save back to it. Otherwise they're the
 // copies built in, and edits live in this browser.
 
-import type { LibraryResolver } from '../../../src/asm/assembler.ts'
+import type { LibraryResolver } from './engine.ts'
 
 export type MasmFile = { path: string; text: string; saved: string }
 

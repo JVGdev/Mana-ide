@@ -15,7 +15,7 @@
   import { files, baseName } from './lib/files.svelte.ts'
   import { session, SCENE_NAMES, PANELS, type SceneName } from './lib/session.svelte.ts'
   import { num, PART_COLORS, PART_NAMES } from './lib/format.ts'
-  import { SCENES } from '../../src/scenes.ts'
+  import { SCENE_LIST } from './lib/engine.ts'
 
   let ready = $state(false)
   let note = $state('')
@@ -54,10 +54,11 @@
   const beats = $derived.by(() => {
     void session.version
     const out = new Map<number, number>()
-    const cast = session.cast
-    if (!cast) return out
-    for (const [addr, { beats }] of cast.profile) {
-      const l = cast.program.lines.get(addr)
+    const cast = session.castView
+    const program = session.program
+    if (!cast || !program) return out
+    for (const [addr, , beats] of cast.profile) {
+      const l = program.lines.get(addr)
       if (l?.file === openName) out.set(l.line, (out.get(l.line) ?? 0) + beats)
     }
     return out
@@ -88,7 +89,7 @@
     // The bench's spells: a ball held in front of the caster, or thrown at the Fireball's pillar.
     const bench = path.startsWith('bench/')
     const scene = bench ? (name.startsWith('Hold') ? 'Hold' : 'Fireball') : name
-    if (scene in SCENES) session.loadScene(scene as SceneName)
+    if (SCENE_LIST.includes(scene)) session.loadScene(scene as SceneName)
     else session.reset()
     session.lint()
   }
@@ -150,11 +151,11 @@ ${name}:
 
   const tick = $derived.by(() => {
     void session.version
-    return session.sim?.tick ?? 0
+    return session.machine?.tick ?? 0
   })
   const midTick = $derived.by(() => {
     void session.version
-    return session.sim?.midTick ?? false
+    return session.machine?.midTick ?? false
   })
 </script>
 
@@ -249,14 +250,14 @@ ${name}:
               problems={problemsHere}
               live={{
                 register: (name) => {
-                  const cast = session.cast
+                  const cast = session.castView
                   if (!cast) return undefined
                   if (name.startsWith('m')) {
-                    const r = cast.caster.regs[Number(name.slice(1))]
+                    const r = cast.regs[Number(name.slice(1))]
                     return r ? r.parts.map((v, k) => `${PART_NAMES[k]} ${num(v)}`).join(', ') : undefined
                   }
                   const [a, b] = name.slice(1).split(':').map(Number)
-                  return Array.from(cast.frame.n.slice(a, (b ?? a) + 1), (v) => num(v, 4)).join(', ')
+                  return cast.n.slice(a, (b ?? a) + 1).map((v) => num(v, 4)).join(', ')
                 },
               }}
               labels={() => [...(session.program?.labels.keys() ?? [])].filter((l) => !l.includes('.'))}

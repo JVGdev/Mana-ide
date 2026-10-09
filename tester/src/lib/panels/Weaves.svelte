@@ -2,34 +2,30 @@
   import { session } from '../session.svelte.ts'
   import { num } from '../format.ts'
   import Parts from '../Parts.svelte'
-  import { total, type Parts as P } from '../../../../src/vm/parts.ts'
-
-  const sum = (ps: P[]): P => ps.reduce((a, p) => [a[0] + p[0], a[1] + p[1], a[2] + p[2], a[3] + p[3]], [0, 0, 0, 0] as P)
+  import { total } from '../engine.ts'
 
   const weaves = $derived.by(() => {
     void session.version
-    const sim = session.sim
-    if (!sim) return []
-    return [...sim.weaves.values()].map((w) => {
-      const free = sum(w.particles.map((p) => p.free))
-      const carried = sum(w.particles.map((p) => p.carried))
-      const ingrained = w.particles.filter((p) => p.order).length
+    const m = session.machine
+    if (!m) return []
+    const tick = m.tick
+    return m.weaves().map((w) => {
       let order = ''
-      if (w.order !== null) for (const [name, addr] of w.program.labels) if (addr === w.order) order = name
+      if (w.order !== null && session.program) for (const [name, addr] of session.program.labels) if (addr === w.order) order = name
       return {
         id: w.id,
-        maker: w.maker.name,
+        maker: w.maker,
         inHand: w.inHand,
-        age: w.inHand ? 0 : sim.tick - w.manifestedAt,
+        age: w.inHand ? 0 : tick - w.manifestedAt,
         origin: w.origin.map((v) => num(v, 2)).join(', '),
-        particles: w.particles.length,
-        ingrained,
-        free,
-        carried,
+        particles: w.particles,
+        ingrained: w.ingrained,
+        free: w.free,
+        carried: w.carried,
         locks: Object.entries(w.locks).filter(([, v]) => v).map(([k]) => k),
         order,
         // Each particle keeps its own copy: this is the newest among them.
-        regs: Array.from(w.regs, (_, k) => w.reg(k)),
+        regs: w.regs,
       }
     })
   })

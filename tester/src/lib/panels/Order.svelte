@@ -1,38 +1,25 @@
 <script lang="ts">
   import { session } from '../session.svelte.ts'
   import { num } from '../format.ts'
-  import { decode, format } from '../../../../src/asm/disassembler.ts'
-  import { PHYSICS } from '../../../../src/vm/physics.ts'
+  import { disassembly, PHYSICS } from '../engine.ts'
 
   const STARTS = ['from centre x', 'from centre y', 'from centre z', 'its mana', 'weave age']
 
+  /** Last tick's orders: which weaves ran them, and how many of each weave's particles did. */
   const traces = $derived.by(() => {
     void session.version
-    return session.sim?.traces ?? new Map()
+    return session.machine?.traceCounts() ?? new Map<number, number>()
   })
-  const all = $derived(traces.get(session.orderSel.weave) ?? [])
+  const all = $derived({ length: traces.get(session.orderSel.weave) ?? 0 })
   const trace = $derived(session.orderTrace())
-  const names = $derived.by(() => {
-    const out = new Map<number, string>()
-    const p = session.program
-    if (p) for (const [name, addr] of p.labels) if (!out.has(addr) || !name.includes('.')) out.set(addr, name)
-    return out
-  })
   const text = (addr: number) => {
     const p = session.program
     if (!p) return ''
-    try {
-      return format(decode(p.bytes, addr), names)
-    } catch {
-      return '?'
-    }
+    return disassembly(p).at.get(addr)?.text ?? '?'
   }
   const beatsOf = (addr: number) => {
-    try {
-      return decode(session.program!.bytes, addr).op.beats
-    } catch {
-      return 0
-    }
+    const p = session.program
+    return (p && disassembly(p).at.get(addr)?.beats) ?? 0
   }
 
   const at = $derived(Math.min(session.orderSel.step, trace ? trace.steps.length : 0))

@@ -1,45 +1,38 @@
 <script lang="ts">
   import { session } from '../session.svelte.ts'
   import { num } from '../format.ts'
-  import { decode, format } from '../../../../src/asm/disassembler.ts'
+  import { disassembly } from '../engine.ts'
 
   const view = $derived.by(() => {
     void session.version
-    const cast = session.cast
-    if (!cast) return null
-    const f = cast.frame
-    const names = new Map<number, string>()
-    for (const [name, addr] of cast.program.labels) if (!names.has(addr) || !name.includes('.')) names.set(addr, name)
+    const c = session.castView
+    const program = session.program
+    if (!c || !program) return null
     let instr = ''
-    try {
-      if (cast.state === 'running') instr = format(decode(cast.program.bytes, f.pc), names)
-    } catch {
-      instr = '?'
-    }
+    if (c.state === 'running') instr = disassembly(program).at.get(c.pc)?.text ?? '?'
     const memory: [number, number][] = []
-    f.memory.forEach((v, i) => v !== 0 && memory.push([i, v]))
-    const perTick = cast.caster.speed * (1 + (cast.caster.conditioning.get(cast.name) ?? 0))
+    c.memory.forEach((v, i) => v !== 0 && memory.push([i, v]))
     return {
-      state: cast.state,
-      fault: cast.fault,
-      code: cast.code,
-      pc: f.pc,
+      state: c.state,
+      fault: c.fault,
+      code: c.code,
+      pc: c.pc,
       instr,
-      line: cast.program.lines.get(f.pc),
-      n: Array.from(f.n),
-      limit: f.limit,
-      flags: f.flags,
-      stack: [...f.stack],
-      calls: f.calls.map((a) => {
+      line: program.lines.get(c.pc),
+      n: c.n,
+      limit: c.limit,
+      flags: c.flags,
+      stack: c.stack,
+      calls: c.calls.map((a) => {
         let best = ''
         let at = -1
-        for (const [name, addr] of cast.program.labels) if (!name.includes('.') && addr <= a && addr > at) [best, at] = [name, addr]
+        for (const [name, addr] of program.labels) if (!name.includes('.') && addr <= a && addr > at) [best, at] = [name, addr]
         return `${best}+${a - at}`
       }),
       memory,
-      left: session.sim?.midTick ? cast.left : perTick,
-      perTick,
-      beats: cast.beats,
+      left: session.machine?.midTick ? c.left : c.perTick,
+      perTick: c.perTick,
+      beats: c.beats,
     }
   })
 </script>

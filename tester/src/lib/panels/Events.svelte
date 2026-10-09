@@ -4,13 +4,13 @@
 
   const view = $derived.by(() => {
     void session.version
-    const sim = session.sim
-    if (!sim) return null
-    const l = sim.ledger()
+    const m = session.machine
+    if (!m) return null
+    const { events, ledger } = m.events(200)
     return {
-      events: sim.events.slice(-200).toReversed(),
-      ledger: l,
-      drift: l.total - session.ledgerAtCast,
+      events: events.toReversed(),
+      ledger,
+      drift: ledger.total - session.ledgerAtCast,
     }
   })
 </script>

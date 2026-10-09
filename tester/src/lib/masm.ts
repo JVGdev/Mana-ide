@@ -4,8 +4,7 @@ import { StreamLanguage, HighlightStyle, syntaxHighlighting, LanguageSupport } f
 import { tags as t } from '@lezer/highlight'
 import { autocompletion, type CompletionContext, type Completion } from '@codemirror/autocomplete'
 import { hoverTooltip, type Tooltip } from '@codemirror/view'
-import { OPS, PORTS, LOCK_NAMES, OP_BY_NAME, PORT_BY_NAME } from '../../../src/asm/isa.ts'
-import { OP_DOCS, PORT_DOCS } from '../../../src/asm/docs.ts'
+import { OPS, PORTS, LOCK_NAMES, OP_BY_NAME, PORT_BY_NAME, OP_DOCS, PORT_DOCS } from './engine.ts'
 
 const MNEMONICS = new Set(OPS.map((o) => o.name))
 const PORT_NAMES = new Set(PORTS.map((p) => p.name))

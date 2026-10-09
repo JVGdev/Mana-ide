@@ -1,10 +1,20 @@
 // The tester's state: which spell, which world, which caster, and the machine running it.
 
-import { assemble, AsmError, type Program, type SourceLine } from '../../../src/asm/assembler.ts'
-import { adept, child, master, type CasterStats, type Caster } from '../../../src/vm/caster.ts'
-import { Sim, type Cast, type OrderTrace } from '../../../src/vm/sim.ts'
-import { field, SCENES } from '../../../src/scenes.ts'
-import type { Vec } from '../../../src/vm/world.ts'
+import {
+  assemble,
+  AsmError,
+  adept,
+  child,
+  master,
+  Machine,
+  SCENE_LIST,
+  type CastView,
+  type CasterStats,
+  type OrderTrace,
+  type Program,
+  type SourceLine,
+  type Vec,
+} from './engine.ts'
 import { baseName, files } from './files.svelte.ts'
 
 export type Problem = { file: string; line: number; message: string }
@@ -14,16 +24,13 @@ export function parseProblem(p: string): Problem {
   return m ? { file: m[1], line: Number(m[2]), message: m[3] } : { file: '', line: 0, message: p }
 }
 
-export const SCENE_NAMES = ['Field', ...Object.keys(SCENES)] as const
-export type SceneName = (typeof SCENE_NAMES)[number]
+export const SCENE_NAMES = ['Field', ...SCENE_LIST]
+export type SceneName = string
 export const PRESETS = { child, adept, master } as const
 export const PANELS = ['mind', 'body', 'weaves', 'order', 'energy', 'profile', 'events', 'caster', 'bytes', 'reference'] as const
 export type Panel = (typeof PANELS)[number]
 export type Preset = keyof typeof PRESETS | 'custom'
 
-function buildScene(name: SceneName, dims: 2 | 3) {
-  return name === 'Field' ? field(dims) : SCENES[name as keyof typeof SCENES](dims)
-}
 
 const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v))
 
@@ -64,9 +71,10 @@ class Session {
   /** A line for the editor to scroll to; `seq` changes each time it's asked. */
   goto = $state<{ line: number; seq: number }>({ line: 0, seq: 0 })
 
-  sim = $state.raw<Sim | null>(null)
-  cast = $state.raw<Cast | null>(null)
-  caster = $state.raw<Caster | null>(null)
+  /** The world and the spell cast in it: the Rust machine (engine.ts). */
+  machine = $state.raw<Machine | null>(null)
+  /** Whether a spell has been cast in it. */
+  cast = $state(false)
   program = $state.raw<Program | null>(null)
   /** The number registers as they were before the last step, to show what changed. */
   before = $state.raw<Float64Array>(new Float64Array(32))
@@ -77,19 +85,19 @@ class Session {
   /** Sets the world up again from the scene, with no spell cast. */
   reset() {
     this.pause()
-    const s = buildScene(this.scene, this.dims)
-    s.caster.stats = clone($state.snapshot(this.stats)) as CasterStats
-    s.caster.condition = { ...this.condition }
-    s.sim.traceOrders = true
-    if (this.keepEnergy) s.sim.keepEnergy()
-    this.sim = s.sim
-    this.caster = s.caster
+    this.machine?.free()
+    const m = new Machine(this.scene, this.dims)
+    m.setStats(clone($state.snapshot(this.stats)) as CasterStats)
+    m.setCondition(this.condition.body, this.condition.mind)
+    m.traceOrders(true)
+    if (this.keepEnergy) m.keepEnergy(true)
+    this.machine = m
     this.orderSel = { weave: 0, particle: 0, step: 0 }
     this.picking = false
-    this.cast = null
+    this.cast = false
     this.syncWill()
-    this.sliceZ = Math.floor(s.caster.body.pos[2] / s.sim.world.cell)
-    this.ledgerAtCast = s.sim.ledger().total
+    this.sliceZ = Math.floor(m.scene.pos[2] / m.world.cell)
+    this.ledgerAtCast = m.ledgerTotal()
     this.before = new Float64Array(32)
     this.version++
   }
@@ -98,10 +106,11 @@ class Session {
   loadScene(name: SceneName, dims = this.dims) {
     this.scene = name
     this.dims = dims
-    const s = buildScene(name, dims)
-    const w = s.caster.will
+    const s = new Machine(name, dims)
+    const w = s.scene.will
     this.will = { amount: w.amount, force: w.force, maintain: w.maintain, aim: [...w.aim] as Vec }
-    const stats = clone(s.caster.stats)
+    const stats = clone(s.scene.stats)
+    s.free()
     const same = (p: () => CasterStats) => JSON.stringify(p()) === JSON.stringify(stats)
     this.preset = same(adept) ? 'adept' : same(master) ? 'master' : same(child) ? 'child' : 'custom'
     this.stats = stats
@@ -110,8 +119,7 @@ class Session {
 
   setKeepEnergy(on: boolean) {
     this.keepEnergy = on
-    if (on && this.sim && !this.sim.trackEnergy) this.sim.keepEnergy()
-    if (!on && this.sim) this.sim.trackEnergy = false
+    this.machine?.keepEnergy(on)
     this.version++
   }
 
@@ -124,17 +132,17 @@ class Session {
   /** Stats and condition, edited: the caster changes now, mid-spell if need be. */
   applyCaster(edited = true) {
     if (edited) this.preset = 'custom'
-    if (!this.caster) return
-    this.caster.stats = clone($state.snapshot(this.stats)) as CasterStats
-    this.caster.condition = { ...this.condition }
+    if (!this.machine) return
+    this.machine.setStats(clone($state.snapshot(this.stats)) as CasterStats)
+    this.machine.setCondition(this.condition.body, this.condition.mind)
     this.version++
   }
 
   /** The will is live: a spell reads it while it runs. */
   syncWill() {
-    if (!this.caster) return
+    if (!this.machine) return
     const w = this.will
-    this.caster.will = { amount: w.amount, force: w.force, maintain: w.maintain, aim: [...w.aim] as Vec }
+    this.machine.setWill({ amount: w.amount, force: w.force, maintain: w.maintain, aim: [...w.aim] as Vec })
   }
 
   /** Assembles the spell as the editor has it. */
@@ -171,29 +179,47 @@ class Session {
   castSpell(): boolean {
     const program = this.assemble()
     this.reset()
-    if (!program || !this.sim || !this.caster) return false
-    this.program = program
-    const name = [...program.labels].find(([, a]) => a === 0)?.[0] ?? 'spell'
-    if (this.practice > 0) this.caster.conditioning.set(name, this.practice)
-    this.cast = this.sim.cast(this.caster, program)
+    const f = files.get(this.spell)
+    if (!program || !this.machine || !f) return false
+    try {
+      this.program = this.machine.cast(f.text, baseName(this.spell), files.resolver, this.practice)
+    } catch (e) {
+      if (!(e instanceof AsmError)) throw e
+      this.problems = e.problems.map(parseProblem)
+      return false
+    }
+    this.cast = true
     this.version++
     return true
   }
 
+  /** The cast's mind as it is now: read again whenever the machine moves. */
+  castView = $derived.by((): CastView | null => {
+    void this.version
+    return this.cast && this.machine ? this.machine.castView() : null
+  })
+
   get running() {
-    return this.cast?.state === 'running'
+    return this.castView?.state === 'running'
   }
 
   /** Where the mind is: the line of the instruction it runs next. */
   here(): SourceLine | undefined {
     void this.version
-    if (!this.cast || !this.program || this.cast.state !== 'running') return undefined
-    return this.program.lines.get(this.cast.frame.pc)
+    const c = this.castView
+    if (!c || !this.program || c.state !== 'running') return undefined
+    return this.program.lines.get(c.pc)
   }
 
   isBreak = (addr: number) => {
     const l = this.program?.lines.get(addr)
     return !!l && this.breakpoints.includes(`${l.file}:${l.line}`)
+  }
+
+  /** The addresses of the instructions on lines with a breakpoint. */
+  private breakAddrs(): number[] {
+    if (!this.program || !this.breakpoints.length) return []
+    return [...this.program.lines.keys()].filter(this.isBreak)
   }
 
   toggleBreakpoint(file: string, line: number) {
@@ -202,7 +228,8 @@ class Session {
   }
 
   private remember() {
-    this.before = this.cast ? this.cast.frame.n.slice() : new Float64Array(32)
+    const c = this.castView
+    this.before = c ? Float64Array.from(c.n) : new Float64Array(32)
   }
 
   private moved(stopped: boolean) {
@@ -214,18 +241,17 @@ class Session {
   /** The trace of the chosen particle's order, from the last tick its weave ran. */
   orderTrace(): OrderTrace | undefined {
     void this.version
-    return this.sim?.traces.get(this.orderSel.weave)?.[this.orderSel.particle]
+    return this.machine?.trace(this.orderSel.weave, this.orderSel.particle)
   }
 
   /** Keeps the order selection pointing at something after a tick: the first weave that ran, back to its first step. */
   private lastTraceTick = -1
   private settleOrder() {
-    const traces = this.sim?.traces
-    if (!traces?.size) return
-    if (!traces.has(this.orderSel.weave)) this.orderSel = { weave: [...traces.keys()][0], particle: 0, step: 0 }
-    const t = traces.get(this.orderSel.weave)!
-    if (this.orderSel.particle >= t.length) this.orderSel.particle = 0
-    const trace = t[this.orderSel.particle]
+    const counts = this.machine?.traceCounts()
+    if (!counts?.size) return
+    if (!counts.has(this.orderSel.weave)) this.orderSel = { weave: [...counts.keys()][0], particle: 0, step: 0 }
+    if (this.orderSel.particle >= counts.get(this.orderSel.weave)!) this.orderSel.particle = 0
+    const trace = this.machine!.trace(this.orderSel.weave, this.orderSel.particle)
     if (trace && trace.tick !== this.lastTraceTick) {
       this.lastTraceTick = trace.tick
       this.orderSel.step = 0
@@ -234,17 +260,12 @@ class Session {
 
   /** The first particle whose order ran a line with a breakpoint last tick. */
   private orderHit(): { weave: number; particle: number; step: number } | undefined {
-    if (!this.breakpoints.length || !this.sim) return undefined
-    for (const [weave, traces] of this.sim.traces)
-      for (const [k, t] of traces.entries()) {
-        const step = t.steps.findIndex((s) => this.isBreak(s.addr))
-        if (step >= 0) return { weave, particle: k, step }
-      }
-    return undefined
+    if (!this.breakpoints.length || !this.machine) return undefined
+    return this.machine.orderHit(this.breakAddrs())
   }
 
   private stopAtOrder(hit: { weave: number; particle: number; step: number }) {
-    this.lastTraceTick = this.sim!.traces.get(hit.weave)![hit.particle].tick
+    this.lastTraceTick = this.machine!.trace(hit.weave, hit.particle)!.tick
     this.orderSel = hit
     this.panel = 'order'
     this.goOrder()
@@ -280,11 +301,11 @@ class Session {
   }
 
   stepTick() {
-    if (!this.sim) return
+    if (!this.machine) return
     this.pause()
     this.remember()
     this.syncWill()
-    this.sim.step()
+    this.machine.step()
     const hit = this.orderHit()
     if (hit) {
       this.stopAtOrder(hit)
@@ -295,22 +316,21 @@ class Session {
   }
 
   stepInstruction() {
-    if (!this.sim) return
+    if (!this.machine) return
     this.pause()
     this.remember()
     this.syncWill()
-    if (this.cast?.state === 'running') this.sim.stepInstruction(this.cast)
-    else this.sim.step()
+    this.machine.stepInstruction()
     this.moved(true)
   }
 
   /** One tick while playing. False when a breakpoint stopped it, in the mind or in an order. */
   private tickOnce(): boolean {
-    const sim = this.sim!
+    const m = this.machine!
     this.syncWill()
-    if (this.cast?.state === 'running' && this.breakpoints.length) {
-      if (sim.runUntil(this.cast, this.isBreak, 1)) return false
-    } else sim.step()
+    if (m.running && this.breakpoints.length) {
+      if (m.runUntil(this.breakAddrs(), 1)) return false
+    } else m.step()
     const hit = this.orderHit()
     if (hit) {
       this.stopAtOrder(hit)
@@ -320,7 +340,7 @@ class Session {
   }
 
   play() {
-    if (this.playing || !this.sim) return
+    if (this.playing || !this.machine) return
     this.playing = true
     let last = performance.now()
     let due = 1 // the first tick right away
@@ -335,7 +355,7 @@ class Session {
         for (let i = 0; i < n; i++)
           if (!this.tickOnce()) {
             this.playing = false
-            const atOrder = this.panel === 'order' && !this.sim?.midTick
+            const atOrder = this.panel === 'order' && !this.machine?.midTick
             this.version++
             if (this.follow && !atOrder) this.goHere()
             return

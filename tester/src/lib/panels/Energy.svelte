@@ -1,6 +1,6 @@
 <script lang="ts">
   import { session } from '../session.svelte.ts'
-  import { JOULES } from '../../../../src/vm/energy.ts'
+  import { PHYSICS } from '../engine.ts'
 
   const HELD: Record<string, string> = {
     motion: 'motion',
@@ -14,20 +14,19 @@
 
   /** Joules, readably. */
   const j = (e: number) => {
-    const v = e * JOULES
+    const v = e * PHYSICS.joules
     const a = Math.abs(v)
     return a >= 1e6 ? `${(v / 1e6).toFixed(2)} MJ` : a >= 1e3 ? `${(v / 1e3).toFixed(2)} kJ` : `${v.toFixed(a >= 10 ? 0 : 1)} J`
   }
 
   const view = $derived.by(() => {
     void session.version
-    const sim = session.sim
-    if (!sim || !sim.trackEnergy) return null
-    const e = sim.energyNow()
-    const heat = Object.entries(sim.world.heat)
-      .filter(([, v]) => Math.abs(v) > 1e-9)
-      .sort((a, b) => b[1] - a[1])
-    const errors = Object.entries(e.error).filter(([, v]) => Math.abs(v) > 1e-9)
+    const m = session.machine
+    if (!m || !m.trackEnergy) return null
+    const e = m.energy()
+    if (!e) return null
+    const heat = e.heatBy.filter(([, v]) => Math.abs(v) > 1e-9).sort((a, b) => b[1] - a[1])
+    const errors = e.error.filter(([, v]) => Math.abs(v) > 1e-9)
     const moved = e.heat + Math.abs(e.outside)
     return { e, heat, errors, share: moved > 0 ? Math.abs(e.errorTotal) / moved : 0 }
   })

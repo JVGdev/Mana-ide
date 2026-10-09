@@ -2,33 +2,32 @@
   import { session } from '../session.svelte.ts'
   import { num } from '../format.ts'
   import Parts from '../Parts.svelte'
-  import { total } from '../../../../src/vm/parts.ts'
+  import { total } from '../engine.ts'
 
   const view = $derived.by(() => {
     void session.version
-    const c = session.caster
-    const sim = session.sim
-    if (!c || !sim) return null
+    const m = session.machine
+    if (!m) return null
+    const c = m.casterView()
     const regs = c.regs.map((r, i) => ({
       i,
-      parts: [...r.parts] as typeof r.parts,
+      parts: r.parts,
       amount: total(r.parts),
-      hold: r.holdUntil >= sim.tick ? r.holdUntil - sim.tick + 1 : 0,
+      hold: r.holdUntil >= c.tick ? r.holdUntil - c.tick + 1 : 0,
       stream: i < c.streams,
     }))
-    const inHand = [...sim.weaves.values()].filter((w) => w.maker === c && w.inHand)
     return {
-      held: c.held(),
+      held: c.held,
       capacity: c.capacity,
-      flow: [...c.flow] as typeof c.flow,
+      flow: c.flow,
       harm: c.harm,
       strain: c.strain,
       mindCapacity: c.mindCapacity,
       madness: c.madness,
-      condition: { ...c.condition },
+      condition: c.condition,
       regs,
       biggest: Math.max(1, ...regs.map((r) => r.amount)),
-      inHand: inHand.reduce((s, w) => s + w.mana(), 0),
+      inHand: c.inHand,
       focus: c.focus,
       drain: c.drain,
       baseline: c.baseline,

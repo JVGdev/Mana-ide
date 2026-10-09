@@ -1,6 +1,5 @@
 <script lang="ts">
-  import { OPS, PORTS } from '../../../../src/asm/isa.ts'
-  import { OP_DOCS, PORT_DOCS } from '../../../../src/asm/docs.ts'
+  import { OPS, PORTS, OP_DOCS, PORT_DOCS } from '../engine.ts'
 
   let filter = $state('')
   const GROUPS = [

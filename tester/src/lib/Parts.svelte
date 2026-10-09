@@ -1,6 +1,6 @@
 <script lang="ts">
   import { PART_COLORS, PART_NAMES, num } from './format.ts'
-  import type { Parts } from '../../../src/vm/parts.ts'
+  import type { Parts } from './engine.ts'
 
   /** A bar of the four parts, `scale` M wide. */
   let { parts, scale }: { parts: Parts; scale: number } = $props()

@@ -1,16 +1,17 @@
 <script lang="ts">
   import { session } from '../session.svelte.ts'
-  import { profile } from '../../../../src/profile.ts'
 
   let { onjump }: { onjump: (file: string, line: number) => void } = $props()
 
   const view = $derived.by(() => {
     void session.version
-    const cast = session.cast
-    if (!cast || cast.beats === 0) return null
-    const p = profile(cast)
-    const ticks = (cast.endedAt ?? session.sim!.tick) - cast.startedAt + 1
-    return { ...p, ticks, state: cast.state }
+    const c = session.castView
+    const m = session.machine
+    if (!c || !m || c.beats === 0) return null
+    const p = m.profile()
+    if (!p) return null
+    const ticks = (c.endedAt ?? m.tick) - c.startedAt + 1
+    return { ...p, ticks, state: c.state }
   })
   const pct = (x: number) => `${(x * 100).toFixed(1)}%`
 </script>

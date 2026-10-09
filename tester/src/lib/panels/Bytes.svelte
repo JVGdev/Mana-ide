@@ -1,27 +1,26 @@
 <script lang="ts">
   import { session } from '../session.svelte.ts'
-  import { decodeAll, format } from '../../../../src/asm/disassembler.ts'
+  import { disassembly } from '../engine.ts'
 
   let { onjump }: { onjump: (file: string, line: number) => void } = $props()
 
   const rows = $derived.by(() => {
     const p = session.program
     if (!p) return []
-    const names = new Map<number, string>()
-    for (const [name, addr] of p.labels) if (!names.has(addr) || !name.includes('.')) names.set(addr, name)
     const starts = new Map<number, string[]>()
     for (const [name, addr] of p.labels) starts.set(addr, [...(starts.get(addr) ?? []), name])
-    return decodeAll(p.bytes).map((i) => ({
+    return disassembly(p).all.map((i) => ({
       addr: i.addr,
       bytes: Array.from(p.bytes.slice(i.addr, i.addr + i.size), (b) => b.toString(16).toUpperCase().padStart(2, '0')).join(' '),
-      text: format(i, names),
+      text: i.text,
       labels: starts.get(i.addr) ?? [],
       source: p.lines.get(i.addr),
     }))
   })
   const pc = $derived.by(() => {
     void session.version
-    return session.cast?.state === 'running' ? session.cast.frame.pc : -1
+    const c = session.castView
+    return c?.state === 'running' ? c.pc : -1
   })
   let list = $state<HTMLDivElement>()
   $effect(() => {

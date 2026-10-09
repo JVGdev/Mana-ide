@@ -1,11 +1,16 @@
 <script lang="ts">
   import { session, PRESETS } from '../session.svelte.ts'
   import { num, PART_NAMES } from '../format.ts'
-  import type { Stat } from '../../../../src/vm/caster.ts'
+  import type { CasterView, Stat } from '../engine.ts'
 
   type Row = { label: string; stat: Stat; effective: () => number; hint: string; step?: number }
 
-  const c = () => session.caster
+  /** The caster as they are now: what each stat comes to. */
+  const caster = $derived.by((): CasterView | null => {
+    void session.version
+    return session.machine?.casterView() ?? null
+  })
+  const c = () => caster
   const body = $derived(session.stats.body)
   const mind = $derived(session.stats.mind)
 
@@ -19,7 +24,7 @@
     ...PART_NAMES.map((name, k) => ({
       label: name,
       stat: body.affinity[k],
-      effective: () => c()?.affinity(k) ?? 0,
+      effective: () => c()?.affinity[k] ?? 0,
       hint: `affinity: how much ${name} survives a FILT, 0–1`,
       step: 0.05,
     })),
