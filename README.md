@@ -39,8 +39,9 @@ npm run bench -- --only Throw --3d
 ```
 
 The same ball of fire, held still or thrown at a pillar in every way the bench knows: by hand (every particle, every
-other one, only the surface) or by its own order (one that knows where its centre is, one that also feels its
-neighbours, one that only feels, one told just an angle to fly along). Each runs on the real machine, for an adept and a
+other one, only the surface) or by its own order (one that clings to where it feels the mana thicker, one that also
+feels how its neighbours move, one told just an angle to fly along). Orders only feel: they aren't told where they are
+(SPEC D31). Each runs on the real machine, for an adept and a
 master, on five layouts, and the bench prints what each cost and how well it did: how long the order took to ingrain, how
 much of the ball stayed together, and the mana the caster's hand and the ball's own order spent. The bench's spells are in
 `bench/`, and the tester lists them too.

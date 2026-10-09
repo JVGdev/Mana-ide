@@ -1,5 +1,5 @@
-; Thrown by hand, held by its own order: it knows where it is from the centre and how its neighbours move, and comes back in at the speed it should.
-        .use  Bench, Shapes, Reactions, Transformations, Orders
+; Thrown by hand, held by its own order: past the edge, it feels how fast it's coming back in against its neighbours, and comes back at the speed it should.
+        .use  Bench, Reactions, Transformations, Orders
 
 ThrowCohere:
         CALL  pour
