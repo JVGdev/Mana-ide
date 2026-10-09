@@ -49,7 +49,7 @@
   function selected() {
     const sim = session.sim
     const t = sim?.traces.get(session.orderSel.weave)?.[session.orderSel.particle]
-    return t ? sim!.weaves.get(t.weave)?.particles[t.particle] : undefined
+    return t ? sim!.world.particles.find((p) => p.id === t.id) : undefined
   }
 
   function draw() {
@@ -219,11 +219,11 @@
       // The nearest particle that ran its order last tick.
       const sim = session.sim!
       let best: { weave: number; k: number; d: number } | undefined
+      const byId = new Map(sim.world.particles.map((p) => [p.id, p]))
       for (const [id, traces] of sim.traces) {
-        const wv = sim.weaves.get(id)
-        if (!wv) continue
+        if (!sim.weaves.get(id)) continue
         traces.forEach((t, k) => {
-          const p = wv.particles[t.particle]
+          const p = byId.get(t.id)
           if (!p || (world.d > 1 && Math.floor(p.pos[2] / world.cell) !== session.sliceZ)) return
           const d = Math.hypot(p.pos[0] - c.mx, p.pos[1] - c.my)
           if (!best || d < best.d) best = { weave: id, k, d }

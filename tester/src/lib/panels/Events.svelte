@@ -101,4 +101,7 @@
   tr.lock .kind {
     color: var(--info);
   }
+  tr.taken .kind {
+    color: var(--special);
+  }
 </style>

@@ -3,7 +3,9 @@
 import { describe, expect, it } from 'vitest'
 import { assemble } from '../src/asm/assembler.ts'
 import { resolver } from '../src/load.ts'
-import { stepFluid } from '../src/vm/fluid.ts'
+import { stepAir } from '../src/vm/air.ts'
+import { mergeAndSplit, stepFluid } from '../src/vm/fluid.ts'
+import { total } from '../src/vm/parts.ts'
 import { PHYSICS } from '../src/vm/physics.ts'
 import { Sim } from '../src/vm/sim.ts'
 import { EARTH, WATER, World, massOf, type Particle, type Vec } from '../src/vm/world.ts'
@@ -228,5 +230,205 @@ kick:   ${src}`,
     const moving = cost(0.3)
     expect(still).toBeGreaterThan(0)
     expect(moving).toBeGreaterThan(still * 5)
+  })
+})
+
+describe('merging and splitting', () => {
+  it('merges particles at rest beside each other, keeping their mana, matter and momentum', () => {
+    const w = ground()
+    const [a] = drop(w, [2, 3, 0.125], WATER, 1, 2)
+    const [b] = drop(w, [2.05, 3, 0.125], WATER, 1, 1)
+    a.pos = [2, 3, 0.125]
+    b.pos = [2.05, 3, 0.125]
+    a.vel = [0.001, 0, 0]
+    b.vel = [0.003, 0, 0]
+    w.impulse.push[0] += massOf(a) * 0.001 + massOf(b) * 0.003
+    const changes = mergeAndSplit(w)
+    expect(changes).toEqual([{ kind: 'merge', into: a, from: b, weave: 1 }])
+    expect(w.particles).toEqual([a])
+    expect(a.free[WATER]).toBeCloseTo(2 * PHYSICS.mote, 12)
+    expect(a.carried[WATER]).toBe(3)
+    expect(w.momentumError()).toBeLessThan(1e-12)
+    expect(a.pos[0]).toBeGreaterThan(2)
+    expect(a.pos[0]).toBeLessThan(2.05)
+  })
+
+  it("doesn't merge particles moving apart, or ones that would be too big", () => {
+    const w = ground()
+    const [a] = drop(w, [2, 3, 0.125], WATER)
+    const [b] = drop(w, [2.05, 3, 0.125], WATER)
+    a.pos = [2, 3, 0.125]
+    b.pos = [2.05, 3, 0.125]
+    b.vel = [0.02, 0, 0]
+    expect(mergeAndSplit(w).filter((c) => c.kind === 'merge')).toEqual([])
+    b.vel = [0, 0, 0]
+    a.free[WATER] = PHYSICS.maxMote
+    expect(mergeAndSplit(w).filter((c) => c.kind === 'merge')).toEqual([])
+  })
+
+  it('splits a big particle that has spread thin, and both halves keep its weave and order', () => {
+    const w = ground()
+    const [p] = drop(w, [2, 4, 0.125], WATER, 1)
+    p.free[WATER] = 1
+    p.order = { program: { bytes: new Uint8Array(), labels: new Map(), lines: new Map() } as never, addr: 7 }
+    const changes = mergeAndSplit(w)
+    expect(changes.map((c) => c.kind)).toEqual(['split'])
+    expect(w.particles.length).toBe(2)
+    for (const q of w.particles) {
+      expect(q.free[WATER]).toBeCloseTo(0.5, 12)
+      expect(q.weave).toBe(1)
+      expect(q.order).toBe(p.order)
+    }
+    mergeAndSplit(w)
+    expect(w.particles.length).toBe(4) // alone, they split again, down to motes
+  })
+
+  it('leaves rock and what is in a hand whole', () => {
+    const w = ground()
+    const [a] = drop(w, [2, 3, 0.125], EARTH, 1, 2)
+    const [b] = drop(w, [2.05, 3, 0.125], EARTH, 1, 2)
+    a.pos = [2, 3, 0.125]
+    b.pos = [2.05, 3, 0.125]
+    w.bonds.push({ a, b, rest: 0.05 })
+    expect(mergeAndSplit(w)).toEqual([])
+    w.bonds = []
+    expect(mergeAndSplit(w, { still: () => true })).toEqual([])
+  })
+})
+
+describe('the second flaw', () => {
+  it("lets a big ordered particle take over someone else's mana that comes to rest against it", () => {
+    const w = ground()
+    const [a] = drop(w, [2, 3, 0.125], EARTH)
+    const [b] = drop(w, [2.05, 3, 0.125], EARTH)
+    a.pos = [2, 3, 0.125]
+    b.pos = [2.05, 3, 0.125]
+    a.free[EARTH] = 0.5
+    b.weave = 2
+    a.order = { program: { bytes: new Uint8Array(), labels: new Map(), lines: new Map() } as never, addr: 3 }
+    const [c] = mergeAndSplit(w)
+    expect(c).toMatchObject({ kind: 'merge', into: a, from: b, weave: 2 })
+    expect(a.weave).toBe(1)
+    expect(a.free[EARTH]).toBeCloseTo(0.75, 12) // weave 2's mana is weave 1's now, and runs its order
+  })
+
+  it("spreads an order through another caster's resting mana, and says so", () => {
+    const world = World.withGround(32, 24, 1, 8)
+    const sim = new Sim(world)
+    const lay = (name: string, order: boolean) => {
+      const caster = sim.addCaster(name, [name === 'A' ? 1 : 1.5, 2.9, 0.125])
+      caster.will = { aim: [3, 2.9, 0.125], amount: 100, force: 0, maintain: false }
+      const program = assemble(
+        `       .use  Elements
+        GATH  m0, #100
+        FILT  m1, m0, #EARTH
+        LDI   n0, #3
+        LDI   n1, #2.1
+        LDI   n2, #0.125
+        WEAV  n3, n0:2
+        LDI   n4, #0
+        LDI   n5, #0
+        LDI   n6, #0
+        LDI   n7, #${order ? 0.75 : 0.25}
+        EMIT  m1, n7, n3, n4:6
+        HOLD  n3, #2
+${order ? '        ORDR  n3, still\n        INGR  n3, #0\n        INGR  n3, #1\n        INGR  n3, #2\n' : ''}        MANI  n3
+        HALT
+still:  RET`,
+        `${name}.masm`,
+        resolver(),
+      )
+      sim.cast(caster, program)
+      sim.step()
+    }
+    // A's three motes settle on the ground and merge into one particle of 0.75 M, ordered. Then B's one mote lands beside it.
+    lay('A', true)
+    sim.run(30)
+    lay('B', false)
+    const b = [...sim.weaves.values()].find((wv) => wv.maker.name === 'B')!
+    const before = b.mana()
+    sim.run(60)
+    const taken = sim.events.filter((e) => e.kind === 'taken')
+    expect(taken.length).toBeGreaterThan(0)
+    expect(taken[0].detail).toMatch(/weave \d+'s mana, and gave it its order/)
+    expect(b.mana()).toBeLessThan(before)
+  })
+})
+
+describe('the air', () => {
+  const airMana = (w: World, x0: number, x1: number, y0: number, y1: number) => {
+    let m = 0
+    for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) m += total(w.air[w.index(x, y, 0)])
+    return m
+  }
+  const airRun = (w: World, ticks: number, each?: () => void) => {
+    let mana = 0
+    for (const a of w.air) mana += total(a)
+    for (let t = 0; t < ticks; t++) {
+      stepAir(w)
+      let now = 0
+      for (const a of w.air) now += total(a)
+      expect(now).toBeCloseTo(mana, 6)
+      expect(w.momentumError()).toBeLessThan(1e-6)
+      each?.()
+    }
+  }
+  /** Air in cells x0–x1, y0–y1 set moving at `u` m/tick along x, its momentum given from outside. */
+  const blow = (w: World, x0: number, x1: number, y0: number, y1: number, u: number) => {
+    for (let y = y0; y < y1; y++)
+      for (let x = x0; x < x1; x++) {
+        const i = w.index(x, y, 0)
+        w.airVel[i * 3] = u
+        w.impulse.push[0] += total(w.air[i]) * u
+      }
+  }
+
+  it('carries itself along: a puff of wind travels on, and takes its mana with it', () => {
+    const w = World.withGround(48, 24, 1, 8)
+    blow(w, 4, 8, 12, 16, 0.3)
+    const centre = () => {
+      let m = 0
+      let x = 0
+      for (let i = 0; i < w.size; i++) {
+        const p = total(w.air[i]) * w.airVel[i * 3]
+        m += p
+        x += p * w.coords(i)[0]
+      }
+      return x / m
+    }
+    const start = centre()
+    airRun(w, 15)
+    expect(centre()).toBeGreaterThan(start + 3) // the moving air is cells further on
+  })
+
+  it('flows around what stands in its way', () => {
+    const w = World.withGround(48, 24, 1, 8)
+    w.fillBox([24, 8, 0], [26, 13, 0], EARTH) // a pillar 1.5 m high
+    blow(w, 8, 20, 8, 20, 0.2)
+    let up = 0
+    airRun(w, 20, () => {
+      for (let y = 8; y < 14; y++) up = Math.max(up, w.airVel[w.index(23, y, 0) * 3 + 1])
+    })
+    expect(up).toBeGreaterThan(0.02) // in front of the pillar, the wind turns up and over it
+    for (let y = 8; y < 14; y++) expect(total(w.air[w.index(25, y, 0)])).toBe(0) // and none goes through it
+  })
+
+  it('fills back in where mana was taken out of it', () => {
+    const w = World.withGround(48, 24, 1, 8)
+    for (let y = 12; y < 16; y++) for (let x = 20; x < 24; x++) w.air[w.index(x, y, 0)].fill(0)
+    const hole = () => airMana(w, 20, 24, 12, 16)
+    airRun(w, 60)
+    expect(hole()).toBeGreaterThan(16 * PHYSICS.airMana * 0.5)
+  })
+
+  it('presses from dense to thin', () => {
+    const w = World.withGround(48, 24, 1, 8)
+    const i = w.index(20, 14, 0)
+    w.air[i].fill(PHYSICS.airMana / 2) // twice as dense as around it
+    const around = () => airMana(w, 17, 24, 11, 18) - total(w.air[i])
+    const before = around()
+    airRun(w, 1)
+    expect(total(w.air[i])).toBeLessThan(PHYSICS.airMana * 2)
+    expect(around()).toBeGreaterThan(before) // what it pushed out is around it
   })
 })

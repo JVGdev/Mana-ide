@@ -132,8 +132,6 @@ export const PORTS: { name: string; code: number; size: number; order?: boolean 
   { name: 'DEPTH', code: 0x07, size: 1 },
   { name: 'LOAD', code: 0x08, size: 1 },
   { name: 'CAPACITY', code: 0x09, size: 1 },
-  { name: 'ORIGIN', code: 0x0a, size: 3, order: true },
-  { name: 'MAKER', code: 0x0b, size: 3, order: true },
   { name: 'REACH', code: 0x0c, size: 1 },
   { name: 'VEL', code: 0x0d, size: 3, order: true },
 ]

@@ -25,7 +25,21 @@ export type FluidHooks = {
   othersCarried?: (p: Particle, cell: number) => number
 }
 
-type Kernels = { poly6: number; grad: number; spiky: number; lap: number; cohesion: number }
+type Kernels = {
+  /**
+   * What a particle feels is weighed with the flat (Epanechnikov) kernel, W = flat·(h² − r²), and its slope, grad·r:
+   * a neighbour most of a smoothing length away still counts a fair share of what the particle itself does.
+   */
+  flat: number
+  grad: number
+  /** The spiky kernel, W = spikyW·(h − r)³, and its slope, spiky·(h − r)². Density is summed with it. */
+  spikyW: number
+  spiky: number
+  lap: number
+  cohesion: number
+  /** The work cohesion does pulling two particles from r out to h, for each 1/64 of h: for the Energy ledger. */
+  cohesionWork: Float64Array
+}
 
 const kernelCache = new Map<string, Kernels>()
 
@@ -34,23 +48,26 @@ function kernels(dims: 2 | 3): Kernels {
   const key = `${dims}:${h}`
   let K = kernelCache.get(key)
   if (K) return K
-  K =
+  const base =
     dims === 2
-      ? { poly6: 4 / (Math.PI * h ** 8), grad: -24 / (Math.PI * h ** 8), spiky: -30 / (Math.PI * h ** 5), lap: 40 / (Math.PI * h ** 5), cohesion: 0 }
-      : {
-          poly6: 315 / (64 * Math.PI * h ** 9),
-          grad: -945 / (32 * Math.PI * h ** 9),
-          spiky: -45 / (Math.PI * h ** 6),
-          lap: 45 / (Math.PI * h ** 6),
-          cohesion: 0,
-        }
+      ? { flat: 2 / (Math.PI * h ** 4), grad: -4 / (Math.PI * h ** 4), spikyW: 10 / (Math.PI * h ** 5), spiky: -30 / (Math.PI * h ** 5), lap: 40 / (Math.PI * h ** 5) }
+      : { flat: 15 / (8 * Math.PI * h ** 5), grad: -15 / (4 * Math.PI * h ** 5), spikyW: 15 / (Math.PI * h ** 6), spiky: -45 / (Math.PI * h ** 6), lap: 45 / (Math.PI * h ** 6) }
   // Akinci's cohesion kernel (2013), scaled so it sums to one over its reach, in 2D or 3D.
+  const steps = 1000
   let sum = 0
-  for (let i = 0; i < 1000; i++) {
-    const r = ((i + 0.5) / 1000) * h
-    sum += cohesionShape(r, h) * (dims === 2 ? 2 * Math.PI * r : 4 * Math.PI * r * r) * (h / 1000)
+  for (let i = 0; i < steps; i++) {
+    const r = ((i + 0.5) / steps) * h
+    sum += cohesionShape(r, h) * (dims === 2 ? 2 * Math.PI * r : 4 * Math.PI * r * r) * (h / steps)
   }
-  K.cohesion = 1 / sum
+  const cohesion = 1 / sum
+  // ∫ from r to h of the scaled shape, tabled at 65 points.
+  const work = new Float64Array(65)
+  for (let t = 63; t >= 0; t--) {
+    let w = 0
+    for (let i = 0; i < 16; i++) w += cohesionShape(((t + (i + 0.5) / 16) / 64) * h, h) * (h / 64 / 16)
+    work[t] = work[t + 1] + cohesion * w
+  }
+  K = { ...base, cohesion, cohesionWork: work }
   kernelCache.set(key, K)
   return K
 }
@@ -179,13 +196,20 @@ export function feel(world: World, ps: Particle[] = world.particles, pairs = fin
   const fm = new Float64Array(n)
   const mm = new Float64Array(n)
   const weight = new Float64Array(n)
-  const self = K.poly6 * h ** 6
+  // Density is summed with the spiky kernel, whose slope is what pressure pushes along: so the pressure forces are
+  // exactly the pull of the gas's stored energy (Σ m k ln ρ), and the Energy ledger can count it.
+  const self = K.spikyW * h ** 3
+  // What a particle feels (DENS, GRAD, NVEL) is summed with the flat kernel, which weighs its neighbours nearly as much as
+  // itself. With a peaked one (poly6), a particle a smoothing length from the next would feel mostly itself, and couldn't
+  // tell the inside of a ball from its edge.
+  const selfFelt = K.flat * h * h
   for (let i = 0; i < n; i++) {
     const p = ps[i]
     fm[i] = freeMass(p)
     mm[i] = matterMass(p)
     p.rho = fm[i] * self
     p.rhoM = mm[i] * self
+    p.felt = fm[i] * selfFelt
     p.grad = [0, 0, 0]
     p.nvel = [0, 0, 0]
   }
@@ -196,30 +220,35 @@ export function feel(world: World, ps: Particle[] = world.particles, pairs = fin
     const a = ps[i]
     const b = ps[j]
     const r = R[e]
-    const q = h * h - r * r
-    const w = K.poly6 * q * q * q
+    const hr = h - r
+    const w = K.spikyW * hr * hr * hr
     const ma = fm[i]
     const mb = fm[j]
     a.rho += mb * w
     b.rho += ma * w
     a.rhoM += mm[j] * w
     b.rhoM += mm[i] * w
-    const g = K.grad * q * q
+    const q = h * h - r * r
+    const wf = K.flat * q
+    a.felt += mb * wf
+    b.felt += ma * wf
+    const g = K.grad
     for (let k = 0; k < 3; k++) {
       const dk = D[e * 3 + k]
       a.grad[k] += mb * g * dk
       b.grad[k] -= ma * g * dk
-      a.nvel[k] += mb * w * b.vel[k]
-      b.nvel[k] += ma * w * a.vel[k]
+      a.nvel[k] += mb * wf * b.vel[k]
+      b.nvel[k] += ma * wf * a.vel[k]
     }
-    weight[i] += mb * w
-    weight[j] += ma * w
+    weight[i] += mb * wf
+    weight[j] += ma * wf
   }
   for (let i = 0; i < n; i++) {
     const p = ps[i]
     const w = weight[i]
     p.rho /= depth
     p.rhoM /= depth
+    p.felt /= depth
     for (let k = 0; k < 3; k++) {
       p.grad[k] /= depth
       p.nvel[k] = w > 0 ? p.nvel[k] / w : p.vel[k]
@@ -306,10 +335,8 @@ function forces(world: World, ps: Particle[], pairs: Pairs, dt: number) {
       const shape = r > h / 2 ? c : 2 * c - h6 / 64
       s += (-((coh[i] + coh[j]) / 2) * Ma * Mb * K.cohesion * shape) / depth
     }
-    // Thickness: neighbours' motions even out.
-    const v = (((visc[i] + visc[j]) / 2) * K.lap * hr * 2 * Ma * Mb) / ((rho[i] + rho[j]) * depth)
     for (let k = 0; k < 3; k++) {
-      const fk = (s * D[e * 3 + k]) / r + v * (b.vel[k] - a.vel[k])
+      const fk = (s * D[e * 3 + k]) / r
       a.acc[k] += fk
       b.acc[k] -= fk
     }
@@ -319,6 +346,143 @@ function forces(world: World, ps: Particle[], pairs: Pairs, dt: number) {
     if (M <= 0) continue
     for (let k = 0; k < 3; k++) p.vel[k] += (p.acc[k] / M) * dt
   }
+  thicken(world, ps, pairs, visc, rho, dt)
+}
+
+/** What a particle weighs: m·g, of its free mana by part and of the matter it holds. */
+function weightOf(p: Particle): number {
+  let w = 0
+  for (let k = 0; k < 4; k++) w += p.free[k] * PHYSICS.fall[k] + p.carried[k] * PHYSICS.matterMass[k] * PHYSICS.matterFall[k]
+  return Math.max(0, w * PHYSICS.gravity)
+}
+
+/** ½m|v|², the kinetic energy of one particle. */
+const ke = (p: Particle) => 0.5 * p.mass * (p.vel[0] * p.vel[0] + p.vel[1] * p.vel[1] + p.vel[2] * p.vel[2])
+
+/**
+ * Thickness: neighbours' motions even out, pair by pair, equally and oppositely. What the evening out takes from their
+ * motion is heat.
+ */
+function thicken(world: World, ps: Particle[], pairs: Pairs, visc: Float64Array, rho: Float64Array, dt: number) {
+  const K = kernels(world.d === 1 ? 2 : 3)
+  const h = PHYSICS.smoothing
+  const depth = world.d === 1 ? world.cell : 1
+  let heat = 0
+  for (let e = 0; e < pairs.n; e++) {
+    const i = pairs.a[e]
+    const j = pairs.b[e]
+    const a = ps[i]
+    const b = ps[j]
+    const Ma = a.mass
+    const Mb = b.mass
+    if (Ma <= 0 || Mb <= 0 || !(visc[i] + visc[j])) continue
+    const c = (((visc[i] + visc[j]) / 2) * K.lap * (h - pairs.r[e]) * 2 * Ma * Mb * dt) / ((rho[i] + rho[j]) * depth)
+    // Never more than evens them out completely.
+    const f = Math.min(c, (Ma * Mb) / (Ma + Mb))
+    const before = ke(a) + ke(b)
+    for (let k = 0; k < 3; k++) {
+      const jk = f * (b.vel[k] - a.vel[k])
+      a.vel[k] += jk / Ma
+      b.vel[k] -= jk / Mb
+    }
+    heat += before - ke(a) - ke(b)
+  }
+  world.warm('thickness', heat)
+}
+
+/** What merging and splitting did: which particle took in which, and which split off from which. */
+export type Change = { kind: 'merge'; into: Particle; from: Particle; weave: number } | { kind: 'split'; from: Particle; into: Particle }
+
+/**
+ * Particles at rest beside each other merge, and big ones that have spread thin split (SPEC §11). Nothing in a caster's
+ * hand, and no rock, does either. A merge keeps mana, matter and momentum: the new particle is at their centre of mass,
+ * moving at their shared momentum, and keeps the bigger one's weave and order, whoever the smaller belonged to. A split
+ * halves a particle into two, side by side across the way its mana thins, at the same speed.
+ */
+export function mergeAndSplit(world: World, hooks: FluidHooks = {}): Change[] {
+  const rock = new Set<Particle>()
+  for (const b of world.bonds) {
+    rock.add(b.a)
+    rock.add(b.b)
+  }
+  const ps = world.particles.filter((p) => !rock.has(p) && !hooks.still?.(p))
+  const changes: Change[] = []
+  if (!ps.length) return changes
+  const pairs = findPairs(world, ps)
+  const gone = new Set<Particle>()
+  const done = new Set<Particle>()
+  const near = PHYSICS.mergeRange
+  for (let e = 0; e < pairs.n; e++) {
+    if (pairs.r[e] > near) continue
+    let a = ps[pairs.a[e]]
+    let b = ps[pairs.b[e]]
+    if (done.has(a) || done.has(b)) continue
+    const fa = total(a.free)
+    const fb = total(b.free)
+    if (fa + fb > PHYSICS.maxMote + PHYSICS.epsilon) continue
+    if (Math.hypot(a.vel[0] - b.vel[0], a.vel[1] - b.vel[1], a.vel[2] - b.vel[2]) > PHYSICS.mergeSpeed) continue
+    // The bigger keeps its weave and order; the same size, the older.
+    if (fb > fa || (fb === fa && b.id < a.id)) [a, b] = [b, a]
+    const Ma = massOf(a)
+    const Mb = massOf(b)
+    const M = Ma + Mb
+    if (M <= 0) continue
+    // Two that move as one lose what moved them apart: ½μ|Δv|².
+    const dv2 = (a.vel[0] - b.vel[0]) ** 2 + (a.vel[1] - b.vel[1]) ** 2 + (a.vel[2] - b.vel[2]) ** 2
+    world.warm('merging', (0.5 * Ma * Mb * dv2) / M)
+    const to: Vec = [0, 0, 0]
+    for (let k = 0; k < 3; k++) {
+      to[k] = (Ma * a.pos[k] + Mb * b.pos[k]) / M
+      a.vel[k] = (Ma * a.vel[k] + Mb * b.vel[k]) / M
+    }
+    if (world.cellOf(to) >= 0) a.pos = to
+    for (let k = 0; k < 4; k++) {
+      a.free[k] += b.free[k]
+      a.carried[k] += b.carried[k]
+      b.free[k] = 0
+      b.carried[k] = 0
+    }
+    a.dvLeft = Math.min(a.dvLeft, b.dvLeft)
+    a.pushedAt = Math.max(a.pushedAt, b.pushedAt)
+    changes.push({ kind: 'merge', into: a, from: b, weave: b.weave })
+    gone.add(b)
+    done.add(a)
+    done.add(b)
+  }
+  if (gone.size) world.particles = world.particles.filter((p) => !gone.has(p))
+  // Split what has spread thin: more of what it feels is itself than is its neighbours.
+  feel(world, ps.filter((p) => !gone.has(p)))
+  const K = kernels(world.d === 1 ? 2 : 3)
+  const depth = world.d === 1 ? world.cell : 1
+  for (const p of ps) {
+    if (gone.has(p) || done.has(p)) continue
+    const m = total(p.free)
+    if (m < 2 * PHYSICS.mote - PHYSICS.epsilon || p.felt <= 0) continue
+    const own = (m * K.flat * PHYSICS.smoothing ** 2) / depth
+    if (own / p.felt <= PHYSICS.splitAlone && m <= 2 * PHYSICS.maxMote) continue
+    const q = world.spawn(p)
+    for (let k = 0; k < 4; k++) {
+      q.free[k] = p.free[k] / 2
+      p.free[k] -= q.free[k]
+      q.carried[k] = p.carried[k] / 2
+      p.carried[k] -= q.carried[k]
+    }
+    // Side by side, across the way it thins (or, alone, any way: by its id), a third of the smoothing length apart.
+    const g = Math.hypot(...p.grad)
+    let u: Vec = g > 1e-12 ? [-p.grad[1] / g, p.grad[0] / g, 0] : [Math.cos(p.id), Math.sin(p.id), 0]
+    if (Math.hypot(...u) < 1e-9) u = [1, 0, 0]
+    const d = PHYSICS.smoothing / 6
+    const there: Vec = [p.pos[0] + u[0] * d, p.pos[1] + u[1] * d, p.pos[2] + u[2] * d]
+    const here: Vec = [p.pos[0] - u[0] * d, p.pos[1] - u[1] * d, p.pos[2] - u[2] * d]
+    // Into the cells beside it too, as long as nothing solid is there.
+    const open = (at: Vec) => world.cellOf(at) >= 0 && !world.solidAt(world.cellOf(at))
+    if (open(there) && open(here)) {
+      q.pos = there
+      p.pos = here
+    } else q.pos = open(there) ? there : open(here) ? here : q.pos
+    changes.push({ kind: 'split', from: p, into: q })
+  }
+  return changes
 }
 
 type Blocked = (p: Particle, from: number, to: number, down: boolean) => boolean
@@ -361,21 +525,30 @@ function hold(world: World, ps: Particle[], bonds: Bond[], dt: number, blocked: 
   const strength = PHYSICS.bondStrength * dt * PHYSICS.bondIterations
   const walls = world.impulse.walls
   const iterations = bonds.length ? PHYSICS.bondIterations : 1
+  let ground = 0
+  let rock = 0
   for (let it = 0; it < iterations; it++) {
     for (const p of grounded) {
       if (p.vel[1] >= 0) continue
       // The ground takes what presses down, and its friction what slides, up to its share of that.
       const m = p.mass
+      // Holding up what rests on it, the ground only takes back the speed its weight gave it this step: no heat in that.
+      const resting = Math.min(-p.vel[1], weightOf(p) * dt / Math.max(m, PHYSICS.epsilon))
+      const before = ke(p) - 0.5 * m * resting * resting
       const press = -p.vel[1]
       walls[1] += m * press
       p.vel[1] = 0
       const slide = Math.hypot(p.vel[0], p.vel[2])
-      if (slide <= 0) continue
+      if (slide <= 0) {
+        ground += before - ke(p)
+        continue
+      }
       const stop = Math.min(1, (PHYSICS.friction * press) / slide)
       for (const k of [0, 2]) {
         walls[k] -= m * p.vel[k] * stop
         p.vel[k] -= p.vel[k] * stop
       }
+      ground += before - ke(p)
     }
     for (const bond of bonds) {
       if (bond.rest < 0) continue
@@ -402,19 +575,25 @@ function hold(world: World, ps: Particle[], bonds: Bond[], dt: number, blocked: 
         bond.rest = -1
         continue
       }
+      const before = ke(a) + ke(b)
       a.vel[0] += (j * nx) / Ma
       a.vel[1] += (j * ny) / Ma
       a.vel[2] += (j * nz) / Ma
       b.vel[0] -= (j * nx) / Mb
       b.vel[1] -= (j * ny) / Mb
       b.vel[2] -= (j * nz) / Mb
+      rock += before - ke(a) - ke(b)
     }
   }
+  world.warm('the ground', ground)
+  // Rock keeping its shape loses what it bends with; pushing a bond back to its length can also give a little back.
+  world.warm('rock', rock)
 }
 
 /** A particle and the air it's in pull each other's speeds together: what one loses, the other gains. */
 function drag(world: World, ps: Particle[], dt: number) {
   const v = world.airVel
+  let heat = 0
   for (const p of ps) {
     const m = p.mass
     const c = world.cellOf(p.pos)
@@ -424,12 +603,19 @@ function drag(world: World, ps: Particle[], dt: number) {
     const rate = (PHYSICS.airDrag * M) / PHYSICS.airMana
     const mu = (m * M) / (m + M)
     const k = mu * (1 - Math.exp(-rate * (1 + m / M) * dt))
+    let rel2 = 0
     for (let i = 0; i < 3; i++) {
-      const j = k * (p.vel[i] - v[c * 3 + i])
+      const rel = p.vel[i] - v[c * 3 + i]
+      rel2 += rel * rel
+      const j = k * rel
       p.vel[i] -= j / m
       v[c * 3 + i] += j / M
     }
+    // Two bodies whose speeds even out by a share s of their difference lose ½μ|Δv|²·(1 − (1 − s)²).
+    const s = k / mu
+    heat += 0.5 * mu * rel2 * (1 - (1 - s) * (1 - s))
   }
+  world.warm('the air dragging', heat)
 }
 
 /**
@@ -438,11 +624,14 @@ function drag(world: World, ps: Particle[], dt: number) {
  * (matter blocks matter). It strikes the bodies it runs into, sharing its speed with them.
  */
 function move(world: World, ps: Particle[], dt: number, hooks: FluidHooks, blocked: Blocked) {
+  let struck = 0
+  let bodies = 0
   for (const p of ps) {
     const m = p.mass
     for (let k = 0; k < 3; k++) {
       if (k === 2 && world.d === 1) {
         world.impulse.walls[2] -= m * p.vel[2]
+        struck += 0.5 * m * p.vel[2] * p.vel[2]
         p.vel[2] = 0
         continue
       }
@@ -453,6 +642,7 @@ function move(world: World, ps: Particle[], dt: number, hooks: FluidHooks, block
       const to = world.cellOf(next)
       if (blocked(p, from, to, k === 1 && p.vel[1] < 0)) {
         world.impulse.walls[k] -= m * p.vel[k]
+        struck += 0.5 * m * p.vel[k] * p.vel[k]
         p.vel[k] = 0
       } else p.pos = next
     }
@@ -461,63 +651,51 @@ function move(world: World, ps: Particle[], dt: number, hooks: FluidHooks, block
       // A body only slides along the ground: it takes the mana's push across, and the ground takes the rest.
       const mu = (m * body.mass) / (m + body.mass)
       for (const k of [0, 2]) {
-        const j = mu * (p.vel[k] - body.vel[k])
+        const rel = p.vel[k] - body.vel[k]
+        const j = mu * rel
         p.vel[k] -= j / m
         body.vel[k] += j / body.mass
+        bodies += 0.5 * mu * rel * rel
       }
     }
   }
+  world.warm('striking', struck)
+  world.warm('striking bodies', bodies)
 }
 
 /**
- * The air carries its speed to its neighbours, and the ground, walls and the world's edge hold still the air against
- * them. It doesn't carry itself along yet, and isn't kept from piling up: a wake spreads where it was made.
+ * Energy the fluid stores in where its particles are, for the Energy ledger: in its gas pressed together (each particle
+ * m·k·ln(ρ/ρ̄), which is what its pressure pushes out of: nothing at the density of the air, `air`, so mana that settles
+ * into the air takes none with it), in matter packed past full, and in particles that cohere pulled apart. Only between
+ * particles that move: what's in a hand presses on nothing.
  */
-export function airFlow(world: World) {
-  const v = world.airVel
-  const k = PHYSICS.airViscosity
-  const still = (a: number, M: number) => {
-    for (let i = 0; i < 3; i++) {
-      const j = k * M * v[a * 3 + i]
-      v[a * 3 + i] -= j / M
-      world.impulse.walls[i] -= j
-    }
+export function storedInFluid(world: World, hooks: FluidHooks = {}, air = 1): { gas: number; packing: number; cohesion: number } {
+  const ps = hooks.still ? world.particles.filter((p) => !hooks.still!(p)) : world.particles
+  const out = { gas: 0, packing: 0, cohesion: 0 }
+  if (!ps.length) return out
+  for (const p of ps) p.mass = massOf(p)
+  const pairs = findPairs(world, ps)
+  feel(world, ps, pairs)
+  const K = kernels(world.d === 1 ? 2 : 3)
+  const depth = world.d === 1 ? world.cell : 1
+  for (const p of ps) {
+    const fm = freeMass(p)
+    if (fm > 0 && p.rho > 0) out.gas += fm * blend(p, PHYSICS.stiffness) * Math.log(p.rho / air)
+    const mm = matterMass(p)
+    const full = fullDensity(p)
+    if (mm > 0 && p.rhoM > full) out.packing += mm * PHYSICS.matterStiffness * (Math.log(p.rhoM / full) + full / p.rhoM - 1)
   }
-  for (let a = 0; a < world.size; a++) {
-    const Ma = total(world.air[a])
-    if (Ma <= 0) continue
-    const moving = v[a * 3] || v[a * 3 + 1] || v[a * 3 + 2]
-    const [x, y, z] = world.coords(a)
-    const around = [
-      [x + 1, y, z],
-      [x, y + 1, z],
-      [x, y, z + 1],
-    ]
-    for (const [i, j, l] of around) {
-      if (l === z + 1 && world.d === 1) continue
-      const b = world.index(i, j, l)
-      const Mb = b < 0 ? 0 : total(world.air[b])
-      if (b < 0 || Mb <= 0 || world.solidAt(b)) {
-        if (moving) still(a, Ma)
-        continue
-      }
-      if (!moving && !(v[b * 3] || v[b * 3 + 1] || v[b * 3 + 2])) continue
-      const mu = (Ma * Mb) / (Ma + Mb)
-      for (let c = 0; c < 3; c++) {
-        const jx = k * mu * (v[a * 3 + c] - v[b * 3 + c])
-        v[a * 3 + c] -= jx / Ma
-        v[b * 3 + c] += jx / Mb
-      }
-    }
-    // The edges below, behind and to the side, which the loop above doesn't reach from this cell.
-    for (const [i, j, l] of [
-      [x - 1, y, z],
-      [x, y - 1, z],
-      [x, y, z - 1],
-    ]) {
-      if (l === z - 1 && world.d === 1) continue
-      const b = world.index(i, j, l)
-      if (moving && (b < 0 || total(world.air[b]) <= 0 || world.solidAt(b))) still(a, Ma)
-    }
+  const h = PHYSICS.smoothing
+  for (let e = 0; e < pairs.n; e++) {
+    const a = ps[pairs.a[e]]
+    const b = ps[pairs.b[e]]
+    const ca = blendAll(a, PHYSICS.cohesion, PHYSICS.matterCohesion)
+    const cb = blendAll(b, PHYSICS.cohesion, PHYSICS.matterCohesion)
+    if (!(ca > 0 && cb > 0)) continue
+    const t = Math.min(64, (pairs.r[e] / h) * 64)
+    const lo = Math.floor(t)
+    const work = lo >= 64 ? 0 : K.cohesionWork[lo] + (K.cohesionWork[lo + 1] - K.cohesionWork[lo]) * (t - lo)
+    out.cohesion -= (((ca + cb) / 2) * a.mass * b.mass * work) / depth
   }
+  return out
 }

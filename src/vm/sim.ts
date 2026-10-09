@@ -8,7 +8,9 @@ import { add, take, total, zero, type Parts } from './parts.ts'
 import { Caster, type CasterStats, type ManaRegister } from './caster.ts'
 import { Weave } from './weave.ts'
 import { EARTH, World, massOf, type Particle, type Vec } from './world.ts'
-import { airFlow, stepFluid } from './fluid.ts'
+import { mergeAndSplit, stepFluid, type Change, type FluidHooks } from './fluid.ts'
+import { stepAir } from './air.ts'
+import { heatOf, stored, sum, type Ledger } from './energy.ts'
 
 export class Fault extends Error {
   constructor(
@@ -33,6 +35,7 @@ export type SimEvent = {
     | 'fray'
     | 'thin-air'
     | 'overcharge'
+    | 'taken'
   caster?: string
   weave?: number
   detail?: string
@@ -79,8 +82,10 @@ export type OrderStep = { addr: number; n: Float64Array }
 export type OrderTrace = {
   tick: number
   weave: number
-  /** Which of its weave's particles, as PPOS counts them. */
+  /** Which of its weave's particles, as PPOS counted them as the tick began. */
   particle: number
+  /** The particle's id: particles merge and split, so the count can change before the next tick. */
+  id: number
   /** Where it was from its weave's centre, in the weave's frame, as the tick began. */
   off: Vec
   /** The weave's registers as the tick began: what GETW reads. */
@@ -167,6 +172,11 @@ export class Sim {
   private gone = new Map<number, Weave>()
   /** M spent so far: poured onto particles by casters (`push`) and by orders on themselves (`kick`), and burned thinking. */
   spent = { push: 0, kick: 0, burn: 0 }
+  /** M of free mana that has strayed out of its weave's field, and left it. */
+  strayed = 0
+  /** Whether the Energy ledger is kept (keepEnergy). */
+  trackEnergy = false
+  energy: Ledger = { start: 0, outside: 0, error: {} }
 
   constructor(readonly world: World) {
     this.carried = new Float64Array(world.size)
@@ -271,35 +281,83 @@ export class Sim {
   /** The rest of a tick: minds still thinking finish, then bodies, weaves and the world. */
   private endTick() {
     const w = this.world
-    // 1. Minds think.
-    for (const cast of this.casts) if (cast.state === 'running') this.think(cast)
-    this.midTick = false
-    // 2–4. Bodies: holds run down, flows drain, overcharge.
-    for (const c of this.casters) this.breathe(c)
-    // 5. Weaves take hold of what matter their mana can bind, and let go of what it can't.
-    for (const weave of this.weaves.values()) this.hold(weave)
-    // 6. Particles of weaves set loose run their orders.
-    if (this.traceOrders) this.traces = new Map()
-    this.measureCarried()
-    for (const weave of [...this.weaves.values()]) if (!weave.inHand) this.runOrders(weave)
+    const hooks = this.hooks
+    // The Energy ledger, if it's being kept: each step either puts energy in from outside (minds and orders), turns it
+    // into heat (counted where it happens, or measured for the steps that only lose it), or gets it wrong, which is
+    // counted too.
+    let e = this.trackEnergy ? this.measure() : 0
+    const step = (kind: 'outside' | 'exact' | 'loses', name: string, run: () => void) => {
+      if (!this.trackEnergy) return run()
+      const heat = heatOf(w)
+      run()
+      const now = this.measure()
+      const appeared = now - e + (heatOf(w) - heat)
+      if (kind === 'outside') this.energy.outside += appeared
+      else if (kind === 'loses' && appeared < 0) w.warm(name, -appeared)
+      else this.energy.error[name] = (this.energy.error[name] ?? 0) + appeared
+      e = now
+    }
+    step('outside', 'casters and orders', () => {
+      // 1. Minds think.
+      for (const cast of this.casts) if (cast.state === 'running') this.think(cast)
+      this.midTick = false
+      // 2–4. Bodies: holds run down, flows drain, overcharge.
+      for (const c of this.casters) this.breathe(c)
+      // 5. Weaves take hold of what matter their mana can bind, and let go of what it can't.
+      for (const weave of this.weaves.values()) this.hold(weave)
+      // 6. Particles of weaves set loose run their orders.
+      if (this.traceOrders) this.traces = new Map()
+      this.measureCarried()
+      for (const weave of [...this.weaves.values()]) if (!weave.inHand) this.runOrders(weave)
+    })
     // 7. The world moves: the mana, the air, bodies, matter.
     this.measureCarried()
-    stepFluid(w, {
-      passes: (p) => (p.weave ? this.weaves.get(p.weave)?.maker.body : undefined),
-      still: (p) => !!p.weave && !!this.weaves.get(p.weave)?.inHand,
-      othersCarried: (p, cell) => this.carried[cell] - (this.carriedBy.get(p.weave)?.get(cell) ?? 0),
+    step('exact', 'the fluid', () => stepFluid(w, hooks))
+    step('loses', 'the air flowing', () => stepAir(w))
+    // Particles at rest together merge, and big ones spread thin split.
+    step('exact', 'merging', () => this.regroup(mergeAndSplit(w, hooks)))
+    step('loses', 'settling', () => {
+      for (const weave of [...this.weaves.values()]) this.keep(weave)
+      this.settleLoose()
+      this.unbind()
+      w.moveBodies()
+      this.measureCarried()
+      w.settleMatter(this.carried)
     })
-    airFlow(w)
-    for (const weave of [...this.weaves.values()]) this.keep(weave)
-    this.settleLoose()
-    this.unbind()
-    w.moveBodies()
-    this.measureCarried()
-    w.settleMatter(this.carried)
-    w.diffuseAir()
     for (const p of w.particles) p.dvLeft = PHYSICS.pushRate
     w.tick++
   }
+
+  /** What the fluid needs from the machine: whose body a particle passes through, what's in a hand, whose matter is whose. */
+  private hooks: FluidHooks = {
+    passes: (p) => (p.weave ? this.weaves.get(p.weave)?.maker.body : undefined),
+    still: (p) => !!p.weave && !!this.weaves.get(p.weave)?.inHand,
+    othersCarried: (p, cell) => this.carried[cell] - (this.carriedBy.get(p.weave)?.get(cell) ?? 0),
+  }
+
+  /** All the Energy the world holds. */
+  private measure(): number {
+    return sum(stored(this.world, this.hooks))
+  }
+
+  /**
+   * Starts keeping the Energy ledger: from now on every tick counts where energy comes from and goes (it costs time). The
+   * world's heat counts from zero.
+   */
+  keepEnergy() {
+    this.trackEnergy = true
+    this.world.heat = {}
+    this.energy = { start: this.measure(), outside: 0, error: {} }
+  }
+
+  /** The ledger now: what the world holds, as heat and otherwise, and how far it is off. */
+  energyNow() {
+    const held = stored(this.world, this.hooks)
+    const heat = heatOf(this.world)
+    const error = Object.values(this.energy.error).reduce((a, b) => a + b, 0)
+    return { held, total: sum(held), heat, ...this.energy, errorTotal: error }
+  }
+
 
   /** Every M of mana in the world, wherever it is. Conservation says `total` never changes. */
   ledger() {
@@ -860,11 +918,11 @@ export class Sim {
       if (!p.order) continue
       const f = frame(PHYSICS.orderRegisters, 16, p.order.addr)
       const off = weave.toFrame(p.pos.map((v, i) => v - weave.origin[i]) as Vec)
-      // What it's told: where it is from its weave's centre (unless orders only feel, PHYSICS.orderKnowsCentre), its mana, its age.
-      const told = PHYSICS.orderKnowsCentre ? off : [0, 0, 0]
-      f.n.set([told[0], told[1], told[2], total(p.free), age])
+      // What it's told: its mana and its age. Not where it is: it only feels (D31). The rest it reads from its weave's
+      // registers, and what it senses.
+      f.n.set([0, 0, 0, total(p.free), age])
       const trace: OrderTrace | undefined = this.traceOrders
-        ? { tick: this.tick, weave: weave.id, particle: k, off, w: w0, steps: [], n: f.n, outcome: 'done', beats: 0, burned: 0, kick: [0, 0, 0], cnds: 0 }
+        ? { tick: this.tick, weave: weave.id, particle: k, id: p.id, off, w: w0, steps: [], n: f.n, outcome: 'done', beats: 0, burned: 0, kick: [0, 0, 0], cnds: 0 }
         : undefined
       let beats = 0
       try {
@@ -968,7 +1026,7 @@ export class Sim {
           continue
         }
         case 'DENS':
-          set(f, a[0], p.rho)
+          set(f, a[0], p.felt)
           next()
           continue
         case 'GRAD':
@@ -984,9 +1042,6 @@ export class Sim {
           let values: number[]
           if (port === 'CELL') values = [w.cell]
           else if (port === 'DEPTH') values = [w.d]
-          else if ((port === 'ORIGIN' || port === 'MAKER') && !PHYSICS.orderKnowsCentre) throw new Fault('BAD_PORT', `an order only feels: it can't read ${port}`)
-          else if (port === 'ORIGIN') values = [...weave.origin]
-          else if (port === 'MAKER') values = [...weave.maker.body.pos]
           else if (port === 'VEL') values = weave.toFrame(p.vel)
           else throw new Fault('BAD_PORT', `an order can't read ${port}`)
           values.forEach((v, k) => set(f, a[0] + k, v))
@@ -1027,6 +1082,7 @@ export class Sim {
     if (c) {
       for (const p of weave.particles) {
         const d = Math.hypot(p.pos[0] - c.pos[0], p.pos[1] - c.pos[1], p.pos[2] - c.pos[2])
+        if (d > weave.field) this.strayed += total(p.free)
         if (d > weave.field || total(p.free) <= PHYSICS.epsilon) this.loosen(p)
       }
       weave.particles = weave.particles.filter((p) => p.weave === weave.id)
@@ -1112,6 +1168,34 @@ export class Sim {
               const d = Math.hypot(a.pos[0] - b.pos[0], a.pos[1] - b.pos[1], a.pos[2] - b.pos[2])
               if (d < r && d > 1e-6) this.world.bonds.push({ a, b, rest: d })
             }
+    }
+  }
+
+  /**
+   * After merging and splitting, each weave's particles are those that are its own. A weave's particle that took in
+   * someone else's mana took it over: their weave lost it, and it's this weave's now, with this weave's order (the second
+   * flaw, SPEC §11). Each tick's takeovers are logged, one event for each weave that took and whose it took.
+   */
+  private regroup(changes: Change[]) {
+    if (!changes.length) return
+    const taken = new Map<string, { into: number; from: number; mana: number; ordered: boolean }>()
+    for (const c of changes) {
+      if (c.kind !== 'merge' || !c.into.weave || c.weave === c.into.weave) continue
+      const key = `${c.into.weave}:${c.weave}`
+      const t = taken.get(key) ?? { into: c.into.weave, from: c.weave, mana: 0, ordered: false }
+      t.mana += total(c.into.free) // what the merged particle now holds
+      t.ordered ||= !!c.into.order
+      taken.set(key, t)
+    }
+    for (const weave of this.weaves.values()) weave.particles = this.world.particles.filter((p) => p.weave === weave.id)
+    for (const t of taken.values()) {
+      const wv = this.weaves.get(t.into)
+      this.log({
+        kind: 'taken',
+        caster: wv?.maker.name ?? '',
+        weave: t.into,
+        detail: `took in ${t.from ? `weave ${t.from}'s` : 'loose'} mana${t.ordered ? ', and gave it its order' : ''}`,
+      })
     }
   }
 

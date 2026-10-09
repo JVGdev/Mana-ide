@@ -1,5 +1,5 @@
-; Held by its own order: knowing where it is from the centre and how its neighbours move, it comes back in at the speed it should (39). The caster ingrains it and walks away.
-        .use  Bench, Shapes, Orders
+; Held by its own order: past the ball's edge, it feels how fast it's coming back in against its neighbours, and comes back at the speed it should. The caster ingrains it and walks away.
+        .use  Bench, Orders
 
 HoldCohere:
         CALL  pour

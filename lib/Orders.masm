@@ -3,8 +3,9 @@
 ; itself. Which one to use is a trade: a short order is cheap to ingrain and cheap to run, and does less. The bench
 ; (npm run bench) compares them.
 ;
-; They're written for a weave turned to face where it goes (TURN): in its frame +z is forward and y is up. An order is
-; told where its particle is from its weave's centre (n0:2), its mana (n3) and its age in ticks (n4).
+; They're written for a weave turned to face where it goes (TURN): in its frame +z is forward and y is up. An order knows
+; only what its particle feels (its speed, and the mana around it: DENS, GRAD, NVEL), its mana (n3), its age in ticks
+; (n4), and what its caster wrote into its weave's registers (D31). It isn't told where it is.
 
 ; heading: flies along one angle, w1 (up from forward, in radians), speeding up 0.04 m/tick every tick for its first 8
 ; ticks. It knows nothing else: not how fast it's going, not where the rest of its weave is. The sine and cosine are
@@ -33,10 +34,10 @@ angle:  GETW  n8, #6
 .known: GETW  n7, #5
         RET
 
-; steer: flies along w1 at w3 m/tick. It feels its own speed (IN VEL) and kicks itself toward the speed it wants, so it
+; steer: flies along w1 at w7 m/tick. It feels its own speed (IN VEL) and kicks itself toward the speed it wants, so it
 ; also cancels whatever else moves it: the spread of its own pressure, the drag of the air.
 steer:  CALL  angle
-        GETW  n9, #3
+        GETW  n9, #7
         MUL   n7, n9
         MUL   n8, n9              ; the velocity it wants: (0, n7, n8)
         IN    n9:11, VEL
@@ -57,10 +58,27 @@ steer:  CALL  angle
         KICK  n6:8
 .done:  RET
 
-; feel: holds a weave together knowing only what its particle feels, not where the weave's centre is. Where the mana
-; around it is thinner than w3 (M/m³), it's at the edge. If it's drifting away from its neighbours there, it kicks
-; itself back toward the thicker mana, harder the steeper it thins: the kick is ∇ρ/ρ, scaled, with no square root.
-feel:   DENS  n5
+; cling: holds a weave together by feel alone. Where the mana around it is thinner than w3 (M/m³), a particle is at
+; the weave's edge, and kicks itself back toward thicker mana, harder the steeper it thins: ∇ρ/ρ, times 0.01 m²/tick.
+; That's about ten times what its own gas's pressure pushes it out with, there. Short, so it's quick to ingrain, and
+; rough: what it pulls back, it doesn't slow, so the edge sways. A particle with nothing near enough to feel can't find
+; its way back.
+cling:  DENS  n5
+        GETW  n9, #3
+        CMP   n5, n9
+        JGE   .done               ; thick enough: it's inside
+        GRAD  n6:8                ; toward thicker mana
+        LDI   n9, #0.01
+        DIV   n9, n5
+        MUL   n6, n9
+        MUL   n7, n9
+        MUL   n8, n9
+        KICK  n6:8
+.done:  RET
+
+; cohere: cling, done carefully: it kicks only while it's drifting away from its neighbours (VEL − NVEL, along ∇ρ). So
+; it spends nothing on a particle already coming back, and a thrown ball holds together however fast it flies.
+cohere: DENS  n5
         GETW  n9, #3
         CMP   n5, n9
         JGE   .done               ; thick enough: it's inside
@@ -77,39 +95,30 @@ feel:   DENS  n5
         ADD   n11, n13
         CMP   n11, #0
         JGT   .done               ; already coming back in
-        LDI   n12, #0.01
-        DIV   n12, n5
-        MUL   n6, n12
-        MUL   n7, n12
-        MUL   n8, n12
+        LDI   n9, #0.01
+        DIV   n9, n5
+        MUL   n6, n9
+        MUL   n7, n9
+        MUL   n8, n9
         KICK  n6:8
 .done:  RET
 
-; feelBurst: burst (Transformations) for an order that only feels: each particle flies 0.2 m/tick out toward where the
-; mana thins, for 3 ticks from w4, then the weave lets go.
-feelBurst: GETW n5, #4
-        MOV   n6, n4
-        SUB   n6, n5
-        CMP   n6, #3
-        JGE   .gone
-        GRAD  n6:8
-        MOV   n9, n6
-        MUL   n9, n6
-        MOV   n10, n7
-        MUL   n10, n7
-        ADD   n9, n10
-        MOV   n10, n8
-        MUL   n10, n8
-        ADD   n9, n10
-        CMP   n9, #0
-        JEQ   .done               ; in the very middle: nowhere is out
-        SQRT  n9
-        LDI   n10, #-0.2
-        DIV   n10, n9
-        MUL   n6, n10
-        MUL   n7, n10
-        MUL   n8, n10
-        KICK  n6:8
-.done:  RET
-.gone:  DISS
+; edge: how thick the mana is at the edge of a ball it fills, for cling and cohere: 3/4 of it spread evenly through a
+; ball of radius n0 (in 2D, a disc one cell deep), into w3. The caster works it out once; the particles are told it.
+;   in: n0 radius (m), n7 its mana, n4 weave
+edge:   MOV   n9, n0
+        MUL   n9, n0              ; r²
+        IN    n8, DEPTH
+        CMP   n8, #1
+        JNE   .ball
+        IN    n8, CELL
+        MUL   n9, n8
+        MUL   n9, #3.14159        ; π r² · cell
+        JMP   .div
+.ball:  MUL   n9, n0
+        MUL   n9, #4.18879        ; 4/3 π r³
+.div:   MOV   n8, n7
+        MUL   n8, #0.75
+        DIV   n8, n9
+        WSET  n4, #3, n8
         RET
