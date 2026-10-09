@@ -1,5 +1,5 @@
 ; Fireball: fire poured into a ball, held together by its own order, thrown by pushing, and burst on touch.
-        .use  Elements, Basics, Shapes, Reactions, Transformations
+        .use  Elements, Basics, Reactions, Transformations, Orders
 
 Fireball:
         IN    n17, AMOUNT
@@ -14,7 +14,9 @@ Fireball:
         MEAS  n7, m1
         EMIT  m1, n7, n16, n4:6   ; all the fire, poured into one point, held still in the hand
         HOLD  n16, #1.5           ; the field: how far it may spread and still be this weave
-        WSET  n16, #2, #0.5       ; the radius its order holds it to
+        MOV   n4, n16
+        LDI   n0, #0.5
+        CALL  edge                ; how thin its mana is at 0.5 m out: where its order holds it
         ORDR  n16, .order
         MOV   n4, n16
         CALL  ingrain             ; ORDER: into every particle, one by one, while the hand holds it
@@ -38,7 +40,7 @@ Fireball:
         CALL  touch               ; n5 = 1 if it's against something
         CMP   n5, #0
         JNE   .hit
-        CALL  pull                ; back toward the centre if it strays
+        CALL  cling               ; back toward thicker mana if it strays past its edge
         RET
 .hit:   PUTW  #0, n5              ; the whole weave bursts from the next tick
         PUTW  #4, n4              ; counting from now

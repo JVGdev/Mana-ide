@@ -88,32 +88,12 @@ throw:  IN    n15, REACH
         JMP   .pass
 .done:  RET
 
-; anchor (an order): the weave follows its maker, keeping where it was from them when it was set loose (noted the first
-; tick, in w5–w7). Each particle pushes itself toward the speed that would bring the weave there in two ticks, paying
-; with itself, and does nothing when it's near enough to that speed.
-anchor: IN    n5:7, MAKER
-        IN    n8:10, ORIGIN
-        CMP   n4, #0
-        JNE   .follow
-        SUB   n8, n5
-        SUB   n9, n6
-        SUB   n10, n7
-        PUTW  #5, n8
-        PUTW  #6, n9
-        PUTW  #7, n10             ; where it is from its maker
-        RET
-.follow: GETW n11, #5
-        ADD   n5, n11
-        GETW  n11, #6
-        ADD   n6, n11
-        GETW  n11, #7
-        ADD   n7, n11             ; where it should be
-        SUB   n5, n8
-        SUB   n6, n9
-        SUB   n7, n10
-        MUL   n5, #0.5
-        MUL   n6, #0.5
-        MUL   n7, #0.5            ; the speed it wants
+; follow (an order): each particle pushes itself toward the velocity in w5–w7 (in its weave's frame), paying with
+; itself, and does nothing when it's near enough to it. It doesn't know where it is, or where anything else is: its
+; caster has to tell it how to move (keep), and while nobody does, it holds still where it is.
+follow: GETW  n5, #5
+        GETW  n6, #6
+        GETW  n7, #7              ; the speed it's told
         IN    n8:10, VEL
         SUB   n5, n8
         SUB   n6, n9
@@ -130,3 +110,35 @@ anchor: IN    n5:7, MAKER
         JLT   .done
         KICK  n5:7
 .done:  RET
+
+; keep: for as long as its caster maintains it, keeps a loose weave where it was from them when this began. Each tick, it
+; tells its order (follow) the velocity that would bring it there in two ticks, in w5–w7. Then it tells it to stay still.
+;   in: n4 weave (loose, not turned)
+keep:   WPOS  n8:10, n4
+        IN    n11:13, SELF
+        SUB   n8, n11
+        SUB   n9, n12
+        SUB   n10, n13            ; where it is from its caster
+.tick:  IN    n5, MAINTAIN
+        CMP   n5, #0
+        JEQ   .stop
+        IN    n11:13, SELF
+        ADD   n11, n8
+        ADD   n12, n9
+        ADD   n13, n10            ; where it should be
+        WPOS  n14:16, n4
+        SUB   n11, n14
+        SUB   n12, n15
+        SUB   n13, n16
+        MUL   n11, #0.5
+        MUL   n12, #0.5
+        MUL   n13, #0.5           ; half the way there each tick
+        WSET  n4, #5, n11
+        WSET  n4, #6, n12
+        WSET  n4, #7, n13
+        TICK
+        JMP   .tick
+.stop:  WSET  n4, #5, #0
+        WSET  n4, #6, #0
+        WSET  n4, #7, #0
+        RET

@@ -1,7 +1,7 @@
 # Plan: the rest of mana physics
 
-*Status: steps 0, 1 and 3–7 are built (PRs #1–#7). Step 2 waits on your call: the bench's answer is published as the page
-"Mana Order Bench", and SPEC §11 The bench has it too. Decisions B–F were taken as recommended.*
+*Status: all steps are built (PRs #1–#8). Decisions B–F were taken as recommended; for A you chose b, orders only feel
+(SPEC D31).*
 
 What's left after phase 3 of SPEC §10, in the order it should be built. Each step lands on its own: tests pass, both ledgers
 balance every tick, the tester shows the new thing, and SPEC says what was built and what it found.
@@ -70,7 +70,7 @@ sandbox, so there is one physics and not two.
 
 ## 2. What an order knows *(small to medium, depends on A)*
 
-Whatever you decide, written into SPEC as D28. Open question 6 closes. The likely options:
+*Chosen: b (SPEC D31).* The options were:
 
 - **a. As now.** The order is told where it is from the centre for free.
 - **b. Feel only.** The centre offset is no longer given. `IN ORIGIN` costs as much as sensing does. The libraries' orders

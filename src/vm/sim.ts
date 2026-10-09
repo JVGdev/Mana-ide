@@ -918,9 +918,9 @@ export class Sim {
       if (!p.order) continue
       const f = frame(PHYSICS.orderRegisters, 16, p.order.addr)
       const off = weave.toFrame(p.pos.map((v, i) => v - weave.origin[i]) as Vec)
-      // What it's told: where it is from its weave's centre (unless orders only feel, PHYSICS.orderKnowsCentre), its mana, its age.
-      const told = PHYSICS.orderKnowsCentre ? off : [0, 0, 0]
-      f.n.set([told[0], told[1], told[2], total(p.free), age])
+      // What it's told: its mana and its age. Not where it is: it only feels (D31). The rest it reads from its weave's
+      // registers, and what it senses.
+      f.n.set([0, 0, 0, total(p.free), age])
       const trace: OrderTrace | undefined = this.traceOrders
         ? { tick: this.tick, weave: weave.id, particle: k, id: p.id, off, w: w0, steps: [], n: f.n, outcome: 'done', beats: 0, burned: 0, kick: [0, 0, 0], cnds: 0 }
         : undefined
@@ -1042,9 +1042,6 @@ export class Sim {
           let values: number[]
           if (port === 'CELL') values = [w.cell]
           else if (port === 'DEPTH') values = [w.d]
-          else if ((port === 'ORIGIN' || port === 'MAKER') && !PHYSICS.orderKnowsCentre) throw new Fault('BAD_PORT', `an order only feels: it can't read ${port}`)
-          else if (port === 'ORIGIN') values = [...weave.origin]
-          else if (port === 'MAKER') values = [...weave.maker.body.pos]
           else if (port === 'VEL') values = weave.toFrame(p.vel)
           else throw new Fault('BAD_PORT', `an order can't read ${port}`)
           values.forEach((v, k) => set(f, a[0] + k, v))

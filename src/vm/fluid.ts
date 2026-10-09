@@ -26,7 +26,11 @@ export type FluidHooks = {
 }
 
 type Kernels = {
-  poly6: number
+  /**
+   * What a particle feels is weighed with the flat (Epanechnikov) kernel, W = flat·(h² − r²), and its slope, grad·r:
+   * a neighbour most of a smoothing length away still counts a fair share of what the particle itself does.
+   */
+  flat: number
   grad: number
   /** The spiky kernel, W = spikyW·(h − r)³, and its slope, spiky·(h − r)². Density is summed with it. */
   spikyW: number
@@ -46,8 +50,8 @@ function kernels(dims: 2 | 3): Kernels {
   if (K) return K
   const base =
     dims === 2
-      ? { poly6: 4 / (Math.PI * h ** 8), grad: -24 / (Math.PI * h ** 8), spikyW: 10 / (Math.PI * h ** 5), spiky: -30 / (Math.PI * h ** 5), lap: 40 / (Math.PI * h ** 5) }
-      : { poly6: 315 / (64 * Math.PI * h ** 9), grad: -945 / (32 * Math.PI * h ** 9), spikyW: 15 / (Math.PI * h ** 6), spiky: -45 / (Math.PI * h ** 6), lap: 45 / (Math.PI * h ** 6) }
+      ? { flat: 2 / (Math.PI * h ** 4), grad: -4 / (Math.PI * h ** 4), spikyW: 10 / (Math.PI * h ** 5), spiky: -30 / (Math.PI * h ** 5), lap: 40 / (Math.PI * h ** 5) }
+      : { flat: 15 / (8 * Math.PI * h ** 5), grad: -15 / (4 * Math.PI * h ** 5), spikyW: 15 / (Math.PI * h ** 6), spiky: -45 / (Math.PI * h ** 6), lap: 45 / (Math.PI * h ** 6) }
   // Akinci's cohesion kernel (2013), scaled so it sums to one over its reach, in 2D or 3D.
   const steps = 1000
   let sum = 0
@@ -195,9 +199,10 @@ export function feel(world: World, ps: Particle[] = world.particles, pairs = fin
   // Density is summed with the spiky kernel, whose slope is what pressure pushes along: so the pressure forces are
   // exactly the pull of the gas's stored energy (Σ m k ln ρ), and the Energy ledger can count it.
   const self = K.spikyW * h ** 3
-  // What a particle feels (DENS, GRAD, NVEL) is summed with the smoother poly6 kernel, which weighs its neighbours more
-  // than itself: so a big particle, merged from several, still feels whether the mana around it is thin.
-  const selfFelt = K.poly6 * h ** 6
+  // What a particle feels (DENS, GRAD, NVEL) is summed with the flat kernel, which weighs its neighbours nearly as much as
+  // itself. With a peaked one (poly6), a particle a smoothing length from the next would feel mostly itself, and couldn't
+  // tell the inside of a ball from its edge.
+  const selfFelt = K.flat * h * h
   for (let i = 0; i < n; i++) {
     const p = ps[i]
     fm[i] = freeMass(p)
@@ -224,10 +229,10 @@ export function feel(world: World, ps: Particle[] = world.particles, pairs = fin
     a.rhoM += mm[j] * w
     b.rhoM += mm[i] * w
     const q = h * h - r * r
-    const wf = K.poly6 * q * q * q
+    const wf = K.flat * q
     a.felt += mb * wf
     b.felt += ma * wf
-    const g = K.grad * q * q
+    const g = K.grad
     for (let k = 0; k < 3; k++) {
       const dk = D[e * 3 + k]
       a.grad[k] += mb * g * dk
@@ -453,7 +458,7 @@ export function mergeAndSplit(world: World, hooks: FluidHooks = {}): Change[] {
     if (gone.has(p) || done.has(p)) continue
     const m = total(p.free)
     if (m < 2 * PHYSICS.mote - PHYSICS.epsilon || p.felt <= 0) continue
-    const own = (m * K.poly6 * PHYSICS.smoothing ** 6) / depth
+    const own = (m * K.flat * PHYSICS.smoothing ** 2) / depth
     if (own / p.felt <= PHYSICS.splitAlone && m <= 2 * PHYSICS.maxMote) continue
     const q = world.spawn(p)
     for (let k = 0; k < 4; k++) {
