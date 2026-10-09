@@ -28,15 +28,14 @@ air is a gas made of matter, and heat lives in matter, mana and air alike. 5 can
 | D | How does influence reach past the aura? | The aura's touch is easy. Further, a mage has to work: unaided, he works out the space's geometry in his mind and pinpoints x, y, z. Probing the space with raw free mana, which sends knowledge back, is one way to do it better. | The aura is the body's outline. Past it, every act costs the mind the work of finding where it is, and sensing what's there needs something to carry the knowledge back (step 5). |
 | E | A pull request? | Commit, no PR; work on `main` from now on. | Done: `main` has the organic physics. |
 
-**Still open, to answer when its step comes:**
+**And the follow-ups:**
 
-- **C, other parts.** Does each part have an Energy it turns into most easily (air into motion? earth into pressure?), or is
-  fire into heat the only one? Until you say, fire turns into heat more easily, and everything else is the same.
-- **C, light.** Can a mind transform mana into light directly (a glow, a flash), or does light only come off hot things?
-- **D, the knowledge's way back.** Does a probe's knowledge come back to its caster instantly (it's their mana, and the soul
-  carries it), or does it travel, at the speed the mana moves?
-- **D, pinpointing.** Does working out a far point only cost thought, or can it also be wrong: the further away, the more
-  it's off, unless something tells the mind where things really are?
+| # | Question | Your answer | What it means for the physics |
+|---|---|---|---|
+| C1 | Does each part turn into some Energy most easily? | Air turns more easily into motion (wind blades, anything that just pushes forward) and into sound. Fire into heat. Water and earth: nothing known. | A table, by part and by kind of Energy (motion, heat, sound, light), of how easily a mind turns it: less strain a joule. Air: motion and sound. Fire: heat. Water and earth: like the rest, until you find out. Air mana also drags less on the air around it (your "less friction"), which is a number too, by part (step 3). |
+| C2 | Can a mind make light directly? | It could, but then it has to follow light's own rules. | Light is built as real light (step 4), and a mind can turn mana into it like any other Energy. |
+| D1 | How does a probe's knowledge get back? | At the mana's speed: the probe has to come back. An order that speeds it up, paying mana, brings it back sooner. | Knowledge rides in mana. A probe's particles keep what they felt in their registers, and the caster reads it when they touch the aura again (step 5). |
+| D2 | Can a far point be worked out wrong? | Yes. Fine-tuning and cross-checking a position is a good mage's work. | Past the aura, what the caster senses is off, more the further it is. Looking again, or checking against something known, narrows it (step 5). |
 
 ---
 
@@ -104,7 +103,10 @@ rules (`settleMatter`, "earth holds together") and the rigid "carried" matter go
   pressure, `−V∇p`. Buoyancy and the push of a wind's pressure come out of it exactly. This replaces the Archimedes-at-rest
   shortcut (D38).
 - **Bodies and matter feel the air:** drag, buoyancy, wind. A Gust's mana drives a real gust of air.
-- **Real speed of sound** (340 m/s), since speed is no constraint: `airSound` goes.
+- **Real speed of sound** (340 m/s), since speed is no constraint: `airSound` goes. Sound is the air's pressure and motion
+  rippling, and is Energy like any other: the ledger counts it. A mind can make it (step 4).
+- **Each part drags on the air by its own amount** (`airDrag`, by part): air mana slips through the air most easily, so a
+  blade of it keeps its speed longest (C1). Your guess, so a number to tune.
 - **Tests:**
   - a balloon of light gas rises, and rock doesn't care;
   - a gust of mana makes a wind that blows past where its mana stopped;
@@ -125,12 +127,20 @@ rules (`settleMatter`, "earth holds together") and the rigid "carried" matter go
   - water freezes, melts and boils, with latent heat;
   - rock melts into lava;
   - burning (fuel in matter giving off heat) needs its own lore, and waits for it.
-- **Turning mana into heat** (C): a mind transforms mana into heat as it does into motion (D32). Heat goes straight into
-  what the mana touches, with no push. It's a new act for the body and for orders: what a mind can do, not something a
-  spell was given. Each part turns into each kind of Energy with its own ease: fire into heat most easily, for less strain
-  a joule. That's a table in `physics.ts`, by part and kind.
-- **Light:** hot things glow, and the light they give off carries their heat away (radiation). Light that falls on
-  something warms it.
+- **Turning mana into heat, sound and light** (C, C1, C2): a mind transforms mana into any Energy, not only motion (D32).
+  Heat goes straight into what the mana touches; sound is the air pushed back and forth; light leaves where the mana is.
+  They're new acts for the body and for orders: what a mind can do, not something a spell was given. Each part turns into
+  each kind with its own ease, less strain a joule: air into motion and sound, fire into heat, the rest alike. That's a
+  table in `physics.ts`, by part and kind, and air's ease into motion counts for pushes and kicks too.
+- **Light, as real light:**
+  - it goes in straight lines, at the speed of light, which is instant at the world's scale;
+  - it spreads out as it goes, thinning with the square of the distance;
+  - matter takes it in, lets it through, or throws it back, by what it's made of: earth takes it in, water and air mostly
+    let it through, and water's surface throws some back;
+  - what takes it in is warmed by it, and Energy is kept exactly: what leaves one place arrives at another, or is still on
+    its way;
+  - hot things give it off by their temperature (σT⁴), redder when cooler and whiter when hotter, and cool as they do;
+  - it pushes, but so little that nothing in the world will feel it.
 - **Felt and harmful:**
   - an order can feel how hot its particle is (a new sense: what a body feels by touch);
   - a caster feels heat on their body;
@@ -148,20 +158,24 @@ rules (`settleMatter`, "earth holds together") and the rigid "carried" matter go
 
 - **The aura is the body's outline.** What touches it, the caster senses and acts on at once, at no extra cost: a fireball
   poured into the hand is easy to hold and aim.
-- **Past the aura, the mind has to find the place.** Every act and sense on something further away (push, pour, ingrain,
-  probe, write into a weave, feel a particle) costs the beats of working out the space's geometry: more the further it is,
-  and more the less the mind knows about what's around it. The 4 m `reach` stat goes. What limits a mage is what their
-  mind can afford.
-- **Knowing helps.** What the mind has already found (a weave it laid out, a point it worked out last tick) is cheaper to
-  find again.
-- **Probing:** raw free mana (unfiltered) let out from the body stays in touch with its caster. Whatever it touches, its
-  caster learns, and finding a place where their probe is costs little. Your answer says not to take it as exact. It's
-  built so that a better way to reach can be found by playing with the physics, not given by a rule.
+- **Past the aura, the mind has to find the place.** It acts exactly where it means to: the soul carries it there and
+  back. But it knows only roughly where things are. Every sense past the aura (a particle's place and speed, a weave's
+  middle, what's at a point) comes back off by an amount that grows with the distance (D2). Each look costs beats, and
+  looking again, or checking against something already known, narrows it. That's working out the space's geometry: a
+  careless mage pushes the wrong particle, or pours into the wrong place, and a good one cross-checks. The error is
+  worked out from the tick and the place, so the same cast always goes the same way. The 4 m `reach` stat goes, and what
+  limits a mage is what their mind can afford.
+- **Probing** (D1): raw free mana (unfiltered) let out with an order keeps what it feels in its registers. It doesn't know
+  where it is (D31), but it can count its own way by its speed: so many ticks at so much, this way. What it learned
+  reaches its caster only when it comes back and touches their aura, and the caster reads it there (`WGET`). It comes
+  back at its own speed, and faster if its order pays to speed it up. It's a way to know, built from the physics, not a
+  rule: other ways can be found by playing with it.
 - **Fixes D33 and D34**, which put the aura out to 4 m. A push still goes off the body: the soul carries it there and back.
 - **Tests:**
   - pouring at the hand costs nothing extra;
-  - pushing a particle 3 m away costs more beats than 1 m, and the same push near the caster's probe costs less;
-  - a weave poured into a probed place is laid out faster than one poured blind.
+  - a particle 3 m away is sensed further off than one 1 m away, and looking at it four times narrows it about by half;
+  - a probe sent out and brought back tells its caster what it touched, and it can't before it's back;
+  - the same cast, run twice, goes the same way.
 
 ## 6. Bodies pay for gathering and pouring *(small; after 1)*
 
