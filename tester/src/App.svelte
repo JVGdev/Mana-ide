@@ -11,11 +11,11 @@
   import Reference from './lib/panels/Reference.svelte'
   import Bytes from './lib/panels/Bytes.svelte'
   import Order from './lib/panels/Order.svelte'
+  import Energy from './lib/panels/Energy.svelte'
   import { files, baseName } from './lib/files.svelte.ts'
   import { session, SCENE_NAMES, PANELS, type SceneName } from './lib/session.svelte.ts'
   import { num, PART_COLORS, PART_NAMES } from './lib/format.ts'
   import { SCENES } from '../../src/scenes.ts'
-  import { PHYSICS } from '../../src/vm/physics.ts'
 
   let ready = $state(false)
   let note = $state('')
@@ -85,10 +85,8 @@
     session.spell = path
     session.open = path
     const name = baseName(path).replace(/\.masm$/, '')
-    // The bench's spells: a ball held in front of the caster, or thrown at the Fireball's pillar. Its orders that only
-    // feel are run where orders aren't told where their centre is.
+    // The bench's spells: a ball held in front of the caster, or thrown at the Fireball's pillar.
     const bench = path.startsWith('bench/')
-    PHYSICS.orderKnowsCentre = !(bench && name.endsWith('Feel'))
     const scene = bench ? (name.startsWith('Hold') ? 'Hold' : 'Fireball') : name
     if (scene in SCENES) session.loadScene(scene as SceneName)
     else session.reset()
@@ -299,6 +297,7 @@ ${name}:
           {:else if session.panel === 'body'}<Body />
           {:else if session.panel === 'weaves'}<Weaves />
           {:else if session.panel === 'order'}<Order />
+          {:else if session.panel === 'energy'}<Energy />
           {:else if session.panel === 'profile'}<Profile onjump={(f, l) => session.jump(f, l)} />
           {:else if session.panel === 'events'}<Events />
           {:else if session.panel === 'caster'}<Caster />

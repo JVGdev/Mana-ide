@@ -1,17 +1,31 @@
 ; Transformations: what a weave can become.
 
-; burst (an order): each particle spends some of itself flying out from the centre, faster the further out it was. After
-; 3 ticks the weave lets go. It reads when it began from w4.
+; burst (an order): each particle spends some of itself flying 0.2 m/tick out, toward where the mana around it thins
+; (against GRAD), for 3 ticks from w4; then the weave lets go. One in the very middle feels no way out, and stays.
 burst:  GETW  n5, #4
         MOV   n6, n4
         SUB   n6, n5              ; ticks since it began
         CMP   n6, #3
         JGE   .gone
-        MUL   n0, #0.4
-        MUL   n1, #0.4
-        MUL   n2, #0.4
-        KICK  n0:2                ; out along where it is: the flare
-        RET
+        GRAD  n6:8
+        MOV   n9, n6
+        MUL   n9, n6
+        MOV   n10, n7
+        MUL   n10, n7
+        ADD   n9, n10
+        MOV   n10, n8
+        MUL   n10, n8
+        ADD   n9, n10
+        CMP   n9, #0
+        JEQ   .done               ; in the very middle: nowhere is out
+        SQRT  n9
+        LDI   n10, #-0.2
+        DIV   n10, n9
+        MUL   n6, n10
+        MUL   n7, n10
+        MUL   n8, n10
+        KICK  n6:8                ; out, away from the thicker mana: the flare
+.done:  RET
 .gone:  DISS                      ; its mana goes loose
         RET
 

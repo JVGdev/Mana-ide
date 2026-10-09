@@ -1,6 +1,6 @@
 ; Thrown by its own order: it's told one angle, and speeds itself up along it for 8 ticks. Nothing holds it together.
 ; The caster only pours it, ingrains it and lets go.
-        .use  Bench, Shapes, Reactions, Transformations, Orders
+        .use  Bench, Reactions, Transformations, Orders
 
 ThrowHeading:
         CALL  pour

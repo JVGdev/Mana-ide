@@ -3,7 +3,9 @@
 import { describe, expect, it } from 'vitest'
 import { assemble } from '../src/asm/assembler.ts'
 import { resolver } from '../src/load.ts'
+import { stepAir } from '../src/vm/air.ts'
 import { mergeAndSplit, stepFluid } from '../src/vm/fluid.ts'
+import { total } from '../src/vm/parts.ts'
 import { PHYSICS } from '../src/vm/physics.ts'
 import { Sim } from '../src/vm/sim.ts'
 import { EARTH, WATER, World, massOf, type Particle, type Vec } from '../src/vm/world.ts'
@@ -350,5 +352,83 @@ still:  RET`,
     expect(taken.length).toBeGreaterThan(0)
     expect(taken[0].detail).toMatch(/weave \d+'s mana, and gave it its order/)
     expect(b.mana()).toBeLessThan(before)
+  })
+})
+
+describe('the air', () => {
+  const airMana = (w: World, x0: number, x1: number, y0: number, y1: number) => {
+    let m = 0
+    for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) m += total(w.air[w.index(x, y, 0)])
+    return m
+  }
+  const airRun = (w: World, ticks: number, each?: () => void) => {
+    let mana = 0
+    for (const a of w.air) mana += total(a)
+    for (let t = 0; t < ticks; t++) {
+      stepAir(w)
+      let now = 0
+      for (const a of w.air) now += total(a)
+      expect(now).toBeCloseTo(mana, 6)
+      expect(w.momentumError()).toBeLessThan(1e-6)
+      each?.()
+    }
+  }
+  /** Air in cells x0–x1, y0–y1 set moving at `u` m/tick along x, its momentum given from outside. */
+  const blow = (w: World, x0: number, x1: number, y0: number, y1: number, u: number) => {
+    for (let y = y0; y < y1; y++)
+      for (let x = x0; x < x1; x++) {
+        const i = w.index(x, y, 0)
+        w.airVel[i * 3] = u
+        w.impulse.push[0] += total(w.air[i]) * u
+      }
+  }
+
+  it('carries itself along: a puff of wind travels on, and takes its mana with it', () => {
+    const w = World.withGround(48, 24, 1, 8)
+    blow(w, 4, 8, 12, 16, 0.3)
+    const centre = () => {
+      let m = 0
+      let x = 0
+      for (let i = 0; i < w.size; i++) {
+        const p = total(w.air[i]) * w.airVel[i * 3]
+        m += p
+        x += p * w.coords(i)[0]
+      }
+      return x / m
+    }
+    const start = centre()
+    airRun(w, 15)
+    expect(centre()).toBeGreaterThan(start + 3) // the moving air is cells further on
+  })
+
+  it('flows around what stands in its way', () => {
+    const w = World.withGround(48, 24, 1, 8)
+    w.fillBox([24, 8, 0], [26, 13, 0], EARTH) // a pillar 1.5 m high
+    blow(w, 8, 20, 8, 20, 0.2)
+    let up = 0
+    airRun(w, 20, () => {
+      for (let y = 8; y < 14; y++) up = Math.max(up, w.airVel[w.index(23, y, 0) * 3 + 1])
+    })
+    expect(up).toBeGreaterThan(0.02) // in front of the pillar, the wind turns up and over it
+    for (let y = 8; y < 14; y++) expect(total(w.air[w.index(25, y, 0)])).toBe(0) // and none goes through it
+  })
+
+  it('fills back in where mana was taken out of it', () => {
+    const w = World.withGround(48, 24, 1, 8)
+    for (let y = 12; y < 16; y++) for (let x = 20; x < 24; x++) w.air[w.index(x, y, 0)].fill(0)
+    const hole = () => airMana(w, 20, 24, 12, 16)
+    airRun(w, 60)
+    expect(hole()).toBeGreaterThan(16 * PHYSICS.airMana * 0.5)
+  })
+
+  it('presses from dense to thin', () => {
+    const w = World.withGround(48, 24, 1, 8)
+    const i = w.index(20, 14, 0)
+    w.air[i].fill(PHYSICS.airMana / 2) // twice as dense as around it
+    const around = () => airMana(w, 17, 24, 11, 18) - total(w.air[i])
+    const before = around()
+    airRun(w, 1)
+    expect(total(w.air[i])).toBeLessThan(PHYSICS.airMana * 2)
+    expect(around()).toBeGreaterThan(before) // what it pushed out is around it
   })
 })

@@ -16,8 +16,6 @@ export const PHYSICS = {
   solid: 30,
   /** Metres around the body that GATH draws from. */
   gatherRadius: 2,
-  /** Share of the difference in air mana between two cells that evens out each tick. */
-  airDiffusion: 0.05,
   /** A pushed body keeps this share of its speed each tick. */
   bodyFriction: 0.7,
   /** Share of a flame's fire that spreads up and around each tick, thinning into warmth. */
@@ -109,17 +107,17 @@ export const PHYSICS = {
   pushRate: 0.1,
   /** How fast a particle's speed comes to the speed of the air around it, per tick, in air as thick as the world's. */
   airDrag: 0.01,
+  /**
+   * How fast a push travels through the air, m/tick (18 m/s). Real air carries one at 340 m/s; this is slower, to keep the
+   * steps few, and still fast beside its winds, so that it flows around things rather than piling up against them.
+   */
+  airSound: 0.6,
   /** Share of the difference in speed between neighbouring cells of air that evens out each tick. */
   airViscosity: 0.2,
   /** Slower than this against the air around it (m/tick), mana that belongs to no weave settles into the air. */
   looseRest: 0.02,
   /** M of its own mana an order burns for every beat it thinks. */
   orderBurn: 0.00002,
-  /**
-   * Whether an order is told where its particle is from its weave's centre, and can read ORIGIN and MAKER. Without it, an
-   * order only feels its own particle and its neighbours (SPEC §12, question 6). The bench tries both.
-   */
-  orderKnowsCentre: true,
   /** How far a weave's field reaches around its centre, in metres, until HOLD says otherwise. */
   field: 1,
   /** Steps the fluid takes in one tick. */
