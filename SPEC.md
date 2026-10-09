@@ -1916,7 +1916,15 @@ The report of these runs, with every number, is published as a page: *Mana Order
 
 **Since D31** orders only feel. The bench's orders that knew the centre (`pull`, and `cohere` as it was) are gone; `cling`
 and `cohere` hold by feel, and the findings above that compare them with knowing the centre are from before. What the bench
-finds now is under *Orders that only feel*, below.
+finds now, as a baseline (nothing tuned):
+
+- **Thrown, feeling is enough.** Held by `cling` or `cohere`, every thrown ball reaches the pillar, in 2D and 3D, with
+  97–100% of its mana together and 92–97% still in it.
+- **Held still, it depends on how finely a particle can feel.** In 2D `cling` and `cohere` keep 97–98% of the ball. In 3D
+  they keep 67–79% (nothing keeps 31–33%; the old `feel`, before the flat kernel, about 40%): a 3D ball of 0.5 m is two
+  smoothing lengths across, too coarse to feel its edge well (§12, question 6).
+- **Lengths:** `cling` makes a 14-instruction order and `cohere` a 26; with `touch` and `burst`, the Fireball's order is
+  52 instructions, and an adept ingrains it in 15 ticks.
 
 The sandbox's findings (2D, its own physics). The first group follows from the physics, and should hold whatever the
 numbers are tuned to:
