@@ -1,13 +1,13 @@
 ; Thrown by its own order: it's told an angle and a speed, feels its own speed, and kicks itself toward the one it's told. That also cancels its spreading.
 ; The caster only pours it, ingrains it and lets go.
-        .use  Bench, Shapes, Reactions, Transformations, Orders
+        .use  Bench, Reactions, Transformations, Orders
 
 ThrowSteer:
         CALL  pour
         CALL  aim
         WSET  n16, #1, n3           ; the angle, up from forward
         IN    n6, FORCE
-        WSET  n16, #3, n6           ; the speed
+        WSET  n16, #7, n6           ; the speed
         ORDR  n16, .order
         CALL  release
         LOCK  n16, INPUT

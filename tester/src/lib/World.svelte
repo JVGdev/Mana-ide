@@ -3,6 +3,7 @@
   import { dominant, total } from '../../../src/vm/parts.ts'
   import { PHYSICS } from '../../../src/vm/physics.ts'
   import type { Parts } from '../../../src/vm/parts.ts'
+  import { massOf } from '../../../src/vm/world.ts'
 
   let canvas = $state<HTMLCanvasElement>()
   let wrap: HTMLDivElement
@@ -25,18 +26,20 @@
   function weaveCells(z: number) {
     const sim = session.sim!
     const w = sim.world
-    const out = new Map<number, { free: Parts; carried: Parts; weaves: Set<number>; particles: number }>()
+    const out = new Map<number, { free: Parts; carried: Parts; weaves: Set<number>; particles: number; mass: number; rhoM: number }>()
     for (const p of w.particles) {
       if (!p.weave) continue
       const i = w.cellOf(p.pos)
       if (i < 0 || w.coords(i)[2] !== z) continue
-      const e = out.get(i) ?? { free: [0, 0, 0, 0], carried: [0, 0, 0, 0], weaves: new Set(), particles: 0 }
+      const e = out.get(i) ?? { free: [0, 0, 0, 0], carried: [0, 0, 0, 0], weaves: new Set(), particles: 0, mass: 0, rhoM: 0 }
       for (let k = 0; k < 4; k++) {
         e.free[k] += p.free[k]
         e.carried[k] += p.carried[k]
       }
       e.weaves.add(p.weave)
       e.particles++
+      e.mass += massOf(p)
+      e.rhoM = Math.max(e.rhoM, p.rhoM)
       out.set(i, e)
     }
     return out
@@ -46,7 +49,7 @@
   function selected() {
     const sim = session.sim
     const t = sim?.traces.get(session.orderSel.weave)?.[session.orderSel.particle]
-    return t ? sim!.weaves.get(t.weave)?.particles[t.particle] : undefined
+    return t ? sim!.world.particles.find((p) => p.id === t.id) : undefined
   }
 
   function draw() {
@@ -117,6 +120,17 @@
         g.lineTo(cx + (vx * len) / 2, cy - (vy * len) / 2)
         g.stroke()
       }
+
+    // Rock: the bonds between particles holding earth.
+    g.strokeStyle = 'rgba(176, 150, 112, 0.35)'
+    g.lineWidth = 1
+    g.beginPath()
+    for (const { a, b } of w.bonds) {
+      if (w.d > 1 && (Math.floor(a.pos[2] / w.cell) !== z || Math.floor(b.pos[2] / w.cell) !== z)) continue
+      g.moveTo((a.pos[0] / w.cell) * px, (w.h - a.pos[1] / w.cell) * px)
+      g.lineTo((b.pos[0] / w.cell) * px, (w.h - b.pos[1] / w.cell) * px)
+    }
+    g.stroke()
 
     // Mana: every particle. In a weave it glows; loose, it's dim; pushed this tick, it's bright.
     g.globalCompositeOperation = 'lighter'
@@ -205,11 +219,11 @@
       // The nearest particle that ran its order last tick.
       const sim = session.sim!
       let best: { weave: number; k: number; d: number } | undefined
+      const byId = new Map(sim.world.particles.map((p) => [p.id, p]))
       for (const [id, traces] of sim.traces) {
-        const wv = sim.weaves.get(id)
-        if (!wv) continue
+        if (!sim.weaves.get(id)) continue
         traces.forEach((t, k) => {
-          const p = wv.particles[t.particle]
+          const p = byId.get(t.id)
           if (!p || (world.d > 1 && Math.floor(p.pos[2] / world.cell) !== session.sliceZ)) return
           const d = Math.hypot(p.pos[0] - c.mx, p.pos[1] - c.my)
           if (!best || d < best.d) best = { weave: id, k, d }
@@ -236,7 +250,10 @@
     const bits = [`cell ${hover.x}, ${hover.y}${w.d > 1 ? `, ${session.sliceZ}` : ''}`, `air ${fmt(w.air[i])}`]
     if (total(w.matter[i]) > 0.01) bits.push(`matter ${fmt(w.matter[i])}`)
     const wc = weaveCells(session.sliceZ).get(i)
-    if (wc) bits.push(`weave ${[...wc.weaves].join(', ')}: ${wc.particles} particles, mana ${fmt(wc.free)}, holds ${fmt(wc.carried)}`)
+    if (wc) {
+      bits.push(`weave ${[...wc.weaves].join(', ')}: ${wc.particles} particles, mana ${fmt(wc.free)}, holds ${fmt(wc.carried)}, ${wc.mass.toFixed(1)} kg`)
+      if (wc.rhoM > 0) bits.push(`matter packed ${wc.rhoM.toFixed(0)} kg/m³`)
+    }
     const v = [w.airVel[i * 3], w.airVel[i * 3 + 1], w.airVel[i * 3 + 2]]
     if (Math.hypot(...v) > 0.0005) bits.push(`wind ${v.map((x) => x.toFixed(3)).join(', ')} m/t`)
     return bits.join('  ·  ')
