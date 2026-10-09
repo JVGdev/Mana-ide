@@ -105,7 +105,7 @@ describe('Fireball', () => {
       const cast = s.sim.cast(s.caster, spell('Fireball'))
       let burstAt: number | undefined
       let reached = 0
-      run(s, 60, (t) => {
+      run(s, 80, (t) => {
         const weave = s.sim.weaves.get(cast.result ?? -1)
         if (!weave) return
         reached = Math.max(reached, weave.origin[0])
@@ -193,7 +193,7 @@ describe('Water Shield', () => {
   it('casts in 3D: a shell around the caster', () => {
     const s = waterShield(3)
     const cast = s.sim.cast(s.caster, spell('WaterShield'))
-    run(s, 50) // about 450 points: an adept's mind takes a while
+    run(s, 80) // about 450 points, each with a sine and a cosine: an adept's mind takes a while
     expect(cast.state).toBe('halted')
     const weave = s.sim.weaves.get(cast.result!)!
     const w = s.sim.world

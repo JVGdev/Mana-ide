@@ -35,6 +35,24 @@ npx tsx src/cli/mvm.ts spells/Gust.masm --ticks 40 --maintain 30
 npx tsx src/cli/mvm.ts spells/WaterShield.masm --3d
 ```
 
+Add `--profile` to see where the caster's thought went, by routine and by line:
+
+```
+npx tsx src/cli/mvm.ts spells/Fireball.masm --3d --quiet --ticks 60 --profile
+```
+
+```
+Fireball: 14515 beats over 49 ticks
+
+routines:
+    14441   99.5%  ball
+       51    0.4%  Fireball
+…
+lines:
+     3064   21.1%  ×383    Shapes.masm:52         COS   n13
+     3064   21.1%  ×383    Shapes.masm:56         SIN   n15
+```
+
 Each spell has a test world (`src/scenes.ts`). The terminal shows a slice of it:
 
 ```
@@ -55,5 +73,6 @@ mana. The full key is in `src/render.ts`.
 - `src/asm/isa.ts`: every instruction, its opcode and operands.
 - `src/vm/sim.ts`: the machine. What each instruction does, and what happens each tick.
 - `src/vm/physics.ts`: the numbers the world runs on, to be tuned.
+- `src/profile.ts`: where a cast's beats went.
 - `lib/`: the libraries.
 - `spells/`: Stone Wall, Fireball, Gust and Water Shield.

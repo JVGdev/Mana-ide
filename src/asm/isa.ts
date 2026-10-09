@@ -24,7 +24,11 @@ export type Op = {
   order?: boolean
 }
 
+// What thinking costs, in beats. Adding is quick, dividing is slow, and a sine is slower still: the costs a mind pays are
+// the costs a real processor pays, so the same tricks make a spell faster (SPEC D18).
 const MIND = 1
+const SLOW = 4
+const TRIG = 8
 const BODY = 4
 
 export const OPS: Op[] = [
@@ -48,18 +52,18 @@ export const OPS: Op[] = [
   { code: 0x12, name: 'ADD', operands: ['n', 's'], beats: MIND },
   { code: 0x13, name: 'SUB', operands: ['n', 's'], beats: MIND },
   { code: 0x14, name: 'MUL', operands: ['n', 's'], beats: MIND },
-  { code: 0x15, name: 'DIV', operands: ['n', 's'], beats: MIND },
-  { code: 0x16, name: 'MOD', operands: ['n', 's'], beats: MIND },
+  { code: 0x15, name: 'DIV', operands: ['n', 's'], beats: SLOW },
+  { code: 0x16, name: 'MOD', operands: ['n', 's'], beats: SLOW },
   { code: 0x17, name: 'NEG', operands: ['n'], beats: MIND },
   { code: 0x18, name: 'ABS', operands: ['n'], beats: MIND },
-  { code: 0x19, name: 'SQRT', operands: ['n'], beats: MIND },
+  { code: 0x19, name: 'SQRT', operands: ['n'], beats: SLOW },
   { code: 0x1a, name: 'FLOOR', operands: ['n'], beats: MIND },
   { code: 0x1b, name: 'ROUND', operands: ['n'], beats: MIND },
-  { code: 0x1c, name: 'SIN', operands: ['n'], beats: MIND },
-  { code: 0x1d, name: 'COS', operands: ['n'], beats: MIND },
-  { code: 0x1e, name: 'TAN', operands: ['n'], beats: MIND },
-  { code: 0x1f, name: 'ATAN', operands: ['n'], beats: MIND },
-  { code: 0x20, name: 'ATN2', operands: ['n', 's'], beats: MIND },
+  { code: 0x1c, name: 'SIN', operands: ['n'], beats: TRIG },
+  { code: 0x1d, name: 'COS', operands: ['n'], beats: TRIG },
+  { code: 0x1e, name: 'TAN', operands: ['n'], beats: TRIG },
+  { code: 0x1f, name: 'ATAN', operands: ['n'], beats: TRIG },
+  { code: 0x20, name: 'ATN2', operands: ['n', 's'], beats: TRIG },
   { code: 0x21, name: 'MIN', operands: ['n', 's'], beats: MIND },
   { code: 0x22, name: 'MAX', operands: ['n', 's'], beats: MIND },
   { code: 0x23, name: 'CMP', operands: ['n', 's'], beats: MIND },

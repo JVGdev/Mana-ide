@@ -37,6 +37,7 @@ The examples throughout are the four spells of Ikozu: **Stone Wall**, **Fireball
 | D15 | Every stat of a caster, body and mind, comes from **genetics**, their **condition** right now, and **training**. |
 | D16 | Matter can be freed back into free mana, but only through **a flaw**: no instruction does it. `CNDS` checks that an amount fits the room a cell has, and never that it's above nothing. Condensing less than nothing runs backwards (§5, *The flaw*). |
 | D17 | **Burning doesn't free anything.** What fire burns is still matter, and so is the fire. |
+| D18 | **Spells can be optimized like real algorithms.** Thought costs what it costs a real processor: adding is quick, dividing is slow, a sine is slower. The same spell written better casts faster. The libraries are first drafts, to be made better by whoever writes spells. |
 | D11 | The tester is a practical tool, maybe the kind Ikozu's mage-engineers would have, but not dressed up in lore. |
 
 ---
@@ -176,8 +177,13 @@ A mind with fewer than 32 registers can't run a routine that needs more. A libra
 hold `Shapes.ball` as written, but a simpler ball could be written for one.
 
 **The Law of Conditioning.** A tick holds `speed × (1 + c)` beats, where `c` is the conditioning for the spell being cast.
-- Mind instructions take 1 beat.
+- Mind instructions take 1 beat, except slow math: `DIV`, `MOD` and `SQRT` take 4, and `SIN`, `COS`, `TAN`, `ATAN` and
+  `ATN2` take 8.
 - Body and reach instructions take 4 beats.
+
+So the usual tricks pay off: compute a sine once outside a loop instead of every time through it, multiply by `1/x` instead
+of dividing by `x`, use a shape's symmetry. The tester's profiler (`mvm --profile`) shows which routines and lines the beats
+went to.
 - `TICK` ends the tick.
 
 So a spell that takes 12 ticks the first time takes about 1 tick after a lot of practice. That's `t / (1 + c)`, and it falls
@@ -242,7 +248,7 @@ has no mana registers. When it starts, a cell's registers hold:
 | `n4` | The weave's age, in ticks since it was manifested. |
 
 An order can do arithmetic and jumps, read its weave's registers and the ports below, and use the **order** instructions
-(`MOVE`, `TUCH`, `GETW`, `PUTW`, `DISS`). It ends with `RET`. An order that runs more than 64 instructions in one tick
+(`MOVE`, `TUCH`, `GETW`, `PUTW`, `DISS`). It ends with `RET`. An order that thinks more than 64 beats in one tick
 **frays**: the weave comes apart, and its mana goes loose.
 
 ### Ports
@@ -465,9 +471,9 @@ Points land in cells, and a cell takes whatever points fall in it. Spaced a whol
 ball has holes, so they're spaced half a cell apart. To give every point the same share, the ball walks itself twice: once
 to count its points, once to lay them out.
 
-That's thorough, and slow. An adept's mind takes about 26 ticks to lay out a 3D ball of 0.5 m, where a 2D one takes 10. A
-fireball the caster has thrown a few times is quicker (the Law of Conditioning). A faster ball is a different ball:
-one that tests every cell of a cube against `x² + y² + z² ≤ r²` takes 8 ticks, but it isn't drawn around an axis.
+That's thorough, and slow: a sine and a cosine for every point. An adept's mind takes about 48 ticks to lay out a 3D ball of
+0.5 m, and the profiler puts 42% of that on the two lines that turn θ into a point. A fireball the caster has thrown a few
+times is quicker (the Law of Conditioning), and so is a better-written ball.
 
 ```
 ; ball: the mana in m1, spread through a ball around the weave's origin. A ball is shells, from the centre out to the

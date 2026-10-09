@@ -61,6 +61,10 @@ export type Cast = {
   result?: number
   startedAt: number
   endedAt?: number
+  /** Beats of thought spent so far. */
+  beats: number
+  /** Where they went: how many times each instruction ran, and its beats, by address. */
+  profile: Map<number, { runs: number; beats: number }>
 }
 
 /** What one cell's order asked for this tick. */
@@ -114,6 +118,8 @@ export class Sim {
       frame: frame(caster.registers, caster.memory, pc),
       state: 'running',
       startedAt: this.tick,
+      beats: 0,
+      profile: new Map(),
     }
     this.casts.push(cast)
     this.log({ kind: 'cast', caster: caster.name, detail: name })
@@ -190,6 +196,11 @@ export class Sim {
       }
       if (beats < instr.op.beats) return
       beats -= instr.op.beats
+      cast.beats += instr.op.beats
+      const spent = cast.profile.get(instr.addr) ?? { runs: 0, beats: 0 }
+      spent.runs++
+      spent.beats += instr.op.beats
+      cast.profile.set(instr.addr, spent)
       try {
         const done = this.execMind(cast, instr)
         if (done === 'tick') return
@@ -573,9 +584,10 @@ export class Sim {
     occupied: Set<number>,
   ): 'done' | 'diss' {
     const w = this.world
-    for (let budget = PHYSICS.orderBudget; ; budget--) {
-      if (budget <= 0) throw new Fault('FRAYED', `an order ran more than ${PHYSICS.orderBudget} instructions in one tick`)
+    for (let budget = PHYSICS.orderBudget; ; ) {
       const instr = fetch(program, f.pc)
+      budget -= instr.op.beats
+      if (budget < 0) throw new Fault('FRAYED', `an order thought more than ${PHYSICS.orderBudget} beats in one tick`)
       const a = instr.args
       const common = execCommon(f, instr)
       if (common === 'ret-empty' || common === 'halt' || common === 'tick') return 'done'

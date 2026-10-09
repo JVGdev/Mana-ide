@@ -27,7 +27,7 @@ export const PHYSICS = {
   bodyFriction: 0.7,
   /** Share of a flame's fire that spreads up and around each tick, thinning into warmth. */
   fireSpread: 0.25,
-  /** Instructions a cell may run in one tick of its order before the weave frays. */
+  /** Beats of thought a cell may spend in one tick of its order before the weave frays. */
   orderBudget: 64,
   /** Registers a cell thinks with in an order. */
   orderRegisters: 16,

@@ -99,6 +99,18 @@ main:   LDI   n0, #0
     expect(ticks(0, 300)).toBe(2)
   })
 
+  it('pays more for slow math, and counts where the beats went', () => {
+    const { sim, cast } = setup(`
+main:   LDI   n0, #1
+        ADD   n0, #1
+slow:   DIV   n0, #2
+        SIN   n0
+        HALT`)
+    sim.runCasts()
+    expect(cast.beats).toBe(1 + 1 + 4 + 8 + 1)
+    expect(cast.profile.get(cast.program.labels.get('slow')!)).toEqual({ runs: 1, beats: 4 })
+  })
+
   it('counts a cast toward conditioning when it halts', () => {
     const { sim, cast, caster } = setup('HALT')
     sim.runCasts()

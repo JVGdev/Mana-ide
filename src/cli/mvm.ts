@@ -4,10 +4,12 @@
 //   mvm spells/StoneWall.masm                 the scene named after the spell, in 2D
 //   mvm spells/Fireball.masm --ticks 30 --every 3
 //   mvm spells/Gust.masm --scene Gust --3d    (3D runs; the terminal shows one slice)
+//   mvm spells/Fireball.masm --3d --profile   where the caster's thought went
 
 import { basename } from 'node:path'
 import { AsmError } from '../asm/assembler.ts'
 import { assembleFile } from '../load.ts'
+import { report } from '../profile.ts'
 import { render } from '../render.ts'
 import { SCENES } from '../scenes.ts'
 
@@ -15,7 +17,7 @@ const args = process.argv.slice(2)
 const flag = (name: string) => (args.includes(name) ? args[args.indexOf(name) + 1] : undefined)
 const file = args.find((a, i) => !a.startsWith('-') && !args[i - 1]?.startsWith('--'))
 if (!file) {
-  console.error('usage: mvm <spell.masm> [--scene StoneWall|Fireball|Gust|WaterShield] [--3d] [--ticks n] [--every n] [--maintain n]')
+  console.error('usage: mvm <spell.masm> [--scene StoneWall|Fireball|Gust|WaterShield] [--3d] [--ticks n] [--every n] [--maintain n] [--profile] [--quiet]')
   process.exit(2)
 }
 
@@ -42,10 +44,11 @@ const ticks = Number(flag('--ticks') ?? 40)
 const every = Number(flag('--every') ?? 5)
 const maintain = Number(flag('--maintain') ?? 12)
 
+const quiet = args.includes('--quiet')
 const before = sim.ledger().total
-sim.cast(caster, program)
+const cast = sim.cast(caster, program)
 for (let t = 0; t <= ticks; t++) {
-  if (t % every === 0 || t === ticks) {
+  if (!quiet && (t % every === 0 || t === ticks)) {
     console.log(`tick ${sim.tick}   load ${caster.held().toFixed(0)} / ${caster.capacity.toFixed(0)} M   harm ${caster.harm.toFixed(0)}`)
     console.log(render(sim))
   }
@@ -57,3 +60,4 @@ console.log('\nevents:')
 for (const e of sim.events) console.log(`  ${String(e.tick).padStart(4)}  ${e.kind.padEnd(10)} ${e.weave ? `weave ${e.weave}  ` : ''}${e.detail ?? ''}`)
 const l = sim.ledger()
 console.log(`\nledger: free ${l.free.toFixed(2)} + condensed ${l.condensed.toFixed(2)} = ${l.total.toFixed(2)} M  (was ${before.toFixed(2)})`)
+if (args.includes('--profile')) console.log(`\n${report(cast)}`)
