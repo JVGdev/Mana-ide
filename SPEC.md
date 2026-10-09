@@ -1022,7 +1022,11 @@ the `.masm` files in `spells/` and `lib/` directly.
   - *Bytes*: the assembled program, with where the mind is.
   - *Reference*: every instruction and port.
 
-Not yet: stepping into one cell's order.
+- *Order*: any cell of any weave, chosen by number or by clicking it in the world, and its order from the last tick,
+  instruction by instruction: step forward and back, its 16 registers at each step, the weave's registers, how it moved,
+  and its beats against the 64 it has. A breakpoint in order code (a weave's `.order`, or a library routine it calls)
+  pauses the run after the tick a cell hit it, on that cell and that instruction. The machine records this only when
+  asked (`Sim.traceOrders`), since every cell of every weave is recorded every tick.
 
 ---
 
@@ -1063,7 +1067,8 @@ npx tsx src/cli/mvm.ts spells/Gust.masm --ticks 40 --maintain 30
    - Tests: the wall stands and leaves a trench, then crumbles back into it; the fireball bursts on touch; the shield follows
      its maker and falls in a splash; Gust pushes and, kept up too long, overcharges; the ledger balances every tick.
 2. **The tester, first cut.** *Built.* Editing with live errors, breakpoints, stepping by instruction or tick, the mind,
-   the body, weaves, the profile, the ledger, the caster and their will, and the world in 2D or a 3D slice.
+   the body, weaves, stepping through any cell's order, the profile, the ledger, the caster and their will, and the world
+   in 2D or a 3D slice.
 3. **The language**, compiling to what phase 1 runs by hand.
 4. Casters, spells and libraries read from Quire.
 5. **Other notations** (later): runes, circuits and scores.

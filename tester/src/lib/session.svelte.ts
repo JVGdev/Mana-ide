@@ -2,7 +2,7 @@
 
 import { assemble, AsmError, type Program, type SourceLine } from '../../../src/asm/assembler.ts'
 import { adept, child, master, type CasterStats, type Caster } from '../../../src/vm/caster.ts'
-import { Sim, type Cast } from '../../../src/vm/sim.ts'
+import { Sim, type Cast, type OrderTrace } from '../../../src/vm/sim.ts'
 import { field, SCENES } from '../../../src/scenes.ts'
 import type { Vec } from '../../../src/vm/world.ts'
 import { baseName, files } from './files.svelte.ts'
@@ -17,6 +17,8 @@ export function parseProblem(p: string): Problem {
 export const SCENE_NAMES = ['Field', ...Object.keys(SCENES)] as const
 export type SceneName = (typeof SCENE_NAMES)[number]
 export const PRESETS = { child, adept, master } as const
+export const PANELS = ['mind', 'body', 'weaves', 'order', 'profile', 'events', 'caster', 'bytes', 'reference'] as const
+export type Panel = (typeof PANELS)[number]
 export type Preset = keyof typeof PRESETS | 'custom'
 
 function buildScene(name: SceneName, dims: 2 | 3) {
@@ -52,6 +54,11 @@ class Session {
   sliceZ = $state(0)
   /** Bumped whenever the machine moves: everything that shows it reads this. */
   version = $state(0)
+  panel = $state<Panel>('mind')
+  /** The cell whose order is shown, and which of its instructions. */
+  orderSel = $state({ weave: 0, cell: 0, step: 0 })
+  /** The next click on the world picks a weave cell instead of aiming. */
+  picking = $state(false)
   /** A line for the editor to scroll to; `seq` changes each time it's asked. */
   goto = $state<{ line: number; seq: number }>({ line: 0, seq: 0 })
 
@@ -71,8 +78,11 @@ class Session {
     const s = buildScene(this.scene, this.dims)
     s.caster.stats = clone($state.snapshot(this.stats)) as CasterStats
     s.caster.condition = { ...this.condition }
+    s.sim.traceOrders = true
     this.sim = s.sim
     this.caster = s.caster
+    this.orderSel = { weave: 0, cell: 0, step: 0 }
+    this.picking = false
     this.cast = null
     this.syncWill()
     this.sliceZ = Math.floor(s.caster.body.pos[2] / s.sim.world.cell)
@@ -171,7 +181,7 @@ class Session {
     return this.program.lines.get(this.cast.frame.pc)
   }
 
-  private isBreak = (addr: number) => {
+  isBreak = (addr: number) => {
     const l = this.program?.lines.get(addr)
     return !!l && this.breakpoints.includes(`${l.file}:${l.line}`)
   }
@@ -186,8 +196,62 @@ class Session {
   }
 
   private moved(stopped: boolean) {
+    this.settleOrder()
     this.version++
     if (stopped && this.follow) this.goHere()
+  }
+
+  /** The trace of the chosen cell's order, from the last tick its weave ran. */
+  orderTrace(): OrderTrace | undefined {
+    void this.version
+    return this.sim?.traces.get(this.orderSel.weave)?.[this.orderSel.cell]
+  }
+
+  /** Keeps the order selection pointing at something after a tick: the first weave that ran, back to its first step. */
+  private lastTraceTick = -1
+  private settleOrder() {
+    const traces = this.sim?.traces
+    if (!traces?.size) return
+    if (!traces.has(this.orderSel.weave)) this.orderSel = { weave: [...traces.keys()][0], cell: 0, step: 0 }
+    const t = traces.get(this.orderSel.weave)!
+    if (this.orderSel.cell >= t.length) this.orderSel.cell = 0
+    const trace = t[this.orderSel.cell]
+    if (trace && trace.tick !== this.lastTraceTick) {
+      this.lastTraceTick = trace.tick
+      this.orderSel.step = 0
+    }
+  }
+
+  /** The first cell whose order ran a line with a breakpoint last tick. */
+  private orderHit(): { weave: number; cell: number; step: number } | undefined {
+    if (!this.breakpoints.length || !this.sim) return undefined
+    for (const [weave, traces] of this.sim.traces)
+      for (const t of traces) {
+        const step = t.steps.findIndex((s) => this.isBreak(s.addr))
+        if (step >= 0) return { weave, cell: t.cell, step }
+      }
+    return undefined
+  }
+
+  private stopAtOrder(hit: { weave: number; cell: number; step: number }) {
+    this.lastTraceTick = this.sim!.traces.get(hit.weave)![hit.cell].tick
+    this.orderSel = hit
+    this.panel = 'order'
+    this.goOrder()
+  }
+
+  /** Opens the file of the order instruction being shown, at its line. */
+  goOrder() {
+    const t = this.orderTrace()
+    const step = t?.steps[this.orderSel.step]
+    const l = step && this.program?.lines.get(step.addr)
+    if (l) this.jump(l.file, l.line)
+  }
+
+  selectOrder(weave: number, cell: number) {
+    this.orderSel = { weave, cell, step: 0 }
+    this.panel = 'order'
+    this.version++
   }
 
   /** Opens the file the mind is in, at its line. */
@@ -210,6 +274,12 @@ class Session {
     this.remember()
     this.syncWill()
     this.sim.step()
+    const hit = this.orderHit()
+    if (hit) {
+      this.stopAtOrder(hit)
+      this.version++
+      return
+    }
     this.moved(true)
   }
 
@@ -223,12 +293,18 @@ class Session {
     this.moved(true)
   }
 
-  /** One tick while playing. False when a breakpoint stopped it. */
+  /** One tick while playing. False when a breakpoint stopped it, in the mind or in an order. */
   private tickOnce(): boolean {
     const sim = this.sim!
     this.syncWill()
-    if (this.cast?.state === 'running' && this.breakpoints.length) return !sim.runUntil(this.cast, this.isBreak, 1)
-    sim.step()
+    if (this.cast?.state === 'running' && this.breakpoints.length) {
+      if (sim.runUntil(this.cast, this.isBreak, 1)) return false
+    } else sim.step()
+    const hit = this.orderHit()
+    if (hit) {
+      this.stopAtOrder(hit)
+      return false
+    }
     return true
   }
 
@@ -248,7 +324,9 @@ class Session {
         for (let i = 0; i < n; i++)
           if (!this.tickOnce()) {
             this.playing = false
-            this.moved(true)
+            const atOrder = this.panel === 'order' && !this.sim?.midTick
+            this.version++
+            if (this.follow && !atOrder) this.goHere()
             return
           }
         this.moved(false)

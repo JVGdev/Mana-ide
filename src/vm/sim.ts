@@ -74,6 +74,27 @@ export type Cast = {
 /** What one cell's order asked for this tick. */
 type CellOrder = { move: Vec; cnds: number }
 
+/** One instruction of a cell's order: where it is, and the cell's registers just before it ran. */
+export type OrderStep = { addr: number; n: Float64Array }
+
+/** One cell's order, run for one tick, instruction by instruction (when `traceOrders` is on). */
+export type OrderTrace = {
+  tick: number
+  weave: number
+  cell: number
+  off: Vec
+  /** The weave's registers as the tick began: what GETW reads. */
+  w: Float64Array
+  steps: OrderStep[]
+  /** Its registers when it was done. */
+  n: Float64Array
+  /** Done, let go (DISS), or the fault that frayed it. */
+  outcome: string
+  beats: number
+  move: Vec
+  cnds: number
+}
+
 const decoded = new WeakMap<Uint8Array, Map<number, Instr>>()
 
 function fetch(program: Program, addr: number): Instr {
@@ -95,6 +116,10 @@ export class Sim {
   private nextWeave = 1
   /** Partway through a tick: some minds may still be thinking, and the world hasn't moved yet. */
   midTick = false
+  /** Record every cell's order, instruction by instruction, into `traces`. For the tester; it costs time. */
+  traceOrders = false
+  /** Last tick's orders, by weave id, one trace per cell (in the order the cells ran). */
+  traces = new Map<number, OrderTrace[]>()
   /** Matter weaves hold, per world cell, as of the start of this tick's orders. */
   private carried: Float64Array
 
@@ -209,6 +234,7 @@ export class Sim {
     // 5. Weaves leak, and take hold of what matter they can.
     for (const weave of this.weaves.values()) this.hold(weave)
     // 6. Weaves set loose run their orders.
+    if (this.traceOrders) this.traces = new Map()
     this.measureCarried()
     for (const weave of [...this.weaves.values()]) if (!weave.inHand && weave.order !== null) this.runOrder(weave)
     // 7. The world moves.
@@ -602,19 +628,32 @@ export class Sim {
     const occupied = new Set(weave.cells.map((c) => w.cellOf(weave.worldPos(c))))
     const orders: CellOrder[] = []
     let ending: string | undefined
+    const traces: OrderTrace[] = []
+    if (this.traceOrders) this.traces.set(weave.id, traces)
+    const w0 = weave.regs.slice()
 
-    for (const cell of weave.cells) {
+    for (const [k, cell] of weave.cells.entries()) {
       const f = frame(PHYSICS.orderRegisters, 16, weave.order!)
       f.n.set([cell.off[0], cell.off[1], cell.off[2], total(cell.free), age])
       const order: CellOrder = { move: [0, 0, 0], cnds: 0 }
       orders.push(order)
+      const trace: OrderTrace | undefined = this.traceOrders
+        ? { tick: this.tick, weave: weave.id, cell: k, off: [...cell.off], w: w0, steps: [], n: f.n, outcome: 'done', beats: 0, move: order.move, cnds: 0 }
+        : undefined
       try {
-        const result = this.execOrder(weave, cell, f, program, order, pending, occupied)
+        const result = this.execOrder(weave, cell, f, program, order, pending, occupied, trace)
         if (result === 'diss') ending = 'its order let it go'
+        if (trace && result === 'diss') trace.outcome = 'let go (DISS)'
       } catch (e) {
         if (!(e instanceof Fault)) throw e
         this.log({ kind: 'fray', caster: weave.maker.name, weave: weave.id, detail: e.message })
         ending = 'frayed'
+        if (trace) trace.outcome = e.message
+      }
+      if (trace) {
+        trace.n = f.n.slice(0, PHYSICS.orderRegisters)
+        trace.cnds = order.cnds
+        traces.push(trace)
       }
       if (ending) break
     }
@@ -655,10 +694,15 @@ export class Sim {
     order: CellOrder,
     pending: Float64Array,
     occupied: Set<number>,
+    trace?: OrderTrace,
   ): 'done' | 'diss' {
     const w = this.world
     for (let budget = PHYSICS.orderBudget; ; ) {
       const instr = fetch(program, f.pc)
+      if (trace) {
+        trace.steps.push({ addr: instr.addr, n: f.n.slice(0, PHYSICS.orderRegisters) })
+        trace.beats += instr.op.beats
+      }
       budget -= instr.op.beats
       if (budget < 0) throw new Fault('FRAYED', `an order thought more than ${PHYSICS.orderBudget} beats in one tick`)
       const a = instr.args

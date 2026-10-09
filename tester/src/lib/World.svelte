@@ -125,6 +125,21 @@
       g.fillText(b.name, left, top - 4)
     }
 
+    // The cell whose order is being looked at.
+    if (session.panel === 'order') {
+      const wv = sim.weaves.get(session.orderSel.weave)
+      const cell = wv?.cells[session.orderSel.cell]
+      if (wv && cell) {
+        const i = w.cellOf(wv.worldPos(cell))
+        if (i >= 0 && w.coords(i)[2] === z) {
+          const [x, y] = w.coords(i)
+          g.strokeStyle = '#8db0cf'
+          g.lineWidth = 2
+          g.strokeRect(X(x) - 2, Y(y) - 2, px + 4, px + 4)
+        }
+      }
+    }
+
     // The hand and the aim.
     if (caster) {
       const [hx, hy] = caster.hand
@@ -166,6 +181,19 @@
   function click(e: MouseEvent) {
     if (!world) return
     const c = cellAt(e)
+    if (session.picking) {
+      const sim = session.sim!
+      const i = world.index(c.x, c.y, session.sliceZ)
+      for (const wv of sim.weaves.values()) {
+        const k = wv.cells.findIndex((cell) => world.cellOf(wv.worldPos(cell)) === i)
+        if (k >= 0) {
+          session.picking = false
+          session.selectOrder(wv.id, k)
+          return
+        }
+      }
+      return
+    }
     session.setAim([c.mx, c.my, (session.sliceZ + 0.5) * world.cell])
   }
 
@@ -196,7 +224,8 @@
         hover = { x: c.x, y: c.y }
       }}
       onmouseleave={() => (hover = null)}
-      title="Click to aim"
+      title={session.picking ? 'Click a weave cell' : 'Click to aim'}
+      class:picking={session.picking}
     ></canvas>
     <div class="under">
       {#if world.d > 1}
@@ -206,7 +235,7 @@
           <span class="num">{session.sliceZ}</span>
         </label>
       {/if}
-      <span class="info">{info || 'Hover a cell to read it. Click to aim.'}</span>
+      <span class="info">{session.picking ? 'Click a cell of a weave to see its order.' : info || 'Hover a cell to read it. Click to aim.'}</span>
     </div>
   {/if}
 </div>
@@ -216,6 +245,10 @@
     --sky: #110e0b;
     width: 100%;
     overflow-x: auto;
+  }
+  canvas.picking {
+    cursor: pointer;
+    outline: 2px solid var(--info);
   }
   canvas {
     display: block;

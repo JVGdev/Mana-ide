@@ -21,6 +21,10 @@ Opens at http://localhost:5175. Edit a spell or a library, Cast it, then Play, S
 of the Tick (Shift+F10). Click the gutter for a breakpoint; the second gutter shows what each line has cost in beats. Click
 the world to aim. Ctrl+S saves the file back to `spells/` or `lib/`.
 
+Weaves run their orders in every cell, every tick. The Order panel shows any one cell's last run, instruction by
+instruction, forward and back; pick the cell by number or click it in the world. A breakpoint in order code pauses on the
+cell that hit it.
+
 ## Assemble a spell
 
 ```

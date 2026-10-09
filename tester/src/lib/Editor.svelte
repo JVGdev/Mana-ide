@@ -14,6 +14,8 @@
     onsave?: () => void
     /** The line the mind runs next, in this file. */
     current?: number
+    /** The order instruction being looked at, in this file. */
+    orderLine?: number
     breakpoints: number[]
     ontoggle: (line: number) => void
     /** Beats spent on each line of this file. */
@@ -25,7 +27,7 @@
     /** A line to scroll to and put the cursor on; `seq` changes each time. */
     goto: { line: number; seq: number }
   }
-  let { path, text, onchange, onsave, current, breakpoints, ontoggle, beats, problems, live, labels, consts, goto }: Props =
+  let { path, text, onchange, onsave, current, orderLine, breakpoints, ontoggle, beats, problems, live, labels, consts, goto }: Props =
     $props()
 
   let host: HTMLDivElement
@@ -46,6 +48,22 @@
             const line = tr.state.doc.line(e.value)
             deco = Decoration.set([Decoration.line({ class: 'cm-here' }).range(line.from)])
           }
+        }
+      return deco
+    },
+    provide: (f) => EditorView.decorations.from(f),
+  })
+
+  // The order instruction being looked at.
+  const setOrderLine = StateEffect.define<number | null>()
+  const orderField = StateField.define<DecorationSet>({
+    create: () => Decoration.none,
+    update(deco, tr) {
+      deco = deco.map(tr.changes)
+      for (const e of tr.effects)
+        if (e.is(setOrderLine)) {
+          if (e.value === null || e.value > tr.state.doc.lines) deco = Decoration.none
+          else deco = Decoration.set([Decoration.line({ class: 'cm-order' }).range(tr.state.doc.line(e.value).from)])
         }
       return deco
     },
@@ -149,6 +167,7 @@
       ]),
       masm(live, labels, consts),
       currentField,
+      orderField,
       breakField,
       beatsField,
       EditorView.updateListener.of((u) => {
@@ -195,7 +214,7 @@
       })
     view.dispatch(
       setDiagnostics(view.state, diagnostics),
-      { effects: [setCurrent.of(current ?? null), setBreaks.of(breakpoints), setBeats.of(beats)] },
+      { effects: [setCurrent.of(current ?? null), setOrderLine.of(orderLine ?? null), setBreaks.of(breakpoints), setBeats.of(beats)] },
     )
   })
 
@@ -247,6 +266,10 @@
   .editor :global(.cm-here) {
     background: var(--accent-soft) !important;
     box-shadow: inset 3px 0 0 var(--accent);
+  }
+  .editor :global(.cm-order) {
+    background: var(--info-soft) !important;
+    box-shadow: inset 3px 0 0 var(--info);
   }
   .editor :global(.cm-bp-gutter) {
     width: 16px;

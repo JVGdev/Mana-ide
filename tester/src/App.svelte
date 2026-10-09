@@ -10,15 +10,14 @@
   import Caster from './lib/panels/Caster.svelte'
   import Reference from './lib/panels/Reference.svelte'
   import Bytes from './lib/panels/Bytes.svelte'
+  import Order from './lib/panels/Order.svelte'
   import { files, baseName } from './lib/files.svelte.ts'
-  import { session, SCENE_NAMES, type SceneName } from './lib/session.svelte.ts'
+  import { session, SCENE_NAMES, PANELS, type SceneName } from './lib/session.svelte.ts'
   import { num, PART_COLORS, PART_NAMES } from './lib/format.ts'
   import { SCENES } from '../../src/scenes.ts'
 
   let ready = $state(false)
   let note = $state('')
-  const TABS = ['mind', 'body', 'weaves', 'profile', 'events', 'caster', 'bytes', 'reference'] as const
-  let tab = $state<(typeof TABS)[number]>('mind')
 
   onMount(async () => {
     await files.load()
@@ -39,6 +38,12 @@
 
   const openName = $derived(baseName(session.open))
   const here = $derived(session.here())
+  /** The order instruction shown in the Order panel, when that's open. */
+  const orderHere = $derived.by(() => {
+    if (session.panel !== 'order') return undefined
+    const step = session.orderTrace()?.steps[session.orderSel.step]
+    return step && session.program?.lines.get(step.addr)
+  })
   const breakLines = $derived(
     session.breakpoints.filter((b) => b.startsWith(`${openName}:`)).map((b) => Number(b.slice(openName.length + 1))),
   )
@@ -116,7 +121,7 @@ ${name}:
       flash('It doesn’t assemble yet: see the problems under the editor.')
       return
     }
-    tab = 'mind'
+    session.panel = 'mind'
     session.goHere()
   }
 
@@ -225,6 +230,7 @@ ${name}:
               onchange={edited}
               onsave={save}
               current={here && here.file === openName ? here.line : undefined}
+              orderLine={orderHere && orderHere.file === openName ? orderHere.line : undefined}
               breakpoints={breakLines}
               ontoggle={(line) => session.toggleBreakpoint(openName, line)}
               {beats}
@@ -272,16 +278,17 @@ ${name}:
           </div>
         </div>
         <nav class="panel-tabs">
-          {#each TABS as t}<button class:on={tab === t} onclick={() => (tab = t)}>{t}</button>{/each}
+          {#each PANELS as t}<button class:on={session.panel === t} onclick={() => (session.panel = t)}>{t}</button>{/each}
         </nav>
         <div class="panel">
-          {#if tab === 'mind'}<Mind />
-          {:else if tab === 'body'}<Body />
-          {:else if tab === 'weaves'}<Weaves />
-          {:else if tab === 'profile'}<Profile onjump={(f, l) => session.jump(f, l)} />
-          {:else if tab === 'events'}<Events />
-          {:else if tab === 'caster'}<Caster />
-          {:else if tab === 'bytes'}<Bytes onjump={(f, l) => session.jump(f, l)} />
+          {#if session.panel === 'mind'}<Mind />
+          {:else if session.panel === 'body'}<Body />
+          {:else if session.panel === 'weaves'}<Weaves />
+          {:else if session.panel === 'order'}<Order />
+          {:else if session.panel === 'profile'}<Profile onjump={(f, l) => session.jump(f, l)} />
+          {:else if session.panel === 'events'}<Events />
+          {:else if session.panel === 'caster'}<Caster />
+          {:else if session.panel === 'bytes'}<Bytes onjump={(f, l) => session.jump(f, l)} />
           {:else}<Reference />{/if}
         </div>
       </section>

@@ -120,6 +120,26 @@ describe('Fireball', () => {
     })
   }
 
+  it("can show any cell's order, instruction by instruction", () => {
+    const s = fireball(2)
+    const cast = s.sim.cast(s.caster, spell('Fireball'))
+    while (cast.state === 'running') s.sim.step()
+    s.sim.step()
+    expect(s.sim.traces.size).toBe(0) // only when asked: it costs time
+    s.sim.traceOrders = true
+    s.sim.step()
+    const weave = s.sim.weaves.get(cast.result!)!
+    const traces = s.sim.traces.get(weave.id)!
+    expect(traces.length).toBe(weave.cells.length)
+    const t = traces[3]
+    expect(t.steps[0].addr).toBe(cast.program.labels.get('Fireball.order'))
+    expect(Array.from(t.steps[0].n.slice(0, 3))).toEqual(t.off) // it starts knowing where its cell is
+    expect(t.outcome).toBe('done')
+    expect(t.beats).toBeGreaterThan(5)
+    expect(t.beats).toBeLessThanOrEqual(64)
+    expect(Math.hypot(...t.move)).toBeGreaterThan(0) // it flew
+  })
+
   it('is a ball: a disc of cells in 2D, a sphere in 3D, with no holes', () => {
     for (const dims of [2, 3] as const) {
       const s = fireball(dims)
