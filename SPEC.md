@@ -87,14 +87,14 @@ what's left.
 **Stand-ins, named:**
 
 13. **Flames spread by a fixed share.** Now flame spreads as any gas does, from more to less, evening out with its
-    neighbours (`flameSpread`). By heat, as the audit asked, it doesn't yet: heat is counted, not a field (left below).
+    neighbours (`flame_spread`). By heat, as the audit asked, it doesn't yet: heat is counted, not a field (left below).
 14. **A pushed body lost 30% of its speed a tick.** Now the ground's friction slows it by μg, as its weight presses on
     it (D39).
 15. **`DENS`, `GRAD` and `NVEL` read the simulation's sums.** *Kept, and why.* They are sums over the particle's
     neighbours within the smoothing length, which is the particle's own size: what's touching it. They're the pressure
     it's under, how that pressure differs across it, and how what's around it flows past: what a body can feel by touch,
     not knowledge from a distance. What's left is question 6, how finely it can feel.
-16. **Slow loose mana joins the air grid** (`looseRest`). *Kept, and why.* It's a change of representation, not physics:
+16. **Slow loose mana joins the air grid** (`loose_rest`). *Kept, and why.* It's a change of representation, not physics:
     the same mana, as a share of the air instead of a particle, exact in mana, momentum and Energy (a parcel of mana is
     worth, in Energy, what the same mana is worth as air: §11, *Mana and Energy*).
 
@@ -155,19 +155,19 @@ what's left.
 | D25 | **Orders don't spread to other mana**, except through a second flaw (§11, *The second flaw*). |
 | D26 | **A weave in hand is held still.** Its mana counts toward the body's load because the body holds it: it stays where it was laid until `MANI` lets it go. *(How: D37.)* |
 | D28 | **Things weigh.** A tick is 1/30 s, and things fall at 9.8 m/s². Matter held by mana weighs what that much matter weighs (a full cell of earth, 25 kg), and the mana holding it has to carry it. What rests on the ground is held up by the ground. |
-| D29 | **A push costs the kinetic energy it adds** (D22, made exact), to what's pushed and to what it's pushed off (D33), at `pushEnergy` a M of mana poured. Speeding up costs more the faster it's already going. Slowing down costs nothing: what's taken out of the motion is heat. Holding something up against its weight costs nothing on the ground; in the air, it costs the downdraft it makes. Lifting it costs its weight times the height. |
+| D29 | **A push costs the kinetic energy it adds** (D22, made exact), to what's pushed and to what it's pushed off (D33), at `push_energy` a M of mana poured. Speeding up costs more the faster it's already going. Slowing down costs nothing: what's taken out of the motion is heat. Holding something up against its weight costs nothing on the ground; in the air, it costs the downdraft it makes. Lifting it costs its weight times the height. |
 | D30 | **Earth held by mana is rock.** Its particles are bound to their neighbours, and keep their shape. Rock cracks where it's bent too far or made to hold too much, and comes apart as its mana lets go of the earth. *(When it forms: D36.)* |
 | D31 | **An order only feels.** It knows its own particle (its mana, its speed, whether it touches something), the mana around it (how dense, which way it thickens, how it moves), its weave's age, and what its caster wrote into the weave's registers. It isn't told where it is, where its weave's centre is, or where its maker is. What it has to know beyond that, its caster works out and writes in: once for the whole weave, or tick by tick while they keep it up. |
-| D32 | **The Law of Transformation.** A mind can transform mana into Energy: that's what a push is. The mana isn't used up (mana has no spent state); it goes loose, still mana, and could be used again. What limits it is the mind. Each mind can transform only so much a tick (`power`, a mind stat, D15), and it strains for every joule; the strain eases as it rests (`recovery`), and past its mental capacity (`capacity`) transforming more harms it, lowering its condition: madness, counted. So in principle the same mana could drive one phenomenon after another without end, but holding a mind to it is beyond anyone, alone. An order is a mind too: its power is its particle's mana's (`orderPower` a M), and its kicks pour its own mana. Closes question 5. |
+| D32 | **The Law of Transformation.** A mind can transform mana into Energy: that's what a push is. The mana isn't used up (mana has no spent state); it goes loose, still mana, and could be used again. What limits it is the mind. Each mind can transform only so much a tick (`power`, a mind stat, D15), and it strains for every joule; the strain eases as it rests (`recovery`), and past its mental capacity (`capacity`) transforming more harms it, lowering its condition: madness, counted. So in principle the same mana could drive one phenomenon after another without end, but holding a mind to it is beyond anyone, alone. An order is a mind too: its power is its particle's mana's (`order_power` a M), and its kicks pour its own mana. Closes question 5. |
 | D33 | **Every push pushes something back.** A caster's push (`SHOV`) goes off their body, through their reach, and `SEND` throws mana out of it: the body is pushed back, across the ground, and their feet hold it as far as friction lets them. An order's kick goes off what's around its particle: the ground or other matter it's against on the side it pushes away from, or else the air it's in. The energy of the push (D29) counts both. |
 | D34 | **A weave is its particles, and each is on its own.** Each particle keeps its own copy of its weave's registers and passes it on to those touching it, `relay` times a tick; the newest write wins. A caster writes into what they touch. A particle that lets go (`DISS`) or frays goes alone. A particle belongs to its weave while it carries the order, and, until it's given one, while its caster can reach it. Everything a caster's body does or senses is within their reach: they feel, count and push only the particles they can reach. `HOLD` and the field are gone; closes question 4. |
 | D35 | **Touch is a force felt.** `TUCH` says whether something stopped or struck the particle when the world last moved: matter, the ground, a body, anyone's. Mana strikes its maker's body as it strikes anyone's; the casting hand is at arm's length (0.6 m) so that what's poured there doesn't. |
 | D36 | **Rock forms where earth is packed and still.** Earth held by mana, in a cell as full of earth as solid ground, binds to its neighbours that hardly move against it. Whose mana it is doesn't matter, nor whether it's in hand. |
 | D37 | **The hand holds what's in it by force.** A weave in hand presses on the mana and air around it, and they on it; the hand holds it still, bears its weight, and the body behind the hand feels the rest. |
-| D38 | **Free mana is a gas, and the air holds it up.** Each part of free mana has its own mass (`manaMass`, D40), and everything weighs its mass times g. The air weighs too, and at rest it's thicker low down. A parcel of mana pushes aside its own M's worth of air, and the air holds it up by what that weighs (Archimedes): fire, the lightest, rises; earth mana sinks a little; matter is what's heavy. Where there's no air, everything falls alike. |
+| D38 | **Free mana is a gas, and the air holds it up.** Each part of free mana has its own mass (`mana_mass`, D40), and everything weighs its mass times g. The air weighs too, and at rest it's thicker low down. A parcel of mana pushes aside its own M's worth of air, and the air holds it up by what that weighs (Archimedes): fire, the lightest, rises; earth mana sinks a little; matter is what's heavy. Where there's no air, everything falls alike. |
 | D39 | **Friction and flame.** A pushed body slides until the ground's friction stops it (μg, its weight pressing on the ground). Flame spreads as a gas does, from more to less, evening out with its neighbours. |
 | D40 | **Mass is mana, by part.** Each part of mana weighs its own amount a M, free or condensed: fire 0.3 g, air 0.45 g, water 0.55 g, earth 0.7 g (the order is the author's; the numbers are tuning). Raw mana weighs half a gram a M, so a cell of air at 40 M is as heavy as real air. Matter is heavy because it's packed: a full cell of earth holds 35,700 M (25 kg, as dense as packed soil), and of water 28,400 M. Condensing and unmaking keep mass and momentum exactly. Matter takes room by its density, and a cell is full when its matter fills it. 1 M of free mana holds 5 kg of matter (`bind`). Gases press by the ideal gas law, by part. |
-| D41 | **The engine is Rust.** The machine, the world, the assembler and the tools are written in Rust: native for the tests, the bench and the CLI, and compiled to WebAssembly for the tester (and for Quire, later). The move changes nothing in the world: the same physics, numbers and order of operations, matched against the TypeScript engine tick by tick until the port is done (PLAN step R). |
+| D41 | **The engine is Rust.** The machine, the world, the assembler and the tools are written in Rust: native for the tests, the bench and the CLI, and compiled to WebAssembly for the tester (and for Quire, later). The move changed nothing in the world: the same physics, numbers and order of operations, matched against the TypeScript engine to the last bit, tick by tick, before it was retired (PLAN step R). So the engine computes with JavaScript's numbers: V8's math (fdlibm), its rounding, and how it writes a number. |
 | D27 | **Knowing costs.** An order is ingrained one particle at a time, at a beat for every instruction it could run, and every beat it thinks burns its particle's mana. A short order is cheap to ingrain and cheap to keep; an order that senses more costs more. |
 
 ---
@@ -271,7 +271,7 @@ These rules belong to the world, not to the machine:
    earth falls free.
 
 Every rule has numbers to tune: how much matter 1 M binds, how hard each part presses, what a push costs, how much an order
-burns, and so on. They live in one table (`src/vm/physics.ts`).
+burns, and so on. They live in one table (`engine/mana/src/vm/physics.rs`).
 
 **Earth holds together.** A cell of solid earth with solid earth beside it stays where it is, even over a hole, so the ground
 around a Stone Wall's trench doesn't pour in like sand. Loose earth (less than solid, or with nothing beside it) falls and
@@ -408,9 +408,9 @@ that **each particle it's ingrained into runs every tick**, like a tiny mind ins
 
 An order can do arithmetic and jumps, read its copy of its weave's registers and the ports below, and use the **order**
 instructions (`KICK`, `TUCH`, `GETW`, `PUTW`, `DISS`, `CNDS`, `DENS`, `GRAD`, `NVEL`). It ends with `RET`. Every beat it
-thinks burns some of its particle's mana into the air (`orderBurn`). An order that thinks more than 64 beats in one tick
+thinks burns some of its particle's mana into the air (`order_burn`). An order that thinks more than 64 beats in one tick
 **frays**: that particle goes loose, and forgets its order. The rest of its weave goes on. An order is a mind (D32): it
-transforms its particle's own mana into the Energy of its kicks, at most `orderPower` for each M it holds, a tick.
+transforms its particle's own mana into the Energy of its kicks, at most `order_power` for each M it holds, a tick.
 
 What an order knows is what it reads (D31): its mana and its weave's age for free, the weave's registers, and, at a price in
 beats, its own speed (`VEL`), whether it touches something (`TUCH`), and what it feels around it (`DENS`, `GRAD`, `NVEL`).
@@ -500,7 +500,7 @@ keyboard, sliders).
 | `59` | `PCNT d, w` | | How many of the weave's particles the caster feels: those within reach, counted 0, 1, 2… in the order they were laid. |
 | `5A` | `PPOS n:3, w, s` | PROBE | Where felt particle `s` is, from the middle of what's felt of the weave, in its frame. |
 | `5B` | `PVEL n:3, w, s` | PROBE | How felt particle `s` moves, in the weave's frame. |
-| `5C` | `SHOV m, w, n, n:3` | PUSH | Push felt particle `n` off the body (D33): change its velocity by `n:3`. It costs the kinetic energy it adds to the particle and the body, at `pushEnergy` for each M, from `m`, poured into the air there (D29), and gets as much as the mind's power has left this tick (D32). Slowing a particle costs nothing. |
+| `5C` | `SHOV m, w, n, n:3` | PUSH | Push felt particle `n` off the body (D33): change its velocity by `n:3`. It costs the kinetic energy it adds to the particle and the body, at `push_energy` for each M, from `m`, poured into the air there (D29), and gets as much as the mind's power has left this tick (D32). Slowing a particle costs nothing. |
 | `5D` | `INGR w, s` | ORDER | Ingrain the weave's order into felt particle `s`, and tell it which way the weave faces. 4 beats, and one more for every instruction the order could run. |
 
 #### Order (only inside an order)
@@ -1753,43 +1753,52 @@ the `.masm` files in `spells/` and `lib/` directly.
   instruction by instruction: step forward and back, its 16 registers at each step, its copy of the weave's registers, how it kicked,
   the mana its thinking burned, and its beats against the 64 it has. A breakpoint in order code (a weave's `.order`, or a
   library routine it calls) pauses the run after the tick a particle hit it, on that particle and that instruction. The
-  machine records this only when asked (`Sim.traceOrders`), since every particle of every weave is recorded every tick.
+  machine records this only when asked (`Sim::trace_orders`), since every particle of every weave is recorded every tick.
 
 ---
 
 ## 10. How it's built
 
-TypeScript throughout, like Quire, so it can run inside Quire later. *Moving to Rust, compiled to WebAssembly where it runs
-in a browser or in Quire (D41, PLAN step R). This section is rewritten when the port is done.*
+The engine is Rust (D41): the machine, the world, the assembler and the tools, in a Cargo workspace. It runs natively
+for the tests, the bench and the terminal, and compiled to WebAssembly for the spell tester (and for Quire, later: it
+runs wherever JavaScript does). It was ported from TypeScript and matched it to the last bit, so it computes with
+JavaScript's numbers: V8's math, its rounding, and how it writes a number (`js/`).
 
 ```
-src/
-  asm/       isa.ts (the instruction table), assembler.ts, disassembler.ts
-  vm/        physics.ts (the numbers), parts.ts, world.ts, caster.ts, weave.ts, sim.ts (the machine and the tick),
-             fluid.ts (mana's particles), air.ts (the air), energy.ts (the Energy ledger)
-  cli/       mas.ts, mvm.ts, bench.ts
-  scenes.ts  test worlds for the four spells and the bench, in 2D and 3D
-  bench.ts   the bench: every way of holding and throwing, measured
-  render.ts  a slice of the world as text
-  profile.ts where a cast's beats went
-tester/      the spell tester: Svelte 5, Vite, CodeMirror 6
-lib/         Elements, Basics, Shapes, Reactions, Transformations, Orders, Holding, in .masm
-spells/      StoneWall, Fireball, Gust, WaterShield, in .masm
-bench/       the bench's spells
-scripts/     listings.ts: SPEC's code listings, from the .masm files
-test/        the assembler, the machine, the physics, the Energy ledger, the four spells, the bench
+engine/
+  mana/            the engine
+    src/asm/       isa.rs (the instruction table), assembler.rs, disassembler.rs, code.rs (a program, decoded once),
+                   docs.rs (a line on each instruction and port)
+    src/vm/        physics.rs (the numbers), parts.rs, world.rs, caster.rs, weave.rs, sim.rs (the machine and the tick),
+                   fluid.rs (mana's particles), air.rs (the air), energy.rs (the Energy ledger)
+    src/js/        JavaScript's numbers: V8's math (fdlibm), Math.round, Math.hypot, toFixed, Number::toString
+    src/scenes.rs  test worlds for the four spells and the bench, in 2D and 3D
+    src/bench.rs   the bench: every way of holding and throwing, measured
+    src/render.rs  a slice of the world as text
+    src/profile.rs where a cast's beats went
+    tests/         the assembler, the machine, the physics, the Energy ledger, the four spells, the bench, V8's math
+  mana-cli/        mas, mvm and bench
+  mana-wasm/       the engine as the tester sees it
+tester/            the spell tester: Svelte 5, Vite, CodeMirror 6; src/lib/engine.ts is how it talks to the engine
+lib/               Elements, Basics, Shapes, Reactions, Transformations, Orders, Holding, in .masm
+spells/            StoneWall, Fireball, Gust, WaterShield, in .masm
+bench/             the bench's spells
+scripts/           listings.ts: SPEC's code listings, from the .masm files
 ```
 
 ```
 npm install
-npm test                                   the tests
-npm run tester                             the spell tester, at http://localhost:5175
-npx tsx src/cli/mas.ts spells/Fireball.masm  the listing: addresses, bytes, instructions
-npx tsx src/cli/mvm.ts spells/StoneWall.masm cast it in its test world, in the terminal
-npx tsx src/cli/mvm.ts spells/Gust.masm --ticks 40 --maintain 30
-npm run bench                              every way of holding and throwing, side by side
-npm run listings                           SPEC's code listings, brought up to date
+npm test                                       the tests
+npm run check                                  clippy, tsc and svelte-check
+npm run tester                                 the spell tester, at http://localhost:5175
+npm run mas -- spells/Fireball.masm            the listing: addresses, bytes, instructions
+npm run mvm -- spells/StoneWall.masm           cast it in its test world, in the terminal
+npm run mvm -- spells/Gust.masm --ticks 40 --maintain 30
+npm run bench                                  every way of holding and throwing, side by side
+npm run listings                               SPEC's code listings, brought up to date
 ```
+
+It needs Rust with its WebAssembly target, wasm-bindgen and wasm-pack.
 
 ### Phases
 
@@ -1813,6 +1822,8 @@ npm run listings                           SPEC's code listings, brought up to d
    - **What an order knows** (D31): it only feels, and what else it needs its caster writes into its weave. *Built.*
    - **The main objective** (§0): the audit's sixteen places, made organic (D32–D39). *Built.* What it turned up is the
      next work (§0, *What's left*).
+   - **Mass is mana** (D40). *Built.*
+   - **The engine in Rust** (D41). *Built:* the same machine, to the last bit, two to five times faster on one core.
 4. **The language**, compiling to what phase 1 runs by hand.
 5. Casters, spells and libraries read from Quire.
 6. **Other notations** (later): runes, circuits and scores.
@@ -1850,9 +1861,9 @@ The machine keeps two more ledgers that physics needs.
 
 **Momentum.** Everything inside the world pushes on everything else equally and oppositely (particle and particle, particle
 and air, air and air, particle and body), so the world's momentum changes only by what comes from outside it, and the tests
-check that every tick (`World.momentumError`).
+check that every tick (`World::momentum_error`).
 
-**Energy** (`src/vm/energy.ts`, `Sim.keepEnergy`). The world holds Energy as motion (of particles, the air and bodies), as
+**Energy** (`engine/mana/src/vm/energy.rs`, `Sim::keep_energy`). The world holds Energy as motion (of particles, the air and bodies), as
 height (weight lifted, of particles, the air and the ground's matter, less what the air holds up of a parcel of mana), and
 stored: in mana's gas pressed together, in matter packed past full, in what coheres pulled apart, in the air pressed or
 drawn thin, and in mana held in bodies. Each is measured from the air at rest, so mana that moves into or out of the air,
@@ -1861,7 +1872,7 @@ every height, its weight and its pressure trading off, and a parcel of mana is h
 as thick as it is on average. Motion becomes **heat** wherever two things even out their speeds: in the mana's thickness,
 the air dragging and its own thickness, landing on the ground and sliding on it, a body's feet, a hand holding still what
 the world pushes on, rock keeping its shape, particles merging, mana let into the air, a push that slows. That heat is
-counted where it happens, to the joule, and kept by how it was made (`World.heat`). Minds put Energy in with every push
+counted where it happens, to the joule, and kept by how it was made (`World::heat`). Minds put Energy in with every push
 and kick, counted push by push (`minds`); bodies change it a little by gathering mana and pouring it (`bodies`). So, every
 tick:
 
@@ -1899,10 +1910,10 @@ particles is equal and opposite, so momentum is conserved. Mana is conserved bec
 `GATH` draws from the grid. A particle moving through the air drags on the air mana around it and is dragged by it, both
 ways. That drag is wind.
 
-The air is a gas (`src/vm/air.ts`). It presses from dense to thin, at its own speed of sound (`airSound`, 18 m/s: slower
+The air is a gas (`engine/mana/src/vm/air.rs`). It presses from dense to thin, at its own speed of sound (`air_sound`, 18 m/s: slower
 than real air's 340, to keep the steps few, and still fast beside its winds). It carries itself along, and its mana and its
 momentum with it, from cell to cell. Solid cells and the world's edge are closed: it flows around them, and what it pushes
-on them is momentum given to the world. Its thickness (`airViscosity`) evens out its speed between neighbours and holds it
+on them is momentum given to the world. Its thickness (`air_viscosity`) evens out its speed between neighbours and holds it
 still against the ground. It weighs: at rest it's thicker low down than high up (by e every `airSound²/g` metres, 33 m),
 its weight and its pressure in balance. So a gust travels on as a jet once it's let go, a fireball leaves a wake and pushes
 air ahead of it, wind turns up and over a pillar, and the hole a caster gathers from fills back in from around it. Air
@@ -1910,12 +1921,12 @@ that has all but stopped stops, and air at rest, as thick as rest would have it,
 
 The air holds up what's in it (D38). A parcel of free mana is a gas like the air, so it pushes aside its own M's worth of
 air, and the air at rest holds it up by what that weighs: `RAW_MASS` (half a gram) a M, the weight of raw mana. Free
-mana of each part has its own mass (`manaMass`, D40): fire 0.3 g a M, so it rises at about two-thirds of g; air 0.45 g, so
+mana of each part has its own mass (`mana_mass`, D40): fire 0.3 g a M, so it rises at about two-thirds of g; air 0.45 g, so
 it rises a little; water 0.55 g, so it sinks a little; earth 0.7 g, so it sinks at about a third of g. Matter isn't held
 up: it's what's heavy. Where there's no air, everything falls alike.
 
-When particles come to rest beside each other, they merge, to keep their number down: closer than `mergeRange`, moving
-within `mergeSpeed` of each other, and together no more than `maxMote`. The new particle sits at their centre of mass with
+When particles come to rest beside each other, they merge, to keep their number down: closer than `merge_range`, moving
+within `merge_speed` of each other, and together no more than `max_mote`. The new particle sits at their centre of mass with
 their summed mana, matter and momentum, and keeps the bigger one's weave and order (the same size, the older one's). A
 particle of two motes or more that has spread thin (more of the density it feels is its own than its neighbours') splits in
 two, side by side. Both halves keep its weave and order. Nothing in a caster's hand merges or splits, and neither does rock.
@@ -1930,7 +1941,7 @@ become about 45. A merged particle runs its order once where two ran it before, 
 
 ### What each part brings
 
-Each part has its own numbers, in `physics.ts`, by part number. The machine still knows no element names (D2).
+Each part has its own numbers, in `physics.rs`, by part number. The machine still knows no element names (D2).
 
 | Part | Pressure | In the air, free | Holds together | So |
 |---|---|---|---|---|
@@ -1939,12 +1950,12 @@ Each part has its own numbers, in `physics.ts`, by part number. The machine stil
 | 2 (air) | high | as heavy as the air: floats | no | fills what's empty. The easiest to pour. |
 | 3 (earth) | very low | the heaviest: sinks slowly | strongly | barely spreads. It has to be laid out by hand. |
 
-*Built:* each part's pressure, thickness, mass (`manaMass`; the air holds it up, D38) and how it holds together
+*Built:* each part's pressure, thickness, mass (`mana_mass`; the air holds it up, D38) and how it holds together
 (`cohesion`, a pull between neighbours, strongest at half the smoothing length). Matter held by mana adds its weight and
-its mass, as much as the mana it was made of (D40), can't be packed past full (`density`, `matterStiffness`), and pulls on
+its mass, as much as the mana it was made of (D40), can't be packed past full (`density`, `matter_stiffness`), and pulls on
 its neighbours as water does
-(`matterCohesion`). Earth held by mana becomes rock where it's packed as full as solid ground and still (D30, D36): each
-particle is bound to its neighbours within `bondRange`, and the bonds hold their length, a dozen passes a step, so that
+(`matter_cohesion`). Earth held by mana becomes rock where it's packed as full as solid ground and still (D30, D36): each
+particle is bound to its neighbours within `bond_range`, and the bonds hold their length, a dozen passes a step, so that
 the ground's support reaches up through a wall. The ground holds up what rests on it, with friction.
 
 An adept's fireball is 72 particles of a quarter of an M each (`mote`).
@@ -1953,9 +1964,9 @@ An adept's fireball is 72 particles of a quarter of an M each (`mote`).
 ### Pushing
 
 A push pours mana onto a particle and changes its velocity. A mind transforms the poured mana into the particle's motion
-(D32): a push costs the **kinetic energy it adds**, to the particle and to what it's pushed off (D33), at `pushEnergy` for
+(D32): a push costs the **kinetic energy it adds**, to the particle and to what it's pushed off (D33), at `push_energy` for
 each M (D29). One M is 900 J. It gets as much as the mind's power has left this tick: an adept's 450 J a tick, an order's
-`orderPower` for each M its particle holds. Every push pushes something back: a caster's goes off their body, through
+`order_power` for each M its particle holds. Every push pushes something back: a caster's goes off their body, through
 their reach, and the ground under their feet takes what friction holds; an order's goes off the ground behind its particle,
 or the air it's in. So:
 
@@ -2038,7 +2049,7 @@ particles down, and nobody asked whose particles they were. A big ordered partic
 else's mana takes it over: loose mana, the mana of another weave, another caster's fireball. With enough mana packed into
 one place, an order spreads through whatever it merges with, like a chemical reaction running through a substance.
 
-It's held back by the same rule that made it: two particles merge only if together they're no more than `maxMote`, so an
+It's held back by the same rule that made it: two particles merge only if together they're no more than `max_mote`, so an
 ordered particle of 0.75 M can take in one mote and no more, until it splits. A particle of only one mote, ordered, ties with
 the mote beside it, and the older one wins. Every takeover is logged as `taken`: which weave took in whose mana, and whether
 it gave it its order.
@@ -2049,7 +2060,7 @@ Like the first flaw, it isn't an instruction, nothing in the libraries uses it, 
 
 1. A 2D sandbox, outside the machine: a ball of particles with pressure, and a caster with beats and mana pushing it by each
    strategy in *Holding*. The bench (below) has taken its place.
-2. Particles in the world, beside the air grid, which now moves (`src/vm/fluid.ts`). The ledger counts them, and a second
+2. Particles in the world, beside the air grid, which now moves (`engine/mana/src/vm/fluid.rs`). The ledger counts them, and a second
    ledger counts momentum.
 3. The instructions in §5: sensing and pushing particles (`PCNT`, `PPOS`, `PVEL`, `SHOV`, `WPOS`, `WVEL`), ingraining
    (`INGR`), and in orders `KICK`, `DENS`, `GRAD`, `NVEL` and `VEL`. `MOVE` and `LOCK SHAPE` are gone, and since D34 so is
@@ -2059,8 +2070,8 @@ Like the first flaw, it isn't an instruction, nothing in the libraries uses it, 
 6. Weight, matter's mass, the ground's support and friction, water that holds together and can't be squeezed, rock, and
    pushes priced by the energy they add (D28–D30).
 7. Particles merging and splitting, and the second flaw.
-8. The air as a gas that flows (`src/vm/air.ts`).
-9. The Energy ledger (`src/vm/energy.ts`).
+8. The air as a gas that flows (`engine/mana/src/vm/air.rs`).
+9. The Energy ledger (`engine/mana/src/vm/energy.rs`).
 10. The main objective's audit, made organic (§0, D32–D39): pushes that push back, Energy from the mind, reach on
     everything, registers passed by touch, particles that go alone, touch as a force felt, rock from a condition, the hand
     that holds by force, buoyancy and an air that weighs, friction under bodies, flame that diffuses.
@@ -2078,12 +2089,12 @@ Things the machine found that the sandbox couldn't:
   costs nothing in mana (D29), but its order has to think every tick to do it, and burns. So it steps back onto the solid
   ground in front of the trench and stands there, its order quiet. The trench becomes a ditch in front of it.
 - **Rock needs bracing.** Bound only to the neighbours straight beside them, a 3D wall's particles fold like a stack of
-  cards: nothing resists shear. Bound to their diagonal neighbours too (`bondRange` 0.2 m), it stands.
+  cards: nothing resists shear. Bound to their diagonal neighbours too (`bond_range` 0.2 m), it stands.
 - **Rock has to be held from the ground up.** Bonds that keep their length are solved a pass at a time; solved in any order,
   the ground's support climbs a 2 m wall too slowly, and it sags. Solved lowest first, with the ground in the same passes,
   it stands in one.
 - **Air that's too soft piles up.** With mana's own gas stiffness, the air's speed of sound was 1 m/s, and wind piled up
-  against a pillar instead of going over it. The air has its own, faster (`airSound`).
+  against a pillar instead of going over it. The air has its own, faster (`air_sound`).
 - **Stepping waves the wrong way makes them grow.** Moving the air with its old speeds while the pressure pushed it made
   every disturbance grow into a storm. Pushed first, then moved, they die away.
 - **Holding is thinking, not mana.** With pushes priced by energy, pushing a straying particle back in mostly slows it:
@@ -2145,16 +2156,16 @@ hide them.
 
 | Number | Value | From |
 |---|---|---|
-| `manaMass` | fire 0.3 g, water 0.55 g, air 0.45 g, earth 0.7 g a M | The author's order; raw mana as heavy, at 40 M a cell, as real air |
-| `airMana` | 40 M a cell of air, at the ground | 20 g in (0.25 m)³: 1.3 kg/m³, real air |
+| `mana_mass` | fire 0.3 g, water 0.55 g, air 0.45 g, earth 0.7 g a M | The author's order; raw mana as heavy, at 40 M a cell, as real air |
+| `air_mana` | 40 M a cell of air, at the ground | 20 g in (0.25 m)³: 1.3 kg/m³, real air |
 | `density` | flame 0.3, water 1,000, air 1.2, earth 1,600 kg/m³ | Hot gas, water, air, packed soil |
 | `bind` | 5 kg of matter a M of free mana | Kept from before: a wall's mana holds what it did |
 | `gravity` | 9.81 m/s², a tick 1/30 s | Real |
-| `airSound` | 0.6 m/tick (18 m/s) | Slowed from 340 m/s to keep steps few; real in step 3 |
-| `pushEnergy` | 900 J a M poured | A guess, kept |
+| `air_sound` | 0.6 m/tick (18 m/s) | Slowed from 340 m/s to keep steps few; real in step 3 |
+| `push_energy` | 900 J a M poured | A guess, kept |
 | `stiffness` | fire 0.0009, water 0.0001, air 0.002, earth 0 (m/tick)² | How fast each part's free mana spreads: kept |
 | `cohesion` | free water 0.037, free earth 0.15 a kg | Rescaled so free mana pulls as it did, now it's lighter |
-| `matterCohesion`, `matterStiffness` | 0.0001, 0.3 | Kept; real surface tension and stiffness come with step 2 |
+| `matter_cohesion`, `matter_stiffness` | 0.0001, 0.3 | Kept; real surface tension and stiffness come with step 2 |
 | mind `power`, `capacity`, `recovery` | adept 450 J a tick, 54 kJ, 18 J a tick | Guesses (D32) |
 
 ### The bench
@@ -2262,7 +2273,7 @@ machine.
 ## 12. Open questions
 
 1. **The numbers.** How much matter 1 M binds, how fast weaves leak, how training grows stats. They start as guesses in
-   `src/vm/physics.ts`, to be tuned in the tester.
+   `engine/mana/src/vm/physics.rs`, to be tuned in the tester.
 2. **Runes as machine code.** Elvish *Runic Magic* is written "their own way", and a glyph already means a step. Glyphs could
    be **opcodes**, and the marks around them (the lattice, its families) the **operands**. A carved ring would then be a
    program the elves have always read straight, with no language in between. This needs its own design pass.

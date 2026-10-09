@@ -4,22 +4,16 @@
   "private": true,
   "type": "module",
   "description": "A machine, a language and a spell tester for Ikozu's magic",
-  "bin": {
-    "mas": "src/cli/mas.ts",
-    "mvm": "src/cli/mvm.ts"
-  },
   "scripts": {
-    "test": "vitest run",
-    "engine:test": "cargo test --manifest-path engine/Cargo.toml",
-    "engine:wasm": "wasm-pack build engine/mana-wasm --target web --release",
-    "parity": "sh -c 'for f in engine/parity/*.ts; do ${MANA_NODE:-node} --import tsx \"$f\" || exit 1; done'",
-    "check": "npm run engine:wasm && tsc --noEmit && svelte-check --tsconfig ./tsconfig.json --workspace tester --fail-on-warnings",
+    "test": "cargo test --manifest-path engine/Cargo.toml",
+    "check": "cargo clippy -q --manifest-path engine/Cargo.toml --workspace --tests -- -D warnings && npm run engine:wasm && tsc --noEmit && svelte-check --tsconfig ./tsconfig.json --workspace tester --fail-on-warnings",
     "tester": "npm run engine:wasm && vite --config tester/vite.config.ts",
     "build:tester": "npm run engine:wasm && vite build --config tester/vite.config.ts",
-    "bench": "tsx src/cli/bench.ts",
+    "engine:wasm": "wasm-pack build engine/mana-wasm --target web --release",
+    "bench": "cargo run -q --release --manifest-path engine/Cargo.toml -p mana-cli --bin bench --",
     "listings": "tsx scripts/listings.ts",
-    "mas": "tsx src/cli/mas.ts",
-    "mvm": "tsx src/cli/mvm.ts"
+    "mas": "cargo run -q --release --manifest-path engine/Cargo.toml -p mana-cli --bin mas --",
+    "mvm": "cargo run -q --release --manifest-path engine/Cargo.toml -p mana-cli --bin mvm --"
   },
   "devDependencies": {
     "@codemirror/autocomplete": "^6.20.3",
@@ -38,7 +32,6 @@
     "svelte-check": "^4.7.6",
     "tsx": "^4.23.15",
     "typescript": "^5.9.3",
-    "vite": "^8.3.4",
-    "vitest": "^5.0.3"
+    "vite": "^8.3.4"
   }
 }

@@ -13,7 +13,8 @@ decision. SPEC §0 has it in full.
 - The physics is real science, as close as possible, and logical in Ikozu's world: mana, momentum and Energy are
   conserved exactly, every force comes in an equal and opposite pair, and nothing acts at a distance unless something
   carries it.
-- When a simple spell is too hard to make, **tune the world's numbers** (`src/vm/physics.ts`), never add a special case.
+- When a simple spell is too hard to make, **tune the world's numbers** (`engine/mana/src/vm/physics.rs`), never add a
+  special case.
 - **Making and balancing spells is the user's job.** The libraries and spells here show how the system works. Keep them
   working with the least change; don't optimise or tune them on your own.
 
@@ -23,7 +24,12 @@ from it when asked.
 
 ## Working here
 
-- `npm test` (vitest; every test checks the mana and momentum ledgers each tick), `npm run check` (tsc and svelte-check).
+- The engine is Rust, in `engine/` (SPEC D41): the machine, the world, the assembler and the tools. The tester is
+  Svelte, and talks to the engine, compiled to WebAssembly, through `tester/src/lib/engine.ts`.
+- The engine computes with JavaScript's numbers (V8's math and rounding, `engine/mana/src/js`): it was ported from
+  TypeScript to the last bit. Use `js::` functions where the engine already does (`js::hypot`, `js::exp`, `js::min`…).
+- `npm test` (cargo test; every test checks the mana and momentum ledgers each tick), `npm run check` (clippy, tsc and
+  svelte-check).
 - `npm run listings` refreshes SPEC's code listings from `lib/`, `spells/` and `bench/`; run it after editing `.masm`.
 - `npm run bench` compares ways of holding and throwing (slow with `--3d`).
 - The design and every decision are in SPEC.md. Record a new decision there (§1) as you make it.

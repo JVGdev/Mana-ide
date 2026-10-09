@@ -14,9 +14,14 @@ get tuned, never the rules bent. Making the spells is the author's job: the ones
 
 SPEC §0 says it in full, with where the machine doesn't meet it yet. The rest of the design is in [SPEC.md](SPEC.md).
 
+The engine is Rust (SPEC D41), in `engine/`: it runs natively for the tests, the bench and the terminal, and compiled to
+WebAssembly for the tester. It needs Rust with its WebAssembly target, and wasm-bindgen and wasm-pack (on Arch:
+`sudo pacman -S rust rust-wasm wasm-bindgen wasm-pack`).
+
 ```
 npm install
 npm test
+npm run check
 ```
 
 ## The spell tester
@@ -25,7 +30,7 @@ npm test
 npm run tester
 ```
 
-Opens at http://localhost:5175. Edit a spell or a library, Cast it, then Play, Step one instruction (F10) or run to the end
+Builds the engine for the browser, then opens at http://localhost:5175. Edit a spell or a library, Cast it, then Play, Step one instruction (F10) or run to the end
 of the Tick (Shift+F10). Click the gutter for a breakpoint; the second gutter shows what each line has cost in beats. Click
 the world to aim. Ctrl+S saves the file back to `spells/`, `bench/` or `lib/`.
 
@@ -63,7 +68,7 @@ much of the ball stayed together, and the mana the caster's hand and the ball's 
 ## Assemble a spell
 
 ```
-npx tsx src/cli/mas.ts spells/Fireball.masm
+npm run mas -- spells/Fireball.masm
 ```
 
 ```
@@ -78,57 +83,70 @@ Fireball:
 ## Cast it
 
 ```
-npx tsx src/cli/mvm.ts spells/StoneWall.masm
-npx tsx src/cli/mvm.ts spells/Fireball.masm --ticks 24 --every 4
-npx tsx src/cli/mvm.ts spells/Gust.masm --ticks 40 --maintain 30
-npx tsx src/cli/mvm.ts spells/WaterShield.masm --3d
+npm run mvm -- spells/StoneWall.masm
+npm run mvm -- spells/Fireball.masm --ticks 24 --every 4
+npm run mvm -- spells/Gust.masm --ticks 40 --maintain 30
+npm run mvm -- spells/WaterShield.masm --3d
 ```
 
 Add `--profile` to see where the caster's thought went, by routine and by line:
 
 ```
-npx tsx src/cli/mvm.ts spells/Fireball.masm --3d --quiet --ticks 60 --profile
+npm run mvm -- spells/Fireball.masm --3d --quiet --ticks 60 --profile
 ```
 
 ```
-Fireball: 7513 beats over 26 ticks
+Fireball: 7086 beats over 24 ticks
 
 routines:
-     4616   61.4%  ingrain
-     2799   37.3%  throw
+     4616   65.1%  ingrain
+     2372   33.5%  throw
 …
 lines:
-     4032   53.7%  ×72     Basics.masm:30         INGR  n4, n6
-     1368   18.2%  ×342    Basics.masm:93         .p:     SHOV  m0, n4, n6, n11:13
+     4032   56.9%  ×72     Basics.masm:30         INGR  n4, n6
+     1152   16.3%  ×288    Basics.masm:93         .p:     SHOV  m0, n4, n6, n11:13
 ```
 
-Each spell has a test world (`src/scenes.ts`). The terminal shows a slice of it: here, a Stone Wall that has climbed out
-of its trench and stepped back onto the ground in front of it.
+Each spell has a test world (`engine/mana/src/scenes.rs`). The terminal shows a slice of it: here
+(`npm run mvm -- spells/StoneWall.masm --ticks 230 --every 1000`), a Stone Wall that its caster lifted out of its trench
+by hand and set down on the ground in front of it, where it stands, leaning a little.
 
 ```
-|             HHH                                                |
-|        @     HH                                                |
-|        @    HHH                                                |
-|        @    +HH                                                |
-|              HH                                                |
-|              HH                                                |
-|################+ ##############################################|
+|             H                                                  |
+|            HHH                                                 |
+|            HHH                                                 |
+|       @    HHH                                                 |
+|       @     HHH                                                |
+|       @     HHH                                                |
+|            :HHH                                                |
+|           ##HHH                                                |
+|################  ##############################################|
 |################  ##############################################|
 ```
 
 `@` is the caster, `#` is earth, `H` is earth a weave holds, `W` is water a weave holds, `*` is fire mana in a weave, and
-`.` is loose mana. The full key is in `src/render.ts`.
+`.` is loose mana. The full key is in `engine/mana/src/render.rs`.
 
 ## Where things are
 
-- `src/asm/isa.ts`: every instruction, its opcode and operands.
-- `src/vm/sim.ts`: the machine. What each instruction does, and what happens each tick.
-- `src/vm/physics.ts`: the numbers the world runs on, to be tuned.
-- `src/vm/fluid.ts`: mana as a fluid of particles: weight, pressure, cohesion, rock, the ground, merging and splitting.
-- `src/vm/air.ts`: the air, a gas that flows.
-- `src/vm/energy.ts`: the Energy ledger.
-- `src/profile.ts`: where a cast's beats went.
+The engine is in `engine/mana/src/`:
+
+- `asm/isa.rs`: every instruction, its opcode and operands.
+- `vm/sim.rs`: the machine. What each instruction does, and what happens each tick.
+- `vm/physics.rs`: the numbers the world runs on, to be tuned.
+- `vm/fluid.rs`: mana as a fluid of particles: weight, pressure, cohesion, rock, the ground, merging and splitting.
+- `vm/air.rs`: the air, a gas that flows.
+- `vm/energy.rs`: the Energy ledger.
+- `profile.rs`: where a cast's beats went.
+- `js/`: JavaScript's numbers (V8's math, its rounding, how it writes a number), which the engine kept when it was
+  ported from TypeScript, so that it does exactly what it did (PLAN step R).
+
+And around it:
+
+- `engine/mana/tests/`: the tests.
+- `engine/mana-cli/`: `mas`, `mvm` and `bench`.
+- `engine/mana-wasm/` and `tester/src/lib/engine.ts`: the engine as the tester sees it.
 - `lib/`: the libraries.
 - `spells/`: Stone Wall, Fireball, Gust and Water Shield.
-- `bench/` and `src/bench.ts`: the bench, its spells and what it measures.
+- `bench/` and `engine/mana/src/bench.rs`: the bench, its spells and what it measures.
 - `scripts/listings.ts`: `npm run listings` brings SPEC.md's code listings up to date with the `.masm` files.

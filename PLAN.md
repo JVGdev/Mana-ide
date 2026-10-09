@@ -15,8 +15,8 @@ are built once, in the engine that keeps them. Each step is still specified in S
                                                           all ─► 7 Spells, bench, SPEC
 ```
 
-1 comes first because every number after it depends on the weights. R comes next because 2 replaces the whole matter
-engine, and building it in TypeScript first would mean building it twice. 2 is the biggest physics step, and 3 and 4 build
+1 comes first because every number after it depends on the weights. R came next because 2 replaces the whole matter
+engine, and building it in TypeScript first would have meant building it twice. 2 is the biggest physics step, and 3 and 4 build
 on it: real air is a gas made of matter, and heat lives in matter, mana and air alike. 5 can be built any time after R.
 
 ## Decided (9 October)
@@ -77,9 +77,34 @@ can't hold up rock. What it found, and hands on:*
   worth of earth now takes far more mana per M of earth, or a far stronger hold per M of mana: that's step 2's force.
 - **Tests:** condensing keeps momentum and mass exactly; a cell of earth weighs what earth does; both ledgers balance.
 
-## R. The engine in Rust *(large; before step 2)*
+## R. The engine in Rust *(done: SPEC D41)*
 
 *Your call of 9 October (F): port the engine first, so steps 2–4 are built once, in the engine that keeps them.*
+
+*Built as below. The Rust engine did exactly what the TypeScript one did, to the last bit: every `.masm` file assembled
+to the same bytes, fifteen world scenarios and the four spells (2D and 3D, the Energy ledger and every order trace
+included, the Stone Wall's 290 ticks) stepped the same, every `mvm` run printed the same, and 130 bench runs measured
+the same. All 101 tests pass in Rust, and the tester runs it as WebAssembly. Then the TypeScript engine went (it's in
+git history).*
+
+*How fast it is, on one core, against TypeScript on Node:*
+
+| | TypeScript | Rust | |
+|---|---|---|---|
+| Fireball, Gust, Water Shield, 2D | 0.2–0.6 s | 0.05–0.11 s | 5× |
+| Fireball, Water Shield, 3D (60 ticks) | 1.2–1.3 s | 0.5 s | 2.5× |
+| Stone Wall, 2D (230 ticks) | 5.6 s | 3.4 s | 2× |
+| Stone Wall, 3D (40 ticks) | 51 s | 25 s | 2× |
+| the bench, 2D (130 runs) | 14.5 s | 4.9 s | 3× |
+| the tests | 38 s | 15.5 s | |
+
+*Rock's bonds take over half the Stone Wall's time: twelve passes over every bond, eight times a tick. That's the
+algorithm, not the language, and step 2 replaces it. What's left can go faster without changing a result: every core
+(there are 16 here), and particles laid out by field rather than one record each. Neither is done yet.*
+
+*Hands on to step 2: real stiffness asks 600–1,800 times more steps than now, and Rust gave 2–5. So even in 2D, matter
+as stiff as real rock would make a Stone Wall take about an hour. The choice between a softer stand-in, an implicit
+solver, and the GPU is yours, before step 2 starts.*
 
 **What moves, and what stays.**
 
@@ -157,7 +182,7 @@ can't hold up rock. What it found, and hands on:*
 ## 2. One matter *(large)*
 
 All matter obeys one mechanics, held by mana or not: the ground, loose earth, water, rock a wall is made of. The cell
-rules (`settleMatter`, "earth holds together") and the rigid "carried" matter go.
+rules (`settle_matter`, "earth holds together") and the rigid "carried" matter go.
 
 - **The model:** matter as material points over the grid (the material point method). It's the standard way to have
   water, sand, clay, snow and rock in one simulation, and they push on each other because it's all one grid.
@@ -194,9 +219,9 @@ rules (`settleMatter`, "earth holds together") and the rigid "carried" matter go
   pressure, `−V∇p`. Buoyancy and the push of a wind's pressure come out of it exactly. This replaces the Archimedes-at-rest
   shortcut (D38).
 - **Bodies and matter feel the air:** drag, buoyancy, wind. A Gust's mana drives a real gust of air.
-- **Real speed of sound** (340 m/s), since speed is no constraint: `airSound` goes. Sound is the air's pressure and motion
+- **Real speed of sound** (340 m/s), since speed is no constraint: `air_sound` goes. Sound is the air's pressure and motion
   rippling, and is Energy like any other: the ledger counts it. A mind can make it (step 4).
-- **Each part drags on the air by its own amount** (`airDrag`, by part): air mana slips through the air most easily, so a
+- **Each part drags on the air by its own amount** (`air_drag`, by part): air mana slips through the air most easily, so a
   blade of it keeps its speed longest (C1). Your guess, so a number to tune.
 - **Tests:**
   - a balloon of light gas rises, and rock doesn't care;
@@ -207,7 +232,7 @@ rules (`settleMatter`, "earth holds together") and the rigid "carried" matter go
 ## 4. Heat *(large)*
 
 - **Everything has a temperature:** each material point, particle and cell of gas. Heat is Energy held there, not a tally
-  by cause: `World.heat` becomes a place.
+  by cause: `World::heat` becomes a place.
 - **Every loss turns into heat where it happens:** drag, friction, impact, thickness, molding, mixing, braking.
 - **Heat moves:**
   - by conduction, at each material's own rate (rock slow, water faster);
@@ -222,7 +247,7 @@ rules (`settleMatter`, "earth holds together") and the rigid "carried" matter go
   Heat goes straight into what the mana touches; sound is the air pushed back and forth; light leaves where the mana is.
   They're new acts for the body and for orders: what a mind can do, not something a spell was given. Each part turns into
   each kind with its own ease, less strain a joule: air into motion and sound, fire into heat, the rest alike. That's a
-  table in `physics.ts`, by part and kind, and air's ease into motion counts for pushes and kicks too.
+  table in `physics.rs`, by part and kind, and air's ease into motion counts for pushes and kicks too.
 - **Light, as real light:**
   - it goes in straight lines, at the speed of light, which is instant at the world's scale;
   - it spreads out as it goes, thinning with the square of the distance;
