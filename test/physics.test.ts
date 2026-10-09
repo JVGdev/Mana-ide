@@ -41,18 +41,29 @@ const run = (w: World, ticks: number, each?: () => void) => {
 }
 
 describe('weight', () => {
-  it('pulls water and earth down at 9.8 m/s², lifts fire a little, and leaves air be', () => {
+  it('pulls everything down at 9.8 m/s² where there is no air: a heavier particle falls just as fast', () => {
     const w = ground()
     const water = drop(w, [1, 5, 0.125], WATER)[0]
     const earth = drop(w, [3, 5, 0.125], EARTH, 1, 2)[0]
     const fire = drop(w, [5, 5, 0.125], 0)[0]
     const air = drop(w, [7, 5, 0.125], 2)[0]
     run(w, 10)
-    expect(water.vel[1]).toBeCloseTo(-10 * G, 6)
-    expect(earth.vel[1]).toBeCloseTo(-10 * G, 6) // a heavier particle falls just as fast
-    expect(fire.vel[1]).toBeGreaterThan(0)
-    expect(air.vel[1]).toBe(0)
+    for (const p of [water, earth, fire, air]) expect(p.vel[1]).toBeCloseTo(-10 * G, 6)
     expect(G * 900).toBeCloseTo(9.81, 6) // ticks are 1/30 s
+  })
+
+  it('holds mana up in the air by what the air it pushes aside weighs: fire rises, earth mana sinks, matter falls', () => {
+    const w = World.withGround(40, 24, 1, 8)
+    const fire = drop(w, [2, 4, 0.125], 0)[0]
+    const air = drop(w, [4, 4, 0.125], 2)[0]
+    const earth = drop(w, [6, 4, 0.125], EARTH)[0]
+    const rock = drop(w, [8, 4, 0.125], EARTH, 1, 4)[0]
+    run(w, 10)
+    expect(fire.vel[1]).toBeGreaterThan(0) // lighter than the air: it rises
+    expect(Math.abs(air.vel[1])).toBeLessThan(0.05 * 10 * G) // as heavy as the air: it floats
+    expect(earth.vel[1]).toBeLessThan(0) // heavier: it sinks, slowly
+    expect(earth.vel[1]).toBeGreaterThan(-0.1 * 10 * G)
+    expect(rock.vel[1]).toBeLessThan(-0.7 * 10 * G) // matter the air doesn't hold up: it falls
   })
 
   it('stops what falls on the ground, which holds it up from then on', () => {
@@ -67,14 +78,14 @@ describe('weight', () => {
   it('gives matter held by mana its weight and inertia', () => {
     const w = ground()
     const p = drop(w, [2, 3, 0.125], EARTH, 1, 4)[0]
-    expect(massOf(p)).toBeCloseTo(PHYSICS.mote + 4 * PHYSICS.matterMass[EARTH], 9)
+    expect(massOf(p)).toBeCloseTo(PHYSICS.mote * PHYSICS.manaMass[EARTH] + 4 * PHYSICS.matterMass[EARTH], 9)
   })
 
   it('keeps sliding things from sliding, by friction', () => {
     const w = ground()
     const p = drop(w, [2, 2.01, 0.125], EARTH, 1, 5)[0]
     p.vel[0] = 0.05
-    w.impulse.push[0] += massOf(p) * 0.05
+    w.impulse.outside[0] += massOf(p) * 0.05
     run(w, 30)
     expect(p.vel[0]).toBe(0)
     expect(p.pos[0]).toBeLessThan(2.5)
@@ -96,10 +107,8 @@ describe('water', () => {
   it('holds together: neighbours close by pull each other in', () => {
     const w = World.withGround(40, 24, 1, 0)
     for (const a of w.air) a.fill(0)
-    const saved = PHYSICS.fall[WATER]
-    const savedM = PHYSICS.matterFall[WATER]
-    PHYSICS.fall[WATER] = 0
-    PHYSICS.matterFall[WATER] = 0
+    const saved = PHYSICS.gravity
+    PHYSICS.gravity = 0
     try {
       const [a] = drop(w, [2, 3, 0.125], WATER, 1, 4)
       const [b] = drop(w, [2.18, 3, 0.125], WATER, 1, 4)
@@ -107,8 +116,7 @@ describe('water', () => {
       run(w, 5)
       expect(b.pos[0] - a.pos[0]).toBeLessThan(before)
     } finally {
-      PHYSICS.fall[WATER] = saved
-      PHYSICS.matterFall[WATER] = savedM
+      PHYSICS.gravity = saved
     }
   })
 })
@@ -156,13 +164,17 @@ describe('rock', () => {
 
 describe('what pushing costs', () => {
   /** A particle poured at the hand, let go of, and kicked by its own order: `kicks` is how, tick by tick. */
-  function kicked(src: string) {
+  function kicked(src: string, air = true) {
     const world = World.withGround(32, 24, 1, 8)
+    if (!air) for (let i = 0; i < world.size; i++) world.air[i].fill(0)
     const sim = new Sim(world)
     const caster = sim.addCaster('Mage', [2, 2.9, 0.125])
     caster.will = { aim: [5, 2.9, 0.125], amount: 100, force: 0.5, maintain: false }
+    // Where there's no air to gather, it's given its mana.
+    if (!air) caster.regs[0].parts = [25, 25, 25, 25]
+    caster.regs[0].holdUntil = 10
     const program = assemble(
-      `       GATH  m0, #100
+      `       GATH  m0, #${air ? 100 : 0}
         LDI   n0, #3
         LDI   n1, #4
         LDI   n2, #0.125
@@ -197,7 +209,7 @@ kick:   ${src}`,
     expect(spent).toBeLessThan((0.5 * massOf(p) * 0.1 ** 2 + massOf(p) * G * 1) / PHYSICS.pushEnergy + 0.01)
   })
 
-  it('costs nothing to slow down, or to hold something up against its weight', () => {
+  it('costs nothing to slow down, and next to nothing to hold something up against its weight', () => {
     // Every tick, it kicks itself back to standing still: it only ever takes speed away.
     const { sim, p } = kicked(`IN n5:7, VEL
         NEG   n5
@@ -206,8 +218,24 @@ kick:   ${src}`,
         KICK  n5:7
         RET`)
     sim.run(20)
-    expect(sim.spent.kick).toBe(0)
+    // Holding itself up, it pushes the air it's in down, a little more each tick: that downdraft is all it pays for,
+    // less than lifting itself a centimetre would cost.
+    expect(sim.spent.kick).toBeLessThan((massOf(p) * G * 0.01) / PHYSICS.pushEnergy)
     expect(Math.abs(p.vel[1])).toBeLessThanOrEqual(G + 1e-9) // it holds itself up, a tick's fall at most
+  })
+
+  it('pushes off the air: where there is none, it has nothing to push off', () => {
+    const src = `LDI n5, #0.05
+        LDI   n6, #0
+        LDI   n7, #0
+        KICK  n5:7
+        RET`
+    const { sim, p } = kicked(src)
+    expect(p.vel[0]).toBeGreaterThan(0.04) // what the air took back, it took from the air
+    expect(sim.spent.kick).toBeGreaterThan(0)
+    // With no air, all it has to push off is the little mana its own thinking lets into the air around it.
+    const empty = kicked(src, false)
+    expect(empty.p.vel[0]).toBeLessThan(p.vel[0] / 5)
   })
 
   it('costs more the faster it already goes the same way', () => {
@@ -221,7 +249,7 @@ kick:   ${src}`,
         KICK  n5:7
 .done:  RET`)
       p.vel = [v, p.vel[1], 0]
-      sim.world.impulse.push[0] += massOf(p) * v
+      sim.world.impulse.outside[0] += massOf(p) * v
       const before = sim.spent.kick
       sim.run(2)
       return sim.spent.kick - before
@@ -242,7 +270,7 @@ describe('merging and splitting', () => {
     b.pos = [2.05, 3, 0.125]
     a.vel = [0.001, 0, 0]
     b.vel = [0.003, 0, 0]
-    w.impulse.push[0] += massOf(a) * 0.001 + massOf(b) * 0.003
+    w.impulse.outside[0] += massOf(a) * 0.001 + massOf(b) * 0.003
     const changes = mergeAndSplit(w)
     expect(changes).toEqual([{ kind: 'merge', into: a, from: b, weave: 1 }])
     expect(w.particles).toEqual([a])
@@ -292,7 +320,8 @@ describe('merging and splitting', () => {
     w.bonds.push({ a, b, rest: 0.05 })
     expect(mergeAndSplit(w)).toEqual([])
     w.bonds = []
-    expect(mergeAndSplit(w, { still: () => true })).toEqual([])
+    const hand = w.addBody('Hand', [0, 0, 0])
+    expect(mergeAndSplit(w, { holder: () => hand })).toEqual([])
   })
 })
 
@@ -331,7 +360,6 @@ describe('the second flaw', () => {
         LDI   n6, #0
         LDI   n7, #${order ? 0.75 : 0.25}
         EMIT  m1, n7, n3, n4:6
-        HOLD  n3, #2
 ${order ? '        ORDR  n3, still\n        INGR  n3, #0\n        INGR  n3, #1\n        INGR  n3, #2\n' : ''}        MANI  n3
         HALT
 still:  RET`,
@@ -379,7 +407,7 @@ describe('the air', () => {
       for (let x = x0; x < x1; x++) {
         const i = w.index(x, y, 0)
         w.airVel[i * 3] = u
-        w.impulse.push[0] += total(w.air[i]) * u
+        w.impulse.outside[0] += total(w.air[i]) * u
       }
   }
 

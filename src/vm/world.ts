@@ -3,6 +3,7 @@
 import { PHYSICS } from './physics.ts'
 import { add, dominant, share, take, total, zero, type Parts } from './parts.ts'
 import type { Program } from '../asm/assembler.ts'
+import { scaleHeight } from './air.ts'
 
 export type Vec = [number, number, number]
 
@@ -33,10 +34,19 @@ export type Particle = {
   carried: Parts
   weave: number
   order: Ingrained | null
-  /** How much more pushes can change its velocity this tick, m/tick. */
-  dvLeft: number
+  /**
+   * Its own copy of its weave's registers (w0–w7), and when each was last written: the newest write wins, as copies pass
+   * from particle to particle by contact (SPEC §5, Weaves). A stamp is the tick it was written, with the writer to break
+   * ties.
+   */
+  regs: Float64Array
+  stamp: Float64Array
+  /** Which way its weave's frame faces, as it was told: the turn about the vertical its order reads and kicks in. */
+  yaw: number
   /** The tick it was last pushed, by its caster or its order. */
   pushedAt: number
+  /** The tick it last felt something stop it or strike it: matter, the ground, a body. TUCH reads it. */
+  touchedAt: number
   /** How dense the mana around it is (M/m³), as its pressure works it out (the spiky kernel). */
   rho: number
   /** How dense it feels the mana around it is, which way it thickens, and how its neighbours move: what DENS, GRAD and NVEL read. */
@@ -60,15 +70,23 @@ export type Bond = { a: Particle; b: Particle; rest: number }
  */
 export function massOf(p: Particle): number {
   const m = PHYSICS.matterMass
-  return p.free[0] + p.free[1] + p.free[2] + p.free[3] + p.carried[0] * m[0] + p.carried[1] * m[1] + p.carried[2] * m[2] + p.carried[3] * m[3]
+  return massOfParts(p.free) + p.carried[0] * m[0] + p.carried[1] * m[1] + p.carried[2] * m[2] + p.carried[3] * m[3]
+}
+
+/** The mass of some free mana, by part (PHYSICS.manaMass). */
+export function massOfParts(p: Parts): number {
+  const m = PHYSICS.manaMass
+  return p[0] * m[0] + p[1] * m[1] + p[2] * m[2] + p[3] * m[3]
 }
 
 /**
- * Momentum given to the world from outside it: pushes, orders' kicks, weight, the ground and walls, what gathering takes
- * out of the air, and matter changing its mass: condensing (1 M of matter weighs less than 1 M of free mana), and matter
- * let go of, which stops dead in the ground.
+ * Momentum given to the world from outside it: weight, the ground and walls (which hold up and stop what's against them,
+ * and take what's pushed off them), and matter changing its mass: condensing (1 M of matter weighs less than 1 M of free
+ * mana), and matter let go of, which stops dead in the ground. Pushes and kicks are inside it: what's pushed, and what
+ * it's pushed off (a caster's body, the air, the ground), take equal and opposite shares. `outside` is what's given by
+ * hand, from beyond the world: a test setting something moving.
  */
-export type Impulses = Record<'push' | 'kick' | 'gravity' | 'walls' | 'gather' | 'matter', Vec>
+export type Impulses = Record<'gravity' | 'walls' | 'matter' | 'outside', Vec>
 
 export const FIRE = 0
 export const WATER = 1
@@ -87,7 +105,7 @@ export class World {
   particles: Particle[] = []
   bodies: Body[] = []
   tick = 0
-  impulse: Impulses = { push: [0, 0, 0], kick: [0, 0, 0], gravity: [0, 0, 0], walls: [0, 0, 0], gather: [0, 0, 0], matter: [0, 0, 0] }
+  impulse: Impulses = { gravity: [0, 0, 0], walls: [0, 0, 0], matter: [0, 0, 0], outside: [0, 0, 0] }
   /** Rock: pairs of particles bound together. */
   bonds: Bond[] = []
   /**
@@ -144,6 +162,11 @@ export class World {
     return this.index(clamp(p[0], this.w), clamp(p[1], this.h), clamp(p[2], this.d))
   }
 
+  /** The mass of the air in a cell. */
+  airMass(i: number): number {
+    return massOfParts(this.air[i])
+  }
+
   /** Unbound earth and water: what blocks and what counts as a touch. */
   solidAt(i: number): boolean {
     if (i < 0) return true
@@ -157,13 +180,17 @@ export class World {
 
   // Building worlds
 
-  /** Fills every cell below `top` (in cells) with matter, and the open air above with air mana. */
+  /**
+   * Fills every cell below `top` (in cells) with matter, and the open air above with air mana, as thick as it settles
+   * under its own weight: PHYSICS.airMana a cell at the ground, thinning as it goes up.
+   */
   static withGround(w: number, h: number, d: number, top: number, part = EARTH): World {
     const world = new World(w, h, d)
+    const H = scaleHeight()
     for (let i = 0; i < world.size; i++) {
       const [, y] = world.coords(i)
       if (y < top) world.matter[i][part] = PHYSICS.cellMatter
-      else world.air[i].fill(PHYSICS.airMana / 4)
+      else world.air[i].fill((PHYSICS.airMana / 4) * Math.exp(-((y + 0.5 - top) * world.cell) / H))
     }
     return world
   }
@@ -226,8 +253,11 @@ export class World {
         carried: zero(),
         weave,
         order: null,
-        dvLeft: PHYSICS.pushRate,
+        regs: new Float64Array(PHYSICS.weaveRegisters),
+        stamp: new Float64Array(PHYSICS.weaveRegisters),
+        yaw: 0,
         pushedAt: -1,
+        touchedAt: -1,
         rho: 0,
         felt: 0,
         grad: [0, 0, 0],
@@ -252,6 +282,8 @@ export class World {
       vel: [...p.vel],
       free: zero(),
       carried: zero(),
+      regs: p.regs.slice(),
+      stamp: p.stamp.slice(),
       grad: [...p.grad],
       nvel: [...p.nvel],
       acc: [0, 0, 0],
@@ -260,43 +292,64 @@ export class World {
     return q
   }
 
-  /** Mana let into the air of a cell, carrying momentum (px, py, pz) into it. */
+  /**
+   * Mana let into the air of a cell, carrying momentum (px, py, pz) into it. It comes to the air's speed there: what that
+   * evening out takes from their motion is heat.
+   */
   addAir(i: number, parts: Parts, momentum: Vec = [0, 0, 0]) {
     if (i < 0) return
-    const before = total(this.air[i])
-    const after = before + total(parts)
+    const before = this.airMass(i)
+    const m = massOfParts(parts)
+    const after = before + m
     if (after <= 0) return
-    for (let k = 0; k < 3; k++) this.airVel[i * 3 + k] = (before * this.airVel[i * 3 + k] + momentum[k]) / after
+    let lost = 0
+    for (let k = 0; k < 3; k++) {
+      const v = this.airVel[i * 3 + k]
+      const next = (before * v + momentum[k]) / after
+      lost += 0.5 * before * v * v + (m > 0 ? (momentum[k] * momentum[k]) / (2 * m) : 0) - 0.5 * after * next * next
+      this.airVel[i * 3 + k] = next
+    }
+    this.warm('mixing', lost)
     add(this.air[i], parts)
   }
 
-  /** Mana drawn out of the air of a cell. What it takes leaves with its share of the air's momentum. */
-  takeAir(i: number, f: number): Parts {
-    const got = share(this.air[i], f)
-    for (let k = 0; k < 3; k++) this.impulse.gather[k] -= total(got) * this.airVel[i * 3 + k]
-    return got
+  /** Mana drawn out of the air of a cell. Returns it, and the momentum it takes with it. */
+  takeAir(i: number, f: number): { parts: Parts; momentum: Vec } {
+    const parts = share(this.air[i], f)
+    const m = massOfParts(parts)
+    return { parts, momentum: [m * this.airVel[i * 3], m * this.airVel[i * 3 + 1], m * this.airVel[i * 3 + 2]] }
   }
 
   // Each tick
 
-  /** Bodies pushed by mana slide along the ground until friction stops them. */
+  /**
+   * Bodies stand on the ground, which holds them up, and slide along it when they're pushed, until friction stops them:
+   * the ground takes from their speed, each tick, as much as their weight pressing on it lets it (PHYSICS.friction × g).
+   * What it takes is heat. A body that runs into something solid stops.
+   */
   moveBodies() {
+    const grip = PHYSICS.friction * PHYSICS.gravity
+    let heat = 0
     for (const b of this.bodies) {
-      if (Math.abs(b.vel[0]) + Math.abs(b.vel[2]) < 1e-6) {
-        this.impulse.walls[0] -= b.mass * b.vel[0]
-        this.impulse.walls[2] -= b.mass * b.vel[2]
-        b.vel = [0, 0, 0]
-        continue
-      }
-      const next: Vec = [b.pos[0] + b.vel[0], b.pos[1], b.pos[2] + b.vel[2]]
-      const i = this.cellOf(next)
       const before: Vec = [...b.vel]
-      if (i >= 0 && !this.solidAt(i)) b.pos = next
-      else b.vel = [0, 0, 0]
-      b.vel[0] *= PHYSICS.bodyFriction
-      b.vel[2] *= PHYSICS.bodyFriction
+      const ke = 0.5 * b.mass * (b.vel[0] ** 2 + b.vel[2] ** 2)
+      const speed = Math.hypot(b.vel[0], b.vel[2])
+      if (speed > 0) {
+        const next: Vec = [b.pos[0] + b.vel[0], b.pos[1], b.pos[2] + b.vel[2]]
+        const i = this.cellOf(next)
+        if (i >= 0 && !this.solidAt(i)) b.pos = next
+        else b.vel = [0, 0, 0]
+        const slow = Math.min(1, grip / speed)
+        b.vel[0] -= b.vel[0] * slow
+        b.vel[2] -= b.vel[2] * slow
+      }
+      heat += ke - 0.5 * b.mass * (b.vel[0] ** 2 + b.vel[2] ** 2)
       for (const k of [0, 2]) this.impulse.walls[k] += b.mass * (b.vel[k] - before[k])
+      // It stands: nothing moves it up or down.
+      this.impulse.walls[1] -= b.mass * b.vel[1]
+      b.vel[1] = 0
     }
+    this.warm('friction', heat)
   }
 
   /**
@@ -344,10 +397,15 @@ export class World {
               if (j >= 0 && total(this.matter[j]) + carried[j] < here()) tryMove(i, j, (here() - total(this.matter[j])) / 2)
             }
           } else if (kind === FIRE) {
+            // Flame spreads as any gas does: from where there's more of it to where there's less, evening out with its
+            // neighbours by a share of the difference (Fick's law), and no further once they're even.
             for (const [sx, sz] of sides) {
               const j = this.index(x + sx, y, z + sz)
               if (j < 0 || room(j) <= 0) continue
-              add(this.matter[j], share(m, PHYSICS.fireSpread / sides.length))
+              const diff = m[FIRE] - this.matter[j][FIRE]
+              if (diff <= 0) continue
+              const f = Math.min(room(j), (PHYSICS.flameSpread * diff) / (sides.length + 1))
+              add(this.matter[j], take(m, (f * total(m)) / m[FIRE]))
               moved[j] = 1
             }
           }
@@ -375,7 +433,7 @@ export class World {
       for (let k = 0; k < 3; k++) m[k] += mass * p.vel[k]
     }
     for (let i = 0; i < this.size; i++) {
-      const mass = total(this.air[i])
+      const mass = this.airMass(i)
       if (mass) for (let k = 0; k < 3; k++) m[k] += mass * this.airVel[i * 3 + k]
     }
     for (const b of this.bodies) for (let k = 0; k < 3; k++) m[k] += b.mass * b.vel[k]

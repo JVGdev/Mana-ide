@@ -61,10 +61,7 @@ export type Result = {
   arrived: boolean
   /** Ticks from letting go to the end. */
   ticks: number
-  /**
-   * Share of its mana that stayed with it, whether it's still in it or was spent by it (not strayed out of its field);
-   * and share still in it.
-   */
+  /** Share of the mana it still holds that is still a ball: within `BALL` metres of its middle. And share still in it. */
   together: number
   kept: number
   /** Root-mean-square distance of its particles from its centre, metres. */
@@ -76,6 +73,18 @@ export type Result = {
   /** The caster's beats from letting go to the end, per tick. */
   handBeats: number
   ms: number
+}
+
+/** How far from its middle a particle can be and still be part of the ball, metres: twice the ball's radius. */
+const BALL = 1
+
+/** The mana of a weave that's still a ball: within BALL metres of its middle. */
+function ball(w: Weave): number {
+  const c = w.centre()
+  if (!c) return 0
+  let m = 0
+  for (const p of w.particles) if (Math.hypot(p.pos[0] - c.pos[0], p.pos[1] - c.pos[1], p.pos[2] - c.pos[2]) < BALL) m += p.free.reduce((a, b) => a + b, 0)
+  return m
 }
 
 function spread(w: Weave): number {
@@ -117,11 +126,10 @@ export function runVariant(v: Variant, caster: CasterName, dims: 2 | 3, layout: 
   let weave: Weave | undefined
   let letGo = -1
   let beatsAtLetGo = 0
-  let strayedAtLetGo = 0
   const spentAtLetGo = { push: 0, kick: 0, burn: 0 }
   const measure = (w: Weave | undefined) => {
     r.ticks = sim.tick - letGo
-    r.together = w ? 1 - (sim.strayed - strayedAtLetGo) / r.mana : 0
+    r.together = w && w.mana() > 0 ? ball(w) / w.mana() : 0
     r.kept = w ? w.mana() / r.mana : 0
     r.spread = w ? spread(w) : 0
     r.push = sim.spent.push - spentAtLetGo.push
@@ -142,7 +150,6 @@ export function runVariant(v: Variant, caster: CasterName, dims: 2 | 3, layout: 
       r.particles = weave.particles.length
       r.mana = weave.mana()
       beatsAtLetGo = cast.beats
-      strayedAtLetGo = sim.strayed
       Object.assign(spentAtLetGo, sim.spent)
     }
     if (v.kind === 'hold') {
@@ -154,8 +161,9 @@ export function runVariant(v: Variant, caster: CasterName, dims: 2 | 3, layout: 
       }
       continue
     }
-    // A throw has arrived when its front reaches the pillar.
-    const front = live ? Math.max(...live.particles.map((p) => p.pos[0])) : 0
+    // A throw has arrived when the front of the ball reaches the pillar: not a stray particle ahead of it.
+    const c = live?.centre()?.pos
+    const front = live && c ? Math.max(0, ...live.particles.filter((p) => Math.hypot(p.pos[0] - c[0], p.pos[1] - c[1], p.pos[2] - c[2]) < BALL).map((p) => p.pos[0])) : 0
     if (front >= PILLAR - 0.05) {
       measure(live)
       r.arrived = true

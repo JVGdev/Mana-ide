@@ -4,6 +4,7 @@ import { resolver } from '../src/load.ts'
 import { adept, type CasterStats } from '../src/vm/caster.ts'
 import { total } from '../src/vm/parts.ts'
 import { Sim, orderLength } from '../src/vm/sim.ts'
+import { stampOf } from '../src/vm/weave.ts'
 import { World } from '../src/vm/world.ts'
 import { PHYSICS } from '../src/vm/physics.ts'
 
@@ -285,7 +286,7 @@ describe('weaves', () => {
     expect(total(caster.flow)).toBeCloseTo(100, 6)
   })
 
-  it('fray when an order thinks too long', () => {
+  it('fray where an order thinks too long: that particle lets go, and the rest of the weave goes on', () => {
     const { sim } = setup(`
         IN    n0:2, AIM
         WEAV  n3, n0:2
@@ -303,7 +304,10 @@ spin:   JMP   spin`)
     const before = sim.ledger().total
     sim.run(3)
     expect(sim.events.find((e) => e.kind === 'fray')?.detail).toMatch(/FRAYED/)
-    expect(sim.weaves.size).toBe(0)
+    const weave = [...sim.weaves.values()][0]
+    expect(weave.particles.length).toBeGreaterThan(0) // the rest are still its caster's, in reach
+    expect(weave.particles.every((p) => !p.order)).toBe(true)
+    expect(weave.particles.length).toBe(sim.world.particles.length - sim.world.particles.filter((p) => !p.weave).length)
     expect(sim.ledger().total).toBeCloseTo(before, 6)
   })
 
@@ -366,7 +370,6 @@ const pour = (rest: string, gather = 120) => `
         LDI   n6, #0
         MEAS  n7, m1
         EMIT  m1, n7, n3, n4:6
-        HOLD  n3, #5
 ${rest}`
 
 describe('mana as a fluid', () => {
@@ -392,7 +395,7 @@ describe('mana as a fluid', () => {
     expect(sim.world.momentumError()).toBeLessThan(1e-9)
   })
 
-  it('pushes a particle by pouring mana onto it, only so much a tick, and only within reach', () => {
+  it('pushes a particle off the body, through its reach, as hard as the mind can transform mana into Energy', () => {
     // One particle: a quarter of 1⅔ M is fire, and 60% of that is 0.25 M.
     const src = pour(
       `        LDI   n8, #0.5
@@ -406,19 +409,28 @@ describe('mana as a fluid', () => {
         HALT`,
       5 / 3,
     )
-    const { sim, cast } = setup(src)
+    const { sim, cast, caster } = setup(src)
     sim.step()
     const weave = [...sim.weaves.values()][0]
     expect(weave.particles.length).toBe(1)
     const p = weave.particles[0]
-    expect(p.vel[0]).toBeCloseTo(PHYSICS.pushRate, 2) // asked for 0.5, got a tick's worth (less what the air took)
-    expect(sim.world.impulse.push[0]).toBeCloseTo(0.25 * PHYSICS.pushRate, 6) // 1⅔ is a float32
-    // It cost the kinetic energy it added (from rest, in the hand), and that mana went loose into the air.
-    expect(cast.frame.n[20] - cast.frame.n[21]).toBeCloseTo((0.5 * 0.25 * PHYSICS.pushRate ** 2) / PHYSICS.pushEnergy, 6)
-    // Out of reach, nothing happens.
+    expect(p.vel[0]).toBeCloseTo(0.5, 1) // all it asked for (less what the air took)
+    // It cost the kinetic energy it added to the particle and to the body it pushed off, and that mana went loose into
+    // the air, still mana. The body was pushed back, and its feet on the ground held it.
+    const m = 0.25 * PHYSICS.manaMass[0] // 0.25 M of fire; 1⅔ is a float32
+    const energy = 0.5 * m * 0.5 ** 2 * (1 + m / caster.body.mass)
+    expect(sim.transformed).toBeCloseTo(energy, 5)
+    expect(cast.frame.n[20] - cast.frame.n[21]).toBeCloseTo(energy / PHYSICS.pushEnergy, 5)
+    expect(sim.world.impulse.walls[0]).toBeCloseTo(m * 0.5, 2) // what the body took, its feet gave the ground
+    expect(caster.body.vel[0]).toBe(0)
+    // A weaker mind pushes less hard.
+    const weak = setup(src, (s) => (s.mind.power.genetics = energy / 4))
+    weak.sim.step()
+    expect([...weak.sim.weaves.values()][0].particles[0].vel[0]).toBeLessThan(0.3)
+    // Out of reach, nothing happens: it can't even be poured there.
     const far = setup(src, (s) => (s.body.reach.genetics = 0.5))
     far.sim.step()
-    expect([...far.sim.weaves.values()][0].particles[0].vel[0]).toBe(0)
+    expect(far.sim.world.particles.length).toBe(0)
     expect(far.cast.frame.n[20]).toBe(far.cast.frame.n[21])
   })
 
@@ -467,9 +479,10 @@ kick:   LDI   n0, #0
     const trace = sim.traces.get(weave.id)!
     expect(trace.length).toBe(1) // only the ingrained one
     expect(trace[0].burned).toBeCloseTo(trace[0].beats * PHYSICS.orderBurn, 12)
-    // It kicks first, and pays the kinetic energy the kick adds; its thinking is paid for after.
+    // It kicks first, and pays the kinetic energy the kick adds (and a little more, for the air it pushes off); its
+    // thinking is paid for after.
     const kickCost = (before * vy * 0.05 + 0.5 * before * 0.05 ** 2) / PHYSICS.pushEnergy
-    expect(total(p.free)).toBeCloseTo(before - kickCost - trace[0].burned, 9)
+    expect(total(p.free)).toBeCloseTo(before - kickCost - trace[0].burned, 4)
     expect(sim.world.momentumError()).toBeLessThan(1e-9)
   })
 
@@ -493,8 +506,9 @@ feel:   DENS  n5
     expect(Math.hypot(n[6], n[7], n[8])).toBeGreaterThan(0)
   })
 
-  it('loses particles that stray past its field, and they settle into the air when they slow', () => {
-    const { sim } = setup(pour('        HOLD  n3, #0.3\n        MANI  n3\n        HALT'))
+  it('loses particles with no order that stray out of its caster\'s reach, and they settle into the air when they slow', () => {
+    // Poured 2.3 m from a caster who reaches 2.4 m: once let go, what spreads further out is no longer theirs.
+    const { sim } = setup(pour('        MANI  n3\n        HALT'), (s) => (s.body.reach.genetics = 2.4))
     sim.run(15)
     const weave = [...sim.weaves.values()][0]
     const loose = sim.world.particles.filter((p) => !p.weave)
@@ -504,6 +518,87 @@ feel:   DENS  n5
     sim.run(60)
     expect(sim.ledger().total).toBeCloseTo(before, 6)
     expect(sim.world.particles.filter((p) => !p.weave).length).toBeLessThan(loose.length)
+  })
+
+  it('passes a weave\'s registers from particle to particle by touch, and not to what nothing touches', () => {
+    // Two particles poured together and one far off, each ingrained with an order that does nothing.
+    const { sim } = setup(
+      `        .use  Elements
+        GATH  m0, #40
+        CIRC  m0
+        FILT  m1, m0, #FIRE
+        LDI   n0, #3
+        LDI   n1, #4
+        LDI   n2, #0.125
+        WEAV  n3, n0:2
+        LDI   n4, #0
+        LDI   n5, #0
+        LDI   n6, #0
+        LDI   n7, #0.5
+        EMIT  m1, n7, n3, n4:6
+        LDI   n4, #2
+        LDI   n7, #0.25
+        EMIT  m1, n7, n3, n4:6
+        ORDR  n3, idle
+        INGR  n3, #0
+        INGR  n3, #1
+        INGR  n3, #2
+        MANI  n3
+        HALT
+idle:   RET`,
+    )
+    sim.step()
+    const [a, b, far] = [...sim.weaves.values()][0].particles
+    // One of the pair writes w3, as its order would (PUTW): the newest write.
+    a.regs[3] = 5
+    a.stamp[3] = stampOf(sim.tick, a.id)
+    sim.step()
+    expect(b.regs[3]).toBe(5) // touching it: it hears
+    expect(far.regs[3]).toBe(0) // 2 m off: it doesn't
+  })
+
+  it('strains the mind for every joule it transforms, and harms it past its capacity', () => {
+    // A strong push, again and again, by a mind of little capacity.
+    const src = pour(
+      `        MANI  n3
+again:  CIRC  m0
+        LDI   n8, #0.3
+        LDI   n9, #0
+        LDI   n10, #0
+        PCNT  n5, n3
+        LDI   n11, #0
+each:   SHOV  m0, n3, n11, n8:10
+        NEG   n8
+        ADD   n11, #1
+        CMP   n11, n5
+        JLT   each
+        TICK
+        JMP   again`,
+    )
+    const { sim, caster } = setup(src, (s) => {
+      s.mind.capacity.genetics = 0.5
+      s.mind.recovery.genetics = 0
+    })
+    sim.run(20)
+    expect(sim.transformed).toBeGreaterThan(0.5)
+    expect(caster.strain).toBeCloseTo(sim.transformed, 6) // nothing eases it
+    expect(caster.madness).toBeGreaterThan(0)
+    expect(caster.condition.mind).toBeLessThan(1)
+    expect(sim.events.some((e) => e.kind === 'overstrain')).toBe(true)
+  })
+
+  it('senses nothing out of reach', () => {
+    const { sim, cast } = setup(`        .use  Elements
+        LDI   n0, #2.125
+        LDI   n1, #1.875
+        LDI   n2, #0.125
+        PROB  n4, n0:2, #EARTH
+        LDI   n0, #8.125
+        PROB  n5, n0:2, #EARTH
+        HALT`)
+    sim.runCasts()
+    expect(cast.frame.n[4]).toBe(100) // the ground under its feet
+    expect(cast.frame.n[5]).toBe(0) // 6 m away: it can't tell
   })
 
   it("won't lock a shape: a shape is held by pushing", () => {

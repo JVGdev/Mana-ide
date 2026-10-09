@@ -22,6 +22,9 @@
       capacity: c.capacity,
       flow: [...c.flow] as typeof c.flow,
       harm: c.harm,
+      strain: c.strain,
+      mindCapacity: c.mindCapacity,
+      madness: c.madness,
       condition: { ...c.condition },
       regs,
       biggest: Math.max(1, ...regs.map((r) => r.amount)),
@@ -51,6 +54,8 @@
     <span>focus <b>{view.focus}</b> ticks</span>
     {#if view.inHand > 0}<span>in hand <b>{num(view.inHand)}</b> M</span>{/if}
     <span class:bad={view.harm > 0}>harm <b>{num(view.harm)}</b></span>
+    <span class:bad={view.strain > view.mindCapacity}>strain <b>{num(view.strain * 900)}</b> / {num(view.mindCapacity * 900)} J</span>
+    {#if view.madness > 0}<span class="bad">madness <b>{num(view.madness * 900)}</b> J</span>{/if}
     <span>condition <b>{num(view.condition.body, 2)}</b> body · <b>{num(view.condition.mind, 2)}</b> mind</span>
   </div>
   <div class="flow"><span class="muted">flow</span><Parts parts={view.flow} scale={total(view.flow)} /></div>

@@ -24,12 +24,12 @@
         origin: w.origin.map((v) => num(v, 2)).join(', '),
         particles: w.particles.length,
         ingrained,
-        field: w.field,
         free,
         carried,
         locks: Object.entries(w.locks).filter(([, v]) => v).map(([k]) => k),
         order,
-        regs: Array.from(w.regs),
+        // Each particle keeps its own copy: this is the newest among them.
+        regs: Array.from(w.regs, (_, k) => w.reg(k)),
       }
     })
   })
@@ -48,7 +48,6 @@
       </div>
       <div class="facts">
         <span>{w.particles} particles, {w.ingrained} ingrained</span>
-        <span>field {num(w.field, 2)} m</span>
         <span>at <span class="mono">{w.origin}</span></span>
       </div>
       <div class="line"><span>mana {num(total(w.free))}</span><Parts parts={w.free} scale={total(w.free)} /></div>

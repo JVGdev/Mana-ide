@@ -10,14 +10,17 @@
 
 import { PHYSICS } from './physics.ts'
 import { total } from './parts.ts'
-import { massOf, type Body, type Bond, type Particle, type Vec, type World } from './world.ts'
+import { massOf, massOfParts, type Body, type Bond, type Particle, type Vec, type World } from './world.ts'
+import { RAW_MASS } from './air.ts'
 
 /** What the fluid needs to know from the machine. */
 export type FluidHooks = {
-  /** A body this particle passes through instead of striking: its weave's maker. */
-  passes?: (p: Particle) => Body | undefined
-  /** Particles held still: a weave in its caster's hand stays where it was laid until it's set loose. */
-  still?: (p: Particle) => boolean
+  /**
+   * The body whose hand holds this particle, if any: a weave in its caster's hand stays where it was laid until it's set
+   * loose. It presses on what moves around it, and is pressed by it; the hand holds it still, and the body feels what
+   * that takes.
+   */
+  holder?: (p: Particle) => Body | undefined
   /**
    * Matter held by mana in a cell, as the tick began, that isn't this particle's weave's own: it takes room, like matter
    * that isn't held. A weave's own matter never blocks it: it moves together.
@@ -114,10 +117,10 @@ function fullDensity(p: Particle): number {
 }
 
 /** Neighbours this step: pairs of indices into the particles, closer than the smoothing length, and how far apart. */
-type Pairs = { n: number; a: Int32Array; b: Int32Array; d: Float64Array; r: Float64Array }
+export type Pairs = { n: number; a: Int32Array; b: Int32Array; d: Float64Array; r: Float64Array }
 
 /** Every pair of particles closer than the smoothing length, once each. */
-function findPairs(world: World, ps: Particle[]): Pairs {
+export function findPairs(world: World, ps: Particle[]): Pairs {
   const h = PHYSICS.smoothing
   const flat = world.d === 1
   const grid = new Map<number, number[]>()
@@ -258,30 +261,105 @@ export function feel(world: World, ps: Particle[] = world.particles, pairs = fin
 
 /** One tick of the fluid: weight, pressure, holding together, rock, the air, and what the particles run into. */
 export function stepFluid(world: World, hooks: FluidHooks = {}) {
-  const ps = hooks.still ? world.particles.filter((p) => !hooks.still!(p)) : world.particles
+  const { moving: ps, held } = split(world, hooks)
   if (!ps.length) return
   const moving = new Set(ps)
+  // What's in a hand and near enough to what moves to press on it, or be pressed: after the moving ones.
+  const near = held.length ? within(world, ps, held) : []
+  const all = near.length ? ps.concat(near) : ps
   // Lowest first: the ground's support passes up through the rock within each pass.
   const low = (b: Bond) => Math.min(b.a.pos[1], b.b.pos[1])
   const bonds = world.bonds.filter((b) => moving.has(b.a) && moving.has(b.b)).sort((x, y) => low(x) - low(y))
   const dt = 1 / PHYSICS.substeps
   const blocked = blocker(world, hooks)
   for (let s = 0; s < PHYSICS.substeps; s++) {
-    for (const p of ps) p.mass = massOf(p)
-    const pairs = findPairs(world, ps)
-    feel(world, ps, pairs)
-    forces(world, ps, pairs, dt)
+    for (const p of all) p.mass = massOf(p)
+    const pairs = findPairs(world, all)
+    feel(world, all, pairs)
+    forces(world, all, pairs, dt, ps.length)
     hold(world, ps, bonds, dt, blocked)
-    drag(world, ps, dt)
-    move(world, ps, dt, hooks, blocked)
+    drag(world, all, dt)
+    grip(world, near, hooks)
+    move(world, ps, dt, blocked)
   }
-  feel(world, ps)
+  feel(world, all)
   // Bonds stretched or squeezed too far have broken: the rock cracks there.
   const broken = new Set(bonds.filter((b) => b.rest < 0))
   if (broken.size) world.bonds = world.bonds.filter((b) => !broken.has(b))
 }
 
-function forces(world: World, ps: Particle[], pairs: Pairs, dt: number) {
+/**
+ * How much of a parcel of mana (a particle's free mana) the air around it holds up, 0–1: all of it where its cell has
+ * more air than mana in parcels, and less where the parcels are most of what's there (they aren't surrounded by air).
+ * The air holds a parcel up by what the air it pushes aside weighs (Archimedes): free mana is a gas, all its parts
+ * alike, so a parcel pushes aside its own M's worth of air, and that weighs RAW_MASS a M. It's the pressure of the air at
+ * rest, thicker below than above, and the ground under the air takes it back.
+ */
+export function buoyed(world: World, cell: number, inParcels: number): number {
+  if (cell < 0 || world.solidAt(cell)) return 0
+  const air = total(world.air[cell])
+  return air > 0 ? Math.min(1, air / Math.max(inParcels, PHYSICS.epsilon)) : 0
+}
+
+/** The free mana in parcels in each cell of some particles. */
+export function parcels(world: World, ps: Particle[]): Map<number, number> {
+  const out = new Map<number, number>()
+  for (const p of ps) {
+    const c = world.cellOf(p.pos)
+    if (c >= 0) out.set(c, (out.get(c) ?? 0) + total(p.free))
+  }
+  return out
+}
+
+/** The particles that move, and those a hand holds. */
+function split(world: World, hooks: FluidHooks): { moving: Particle[]; held: Particle[] } {
+  if (!hooks.holder) return { moving: world.particles, held: [] }
+  const moving: Particle[] = []
+  const held: Particle[] = []
+  for (const p of world.particles) (hooks.holder(p) ? held : moving).push(p)
+  return { moving, held }
+}
+
+/** Those of `some` within the smoothing length of any of `of`. */
+function within(world: World, of: Particle[], some: Particle[]): Particle[] {
+  const h = PHYSICS.smoothing
+  const flat = world.d === 1
+  const grid = new Set<number>()
+  const key = (x: number, y: number, z: number) => x + 2048 + (y + 2048) * 4096 + (z + 2048) * 16777216
+  for (const p of of) grid.add(key(Math.floor(p.pos[0] / h), Math.floor(p.pos[1] / h), flat ? 0 : Math.floor(p.pos[2] / h)))
+  const zr = flat ? 0 : 1
+  return some.filter((p) => {
+    const x = Math.floor(p.pos[0] / h)
+    const y = Math.floor(p.pos[1] / h)
+    const z = flat ? 0 : Math.floor(p.pos[2] / h)
+    for (let dz = -zr; dz <= zr; dz++) for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (grid.has(key(x + dx, y + dy, z + dz))) return true
+    return false
+  })
+}
+
+/**
+ * A hand holds what's in it still, where it was laid: what the world gave it this step, the hand takes away, and the
+ * body behind the hand gets, across the ground (the ground takes what's up and down). What motion it had is heat.
+ */
+function grip(world: World, held: Particle[], hooks: FluidHooks) {
+  let heat = 0
+  for (const p of held) {
+    const body = hooks.holder?.(p)
+    if (!body) continue
+    const m = p.mass
+    heat += ke(p)
+    for (const k of [0, 2]) body.vel[k] += (m * p.vel[k]) / body.mass
+    world.impulse.walls[1] -= m * p.vel[1]
+    p.vel = [0, 0, 0]
+  }
+  world.warm('the hand', heat)
+}
+
+/**
+ * Weight, pressure, holding together and thickness. The first `free` of `ps` move; the rest are in a hand, which bears
+ * their weight, and they press only on what moves (what's in a hand doesn't press on itself: the hand holds it all).
+ */
+function forces(world: World, ps: Particle[], pairs: Pairs, dt: number, free = ps.length) {
   const K = kernels(world.d === 1 ? 2 : 3)
   const h = PHYSICS.smoothing
   const depth = world.d === 1 ? world.cell : 1
@@ -296,14 +374,21 @@ function forces(world: World, ps: Particle[], pairs: Pairs, dt: number) {
   const coh = new Float64Array(n)
   const visc = new Float64Array(n)
   const rho = new Float64Array(n)
+  const inCell = parcels(world, ps.slice(0, free))
+  const raw = RAW_MASS()
   for (let i = 0; i < n; i++) {
     const p = ps[i]
-    let w = 0
-    for (let k = 0; k < 4; k++) w += p.free[k] * PHYSICS.fall[k] + p.carried[k] * PHYSICS.matterMass[k] * PHYSICS.matterFall[k]
-    // Weight: free mana by part, and the matter it holds.
-    p.acc = [0, -g * w, 0]
-    world.impulse.gravity[1] -= g * w * dt
     fm[i] = freeMass(p)
+    // Weight: its mass, free mana and matter, times g; less what the air holds up (buoyancy), which the ground under
+    // the air takes. What's in a hand, the hand bears.
+    if (i < free) {
+      const c = world.cellOf(p.pos)
+      const lift = g * fm[i] * raw * buoyed(world, c, inCell.get(c) ?? 0)
+      p.acc = [0, -g * p.mass + lift, 0]
+      lifted.set(p, lift)
+      world.impulse.gravity[1] -= g * p.mass * dt
+      world.impulse.walls[1] += lift * dt
+    } else p.acc = [0, 0, 0]
     mm[i] = matterMass(p)
     // Free mana presses like a gas: pressure = k·ρ, so its term is k/ρ.
     press[i] = fm[i] > 0 ? blend(p, PHYSICS.stiffness) / (p.rho * depth) : 0
@@ -320,6 +405,7 @@ function forces(world: World, ps: Particle[], pairs: Pairs, dt: number) {
     if (r < 1e-9) continue
     const i = A[e]
     const j = Bi[e]
+    if (i >= free && j >= free) continue
     const a = ps[i]
     const b = ps[j]
     const Ma = a.mass
@@ -346,14 +432,15 @@ function forces(world: World, ps: Particle[], pairs: Pairs, dt: number) {
     if (M <= 0) continue
     for (let k = 0; k < 3; k++) p.vel[k] += (p.acc[k] / M) * dt
   }
-  thicken(world, ps, pairs, visc, rho, dt)
+  thicken(world, ps, pairs, visc, rho, dt, free)
 }
 
-/** What a particle weighs: m·g, of its free mana by part and of the matter it holds. */
+/** How hard the air held each particle up, as of its last step. */
+const lifted = new WeakMap<Particle, number>()
+
+/** What a particle weighs, less what the air holds up: m·g − lift. */
 function weightOf(p: Particle): number {
-  let w = 0
-  for (let k = 0; k < 4; k++) w += p.free[k] * PHYSICS.fall[k] + p.carried[k] * PHYSICS.matterMass[k] * PHYSICS.matterFall[k]
-  return Math.max(0, w * PHYSICS.gravity)
+  return Math.max(0, massOf(p) * PHYSICS.gravity - (lifted.get(p) ?? 0))
 }
 
 /** ½m|v|², the kinetic energy of one particle. */
@@ -363,7 +450,7 @@ const ke = (p: Particle) => 0.5 * p.mass * (p.vel[0] * p.vel[0] + p.vel[1] * p.v
  * Thickness: neighbours' motions even out, pair by pair, equally and oppositely. What the evening out takes from their
  * motion is heat.
  */
-function thicken(world: World, ps: Particle[], pairs: Pairs, visc: Float64Array, rho: Float64Array, dt: number) {
+function thicken(world: World, ps: Particle[], pairs: Pairs, visc: Float64Array, rho: Float64Array, dt: number, free: number) {
   const K = kernels(world.d === 1 ? 2 : 3)
   const h = PHYSICS.smoothing
   const depth = world.d === 1 ? world.cell : 1
@@ -371,6 +458,7 @@ function thicken(world: World, ps: Particle[], pairs: Pairs, visc: Float64Array,
   for (let e = 0; e < pairs.n; e++) {
     const i = pairs.a[e]
     const j = pairs.b[e]
+    if (i >= free && j >= free) continue
     const a = ps[i]
     const b = ps[j]
     const Ma = a.mass
@@ -405,7 +493,7 @@ export function mergeAndSplit(world: World, hooks: FluidHooks = {}): Change[] {
     rock.add(b.a)
     rock.add(b.b)
   }
-  const ps = world.particles.filter((p) => !rock.has(p) && !hooks.still?.(p))
+  const ps = world.particles.filter((p) => !rock.has(p) && !hooks.holder?.(p))
   const changes: Change[] = []
   if (!ps.length) return changes
   const pairs = findPairs(world, ps)
@@ -442,7 +530,6 @@ export function mergeAndSplit(world: World, hooks: FluidHooks = {}): Change[] {
       b.free[k] = 0
       b.carried[k] = 0
     }
-    a.dvLeft = Math.min(a.dvLeft, b.dvLeft)
     a.pushedAt = Math.max(a.pushedAt, b.pushedAt)
     changes.push({ kind: 'merge', into: a, from: b, weave: b.weave })
     gone.add(b)
@@ -530,6 +617,7 @@ function hold(world: World, ps: Particle[], bonds: Bond[], dt: number, blocked: 
   for (let it = 0; it < iterations; it++) {
     for (const p of grounded) {
       if (p.vel[1] >= 0) continue
+      p.touchedAt = world.tick
       // The ground takes what presses down, and its friction what slides, up to its share of that.
       const m = p.mass
       // Holding up what rests on it, the ground only takes back the speed its weight gave it this step: no heat in that.
@@ -598,7 +686,7 @@ function drag(world: World, ps: Particle[], dt: number) {
     const m = p.mass
     const c = world.cellOf(p.pos)
     if (m <= 0 || c < 0) continue
-    const M = total(world.air[c])
+    const M = massOfParts(world.air[c])
     if (M <= 0) continue
     const rate = (PHYSICS.airDrag * M) / PHYSICS.airMana
     const mu = (m * M) / (m + M)
@@ -621,9 +709,10 @@ function drag(world: World, ps: Particle[], dt: number) {
 /**
  * Each particle moves, one axis at a time, so it can't slip through a corner. It stops dead at the edge of the world, and
  * against matter: free mana against solid matter, and mana holding matter against a cell with no room for what it holds
- * (matter blocks matter). It strikes the bodies it runs into, sharing its speed with them.
+ * (matter blocks matter). It strikes the bodies it runs into, its maker's as much as anyone's, sharing its speed with
+ * them. Whatever stops it or strikes it, it feels: that's a touch.
  */
-function move(world: World, ps: Particle[], dt: number, hooks: FluidHooks, blocked: Blocked) {
+function move(world: World, ps: Particle[], dt: number, blocked: Blocked) {
   let struck = 0
   let bodies = 0
   for (const p of ps) {
@@ -644,10 +733,12 @@ function move(world: World, ps: Particle[], dt: number, hooks: FluidHooks, block
         world.impulse.walls[k] -= m * p.vel[k]
         struck += 0.5 * m * p.vel[k] * p.vel[k]
         p.vel[k] = 0
+        p.touchedAt = world.tick
       } else p.pos = next
     }
-    const body = world.bodyAt(p.pos, hooks.passes?.(p))
+    const body = world.bodyAt(p.pos)
     if (body && m > 0) {
+      p.touchedAt = world.tick
       // A body only slides along the ground: it takes the mana's push across, and the ground takes the rest.
       const mu = (m * body.mass) / (m + body.mass)
       for (const k of [0, 2]) {
@@ -666,11 +757,11 @@ function move(world: World, ps: Particle[], dt: number, hooks: FluidHooks, block
 /**
  * Energy the fluid stores in where its particles are, for the Energy ledger: in its gas pressed together (each particle
  * m·k·ln(ρ/ρ̄), which is what its pressure pushes out of: nothing at the density of the air, `air`, so mana that settles
- * into the air takes none with it), in matter packed past full, and in particles that cohere pulled apart. Only between
- * particles that move: what's in a hand presses on nothing.
+ * into the air takes none with it), in matter packed past full, and in particles that cohere pulled apart. What's in a
+ * hand counts too: it presses on what's around it.
  */
-export function storedInFluid(world: World, hooks: FluidHooks = {}, air = 1): { gas: number; packing: number; cohesion: number } {
-  const ps = hooks.still ? world.particles.filter((p) => !hooks.still!(p)) : world.particles
+export function storedInFluid(world: World, air = 1): { gas: number; packing: number; cohesion: number } {
+  const ps = world.particles
   const out = { gas: 0, packing: 0, cohesion: 0 }
   if (!ps.length) return out
   for (const p of ps) p.mass = massOf(p)

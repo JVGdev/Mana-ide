@@ -34,12 +34,12 @@ describe('the bench', () => {
   it('an order told only an angle flies, but nothing holds it together', () => {
     const r = runVariant(variant('ThrowHeading'), 'adept', 2, 2)
     expect(r.ingrain).toBeGreaterThan(0)
-    expect(r.arrived).toBe(false)
+    expect(r.together).toBeLessThan(0.5) // what's left of the ball when it gets there, if it does, is a scatter
   })
 
   it('an order that feels its neighbours holds a thrown ball together all the way', () => {
     const r = runVariant(variant('ThrowCohere'), 'master', 2, 2)
     expect(r.arrived).toBe(true)
-    expect(r.together).toBeGreaterThan(0.9)
+    expect(r.together).toBeGreaterThan(0.85)
   })
 })

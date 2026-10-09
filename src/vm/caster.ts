@@ -22,6 +22,14 @@ export type CasterStats = {
     speed: Stat
     registers: Stat
     memory: Stat
+    /**
+     * The most Energy the mind can transform out of mana in one tick (kg·(m/tick)², one is 900 J): how hard it can push.
+     */
+    power: Stat
+    /** How much strain it bears before transforming more harms it: its mental capacity. */
+    capacity: Stat
+    /** How much strain eases each tick it rests. */
+    recovery: Stat
   }
 }
 
@@ -39,7 +47,7 @@ export function adept(): CasterStats {
       reach: s(4),
       affinity: [s(0.6), s(0.6), s(0.6), s(0.6)],
     },
-    mind: { speed: s(300), registers: s(32), memory: s(256) },
+    mind: { speed: s(300), registers: s(32), memory: s(256), power: s(0.5), capacity: s(60), recovery: s(0.02) },
   }
 }
 
@@ -55,7 +63,7 @@ export function child(): CasterStats {
       reach: s(2.5),
       affinity: [s(0.3), s(0.3), s(0.3), s(0.3)],
     },
-    mind: { speed: s(120), registers: s(8), memory: s(32) },
+    mind: { speed: s(120), registers: s(8), memory: s(32), power: s(0.1), capacity: s(10), recovery: s(0.005) },
   }
 }
 
@@ -71,7 +79,7 @@ export function master(): CasterStats {
       reach: s(3, 2),
       affinity: [s(0.6, 0.25), s(0.6, 0.25), s(0.6, 0.25), s(0.6, 0.25)],
     },
-    mind: { speed: s(300, 1200), registers: s(32), memory: s(256) },
+    mind: { speed: s(300, 1200), registers: s(32), memory: s(256), power: s(0.5, 1.5), capacity: s(60, 180), recovery: s(0.02, 0.04) },
   }
 }
 
@@ -90,6 +98,14 @@ export class Caster {
   conditioning = new Map<string, number>()
   /** Harm taken from overcharge, in M past capacity, summed over ticks. */
   harm = 0
+  /**
+   * Energy the mind has transformed out of mana and not yet recovered from (SPEC §4, The mind). Past its capacity, each
+   * tick harms it: `madness` counts by how much, summed over ticks.
+   */
+  strain = 0
+  madness = 0
+  /** Energy the mind can still transform this tick. */
+  powerLeft = 0
 
   constructor(
     readonly name: string,
@@ -137,14 +153,23 @@ export class Caster {
   get memory() {
     return Math.max(0, Math.min(256, Math.floor(this.mindStat(this.stats.mind.memory))))
   }
+  get power() {
+    return Math.max(0, this.mindStat(this.stats.mind.power))
+  }
+  get mindCapacity() {
+    return Math.max(0, this.mindStat(this.stats.mind.capacity))
+  }
+  get recovery() {
+    return Math.max(0, this.mindStat(this.stats.mind.recovery))
+  }
 
-  /** The casting hand: a little in front of the body, towards where they aim. */
+  /** The casting hand: at arm's length in front of the body, towards where they aim. */
   get hand(): Vec {
     const p = this.body.pos
     const dx = this.will.aim[0] - p[0]
     const dz = this.will.aim[2] - p[2]
     const len = Math.hypot(dx, dz) || 1
-    return [p[0] + (0.4 * dx) / len, p[1] + 0.2, p[2] + (0.4 * dz) / len]
+    return [p[0] + (0.6 * dx) / len, p[1] + 0.2, p[2] + (0.6 * dz) / len]
   }
 
   /** Mana in the body: its flow and what its registers hold. Weaves in hand are counted by the machine. */

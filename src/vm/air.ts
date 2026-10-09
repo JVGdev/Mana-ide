@@ -1,7 +1,9 @@
 // The air (SPEC §11): the free mana spread through the world's cells, as a gas. It presses from dense to thin, carries
 // itself along (and its mana, and its momentum, with it), flows around what's solid, and is held still against the
 // ground and the world's edge. Its pressure is its density times the square of its speed of sound (PHYSICS.airSound):
-// fast enough beside the winds in it that it flows around things, as air does, rather than piling up against them.
+// fast enough beside the winds in it that it flows around things, as air does, rather than piling up against them. It
+// weighs, so at rest it's thicker low down than high up: its own weight presses it down, and its pressure holds it up.
+// That pressure, thicker below than above, is what holds up a parcel of mana lighter than the air around it.
 //
 // It's a finite-volume scheme on the grid. Between every two open neighbouring cells, each step, mana and momentum flow
 // from the one upwind, and the pressure on the face between them pushes them apart, equally and oppositely. Against a
@@ -10,7 +12,7 @@
 
 import { PHYSICS } from './physics.ts'
 import { total } from './parts.ts'
-import type { World } from './world.ts'
+import { massOfParts, type World } from './world.ts'
 
 /** The most of a cell's mana that may leave it through one face in one step. */
 const MOST = 0.15
@@ -18,7 +20,41 @@ const MOST = 0.15
 const STOP = 5e-4
 const CALM = 5e-3
 
-/** One tick of the air: it flows, presses, and evens out its speed with its neighbours. */
+/** The mass of 1 M of raw mana: what the air weighs for each M of it, before anything's taken out or let into it. */
+export const RAW_MASS = () => PHYSICS.manaMass.reduce((a, b) => a + b, 0) / 4
+
+/**
+ * How high the air at rest thins by a factor of e, metres: its speed of sound squared over what it weighs. Air at rest is
+ * as thick, at height y, as e^(−y/H) times what it is at the ground.
+ */
+export function scaleHeight(): number {
+  return PHYSICS.airSound ** 2 / (PHYSICS.gravity * RAW_MASS())
+}
+
+/**
+ * The air at rest, cell by cell: as much mana as the air has now, laid out as thick at each height as it would settle
+ * (M in each cell). It's what the air's pressure and weight are measured from: air at rest, at rest's thickness,
+ * presses and weighs nothing that the ground doesn't already hold up, and needs no work.
+ */
+function atRest(world: World, open: Uint8Array): Float64Array {
+  const H = scaleHeight()
+  const rows = new Float64Array(world.h)
+  for (let y = 0; y < world.h; y++) rows[y] = Math.exp(-((y + 0.5) * world.cell) / H)
+  let mana = 0
+  let shape = 0
+  for (let i = 0; i < world.size; i++)
+    if (open[i]) {
+      mana += total(world.air[i])
+      shape += rows[Math.floor(i / world.w) % world.h]
+    }
+  const out = new Float64Array(world.size)
+  if (shape <= 0) return out
+  const S = mana / shape
+  for (let i = 0; i < world.size; i++) if (open[i]) out[i] = S * rows[Math.floor(i / world.w) % world.h]
+  return out
+}
+
+/** One tick of the air: it flows, presses, falls under its weight, and evens out its speed with its neighbours. */
 export function stepAir(world: World) {
   const n = world.size
   const dx = world.cell
@@ -30,22 +66,17 @@ export function stepAir(world: World) {
   const air = world.air
   const walls = world.impulse.walls
   const k2 = PHYSICS.airSound ** 2
-  // Pressure is measured from the air's own, all through the world: how dense it is on average. A pressure the same all
-  // round pushes nothing anywhere: inside the air its pushes cancel, and on any closed surface (the ground, a pillar, the
-  // world's edge) they add up to nothing. So air at rest, as dense as the rest of it, needs no work, and is skipped.
-  let sum = 0
-  let cells = 0
-  for (let i = 0; i < n; i++)
-    if (open[i]) {
-      sum += total(air[i])
-      cells++
-    }
-  const usual = cells ? sum / cells : 0
-  const still = (k2 * usual) / V
+  const g = PHYSICS.gravity
+  const raw = RAW_MASS()
+  // Pressure and weight are measured from the air at rest (atRest): the pressure that holds it up there, and the weight
+  // it holds up, cancel, and the ground takes the rest. So air at rest, as thick as rest would have it, and as heavy,
+  // needs no work, and is skipped. Only what's different from rest pushes or falls.
+  const rest = atRest(world, open)
   const quiet = (i: number) => {
     const a = air[i]
     const m = a[0] + a[1] + a[2] + a[3]
-    return v[i * 3] === 0 && v[i * 3 + 1] === 0 && v[i * 3 + 2] === 0 && Math.abs(m - usual) <= CALM * usual
+    const r = rest[i]
+    return v[i * 3] === 0 && v[i * 3 + 1] === 0 && v[i * 3 + 2] === 0 && Math.abs(m - r) <= CALM * r && Math.abs(massOfParts(a) - r * raw) <= CALM * r * raw
   }
   // Air that has all but stopped stops: what little motion it had goes into the ground, as the air's thickness would
   // have taken it there anyway.
@@ -53,7 +84,7 @@ export function stepAir(world: World) {
     if (!open[i]) continue
     const s2 = v[i * 3] ** 2 + v[i * 3 + 1] ** 2 + v[i * 3 + 2] ** 2
     if (s2 === 0 || s2 > STOP * STOP) continue
-    const m = total(air[i])
+    const m = massOfParts(air[i])
     world.warm('the air', 0.5 * m * s2)
     for (let k = 0; k < 3; k++) {
       walls[k] -= m * v[i * 3 + k]
@@ -72,6 +103,7 @@ export function stepAir(world: World) {
 
   const M = new Float64Array(n)
   const P = new Float64Array(n * 3)
+  const sink = new Float64Array(n)
   const press = new Float64Array(n)
   const flow = new Float64Array(n * 4)
   const moved = new Float64Array(n * 3)
@@ -98,11 +130,14 @@ export function stepAir(world: World) {
       touched.push(i)
       const a = air[i]
       const m = a[0] + a[1] + a[2] + a[3]
-      M[i] = m
-      P[i * 3] = m * v[i * 3]
-      P[i * 3 + 1] = m * v[i * 3 + 1]
-      P[i * 3 + 2] = m * v[i * 3 + 2]
-      press[i] = m > 0 ? (k2 * m) / V - still : -still
+      const mass = massOfParts(a)
+      M[i] = mass
+      P[i * 3] = mass * v[i * 3]
+      P[i * 3 + 1] = mass * v[i * 3 + 1]
+      P[i * 3 + 2] = mass * v[i * 3 + 2]
+      press[i] = (k2 * (m - rest[i])) / V
+      // How much heavier (or lighter) it is than the air at rest there, which its pressure holds up.
+      sink[i] = g * (mass - rest[i] * raw)
       for (let k = 0; k < 4; k++) flow[i * 4 + k] = 0
       moved[i * 3] = moved[i * 3 + 1] = moved[i * 3 + 2] = 0
     }
@@ -134,6 +169,11 @@ export function stepAir(world: World) {
         walls[ax] += f
       }
     })
+    // And it falls by what it weighs beyond the air at rest there, or rises by what it weighs less.
+    for (const i of touched) {
+      P[i * 3 + 1] -= sink[i] * dt
+      world.impulse.gravity[1] -= sink[i] * dt
+    }
     for (const i of touched)
       for (let k = 0; k < 3; k++) u[i * 3 + k] = M[i] > 0 ? P[i * 3 + k] / M[i] : 0
     // Then the air, at the speed it now has, carries its mana and momentum across each open face, from the cell upwind.
@@ -159,11 +199,8 @@ export function stepAir(world: World) {
     })
     for (const i of touched) {
       const parts = air[i]
-      let m = 0
-      for (let k = 0; k < 4; k++) {
-        parts[k] = Math.max(0, parts[k] + flow[i * 4 + k])
-        m += parts[k]
-      }
+      for (let k = 0; k < 4; k++) parts[k] = Math.max(0, parts[k] + flow[i * 4 + k])
+      const m = massOfParts(parts)
       for (let k = 0; k < 3; k++) {
         const p = P[i * 3 + k] + moved[i * 3 + k]
         if (m > 1e-12) v[i * 3 + k] = p / m
@@ -207,11 +244,6 @@ function layout(world: World) {
   return { open, next, prev }
 }
 
-/** How hard a cell's air presses for its density: pressure = this × density. */
-function stiffness(world: World, i: number): number {
-  return total(world.air[i]) > 0 ? PHYSICS.airSound ** 2 : 0
-}
-
 /**
  * The air carries its speed to its neighbours (it's thick), and the ground, walls and the world's edge hold still the air
  * against them.
@@ -234,7 +266,7 @@ function viscosity(world: World, open: Uint8Array, next: Int32Array, prev: Int32
   const moving = (i: number) => v[i * 3] !== 0 || v[i * 3 + 1] !== 0 || v[i * 3 + 2] !== 0
   for (let a = 0; a < world.size; a++) {
     if (!open[a]) continue
-    const Ma = total(world.air[a])
+    const Ma = world.airMass(a)
     if (Ma <= 0) continue
     // Still air beside still air: nothing to even out.
     let near = moving(a)
@@ -245,7 +277,7 @@ function viscosity(world: World, open: Uint8Array, next: Int32Array, prev: Int32
     if (!near) continue
     for (let ax = 0; ax < axes; ax++) {
       const b = next[a * 3 + ax]
-      const Mb = b < 0 ? 0 : total(world.air[b])
+      const Mb = b < 0 ? 0 : world.airMass(b)
       if (Mb <= 0) {
         still(a, Ma)
         continue

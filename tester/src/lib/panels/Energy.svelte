@@ -9,6 +9,7 @@
     packing: 'matter packed',
     cohesion: 'held together',
     air: 'air pressed',
+    bodies: 'mana in bodies',
   }
 
   /** Joules, readably. */
@@ -39,7 +40,7 @@
 
 {#if view}
   <div class="facts">
-    <span>put in by casters and orders <b>{j(view.e.outside)}</b></span>
+    <span>put in by casters and orders <b>{j(view.e.outside)}</b>: minds transformed <b>{j(view.e.minds)}</b>, bodies <b>{j(view.e.bodies)}</b></span>
     <span>turned to heat <b>{j(view.e.heat)}</b></span>
     <span>held now, beyond the start <b>{j(view.e.total - view.e.start)}</b></span>
     <span class:bad={view.share > 0.05}>off by <b>{j(view.e.errorTotal)}</b> ({(view.share * 100).toFixed(1)}%)</span>

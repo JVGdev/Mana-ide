@@ -11,7 +11,6 @@ StoneWall:
         CIRC  m0                  ; CIRCULATE
         FILT  m1, m0, #EARTH      ; FILTER: earth × affinity; the residue stays in m0
         WEAV  n20, n16:18         ; a weave on the ground at the aim
-        HOLD  n20, #3             ; a field big enough for the whole wall
         IN    n0:2, SELF
         MOV   n3, n16
         MOV   n4, n17

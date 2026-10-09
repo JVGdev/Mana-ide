@@ -8,7 +8,6 @@ WaterShield:
         FILT  m1, m0, #WATER      ; FILTER
         IN    n1:3, SELF
         WEAV  n17, n1:3           ; POSITION: a weave around the caster
-        HOLD  n17, #2             ; a field wider than the shell
         MOV   n4, n17
         LDI   n0, #1.2
         CALL  shield              ; a shell of water mana, 1.2 m

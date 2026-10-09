@@ -44,43 +44,76 @@ The check for any part of the machine, old or new: *is this something the world 
 
 ### Where the machine doesn't meet it yet
 
-An audit of the code against this objective (on `claude/orders-only-feel`, after D31) found these. Each is to be fixed,
-or kept and named as a stand-in.
+An audit of the code against this objective (after D31) found sixteen places. They were fixed on
+`claude/organic-physics` (D32–D39), and what each became is below. The work turned up a few more, at the end: those are
+what's left.
 
-**Breaks a law of the world:**
+**Broke a law of the world. Fixed:**
 
-1. **A kick has nothing to push against.** An order's `KICK` adds momentum booked as from outside; the mana it pays with
-   leaves at the particle's old speed. *Organic:* a rocket, whose spent mana is thrown back.
-2. **A caster's push recoils on nobody.** `SHOV` and `SEND` give mana momentum from outside; the caster's body feels
-   nothing. *Organic:* the momentum comes from the body, or from mana thrown at the target.
-3. **A push's Energy comes from nowhere.** The mana paid goes loose, still mana, and the kinetic energy is booked as
-   outside. *Organic:* a store it comes out of: the body, or a state the mana drops to (question 5).
-4. **The weave's registers are telepathy.** One particle's `PUTW` reaches every particle next tick, wherever it is, and a
-   caster's `WSET` reaches its weave from any distance. *Organic:* each particle keeps its own copy and passes it on by
-   contact; a caster writes within reach.
-5. **A weave dies all at once.** One particle's `DISS`, or one particle thinking past 64 beats, ends every particle the
-   same tick. *Organic:* each particle lets go or frays on its own, and it spreads only as neighbours feel it.
-6. **Belonging is measured from the centre.** A particle further from its weave's centre than the field leaves it, even
-   after the caster is gone. *Organic:* it belongs while it carries the order; the field is the caster's, while they hold.
-7. **A mage acts anywhere.** Only `SHOV` and `INGR` check reach; `WEAV`, `EMIT`, `SEND`, `PROB`, `AIRM`, `PPOS`, `PVEL`,
-   `WPOS` and `WSET` don't. *Organic:* everything the body does or senses is within reach.
+1. **A kick had nothing to push against.** Now a particle pushes off what's around it: the ground or other solid
+   matter it's against, on the side it pushes away from, or else the air it's in, which takes the push back (D33). In
+   empty space it can't push at all.
+2. **A caster's push recoiled on nobody.** Now `SHOV` goes off the caster's body, through their reach, and `SEND`
+   throws mana out of it: the body is pushed back, and their feet on the ground hold them as far as friction lets
+   them (D33). Throwing an 18 M fireball at 13 m/s slides an adept back a metre.
+3. **A push's Energy came from nowhere.** Now a mind transforms it out of mana, as hard as its power allows, and strains
+   for it; past its capacity it's harmed (the Law of Transformation, D32). The mana isn't used up. The Energy ledger
+   counts what minds put in, push by push.
+4. **The weave's registers were telepathy.** Now each particle keeps its own copy, written by its own order or by a
+   caster within reach, and passes it on to those touching it; the newest write wins (D34).
+5. **A weave died all at once.** Now a particle that lets go (`DISS`) or frays goes alone. Its neighbours go on, and a
+   burst spreads only as fast as the word of it passes by touch (D34).
+6. **Belonging was measured from the centre.** Now a particle belongs to its weave while it carries the order, and,
+   until it's given one, while its caster can reach it. `HOLD` and the field are gone (D34).
+7. **A mage acted anywhere.** Now every body and reach instruction works only within reach: a caster feels, counts and
+   pushes only the particles they can reach (D34).
 
-**Shortcuts that physics should produce:**
+**Shortcuts that physics should produce. Now it does:**
 
-8. **Touch knows who owns what.** `TUCH` ignores its maker's body. *Organic:* touch is a force felt; ownership isn't.
-9. **Rock forms when the caster lets go** (`MANI`). *Organic:* from a condition: earth packed and still, bonding.
-10. **Fire rises by a fixed share of gravity** (`fall`), and the air doesn't press on particles. *Organic:* buoyancy,
-    from the air it displaces.
-11. **A push changes speed by at most 0.1 m/tick** (`pushRate`), whatever it weighs. *Organic:* a limit on the body's
-    power, Energy per tick.
-12. **A weave in hand is frozen** (D26), and strains nothing. *Organic:* the hand holds it with a force the body feels.
+8. **Touch knew who owned what.** Now `TUCH` says whether something stopped or struck the particle when the world last
+   moved, matter, the ground or a body, anyone's, and mana strikes its maker's body as it would anyone's (D35).
+9. **Rock formed when the caster let go.** Now earth held by mana becomes rock wherever it's packed as full as solid
+   ground and still, whoever's it is, in hand or not (D36).
+10. **Fire rose by a fixed share of gravity.** Now each part of free mana has its own mass, everything weighs its mass
+    times g, and the air holds up a parcel of mana by what the air it pushes aside weighs. Fire is the lightest, so it
+    rises; the air weighs too, and settles thicker near the ground (D38).
+11. **A push changed speed by at most 0.1 m/tick.** Now a push gets as much as the mind's power gives it (an order's
+    power is its particle's mana's). A mind that pushes particles one at a time has to choose how much each gets: the
+    library's `throw` gives each the same 0.1 m/tick a pass, so the ball doesn't tear (D32).
+12. **A weave in hand was frozen.** Now it presses on what moves around it, and is pressed by it; the hand holds it
+    still, and the body behind the hand feels what that takes (D37).
 
-**Stand-ins, to name and replace when a spell leans on them:**
+**Stand-ins, named:**
 
-13. Flames spread by a fixed share (`fireSpread`), not by heat.
-14. A pushed body loses 30% of its speed a tick (`bodyFriction`), not friction against the ground.
-15. `DENS`, `GRAD` and `NVEL` read the simulation's sums, not a force the particle feels (question 6).
-16. Slow loose mana joins the air grid (`looseRest`): a change of representation, exact in mana and momentum.
+13. **Flames spread by a fixed share.** Now flame spreads as any gas does, from more to less, evening out with its
+    neighbours (`flameSpread`). By heat, as the audit asked, it doesn't yet: heat is counted, not a field (left below).
+14. **A pushed body lost 30% of its speed a tick.** Now the ground's friction slows it by μg, as its weight presses on
+    it (D39).
+15. **`DENS`, `GRAD` and `NVEL` read the simulation's sums.** *Kept, and why.* They are sums over the particle's
+    neighbours within the smoothing length, which is the particle's own size: what's touching it. They're the pressure
+    it's under, how that pressure differs across it, and how what's around it flows past: what a body can feel by touch,
+    not knowledge from a distance. What's left is question 6, how finely it can feel.
+16. **Slow loose mana joins the air grid** (`looseRest`). *Kept, and why.* It's a change of representation, not physics:
+    the same mana, as a share of the air instead of a particle, exact in mana, momentum and Energy (a parcel of mana is
+    worth, in Energy, what the same mana is worth as air: §11, *Mana and Energy*).
+
+**What's left.** Found while fixing the above, and not fixed yet:
+
+- **Matter held by mana doesn't block.** Only unbound matter is solid. A fireball passes through a raised Stone Wall's
+  rock, and the air flows into the wall's cells while it's still in the ground. *Organic:* matter is matter, held or not.
+  This changes how a wall can rise. With its cells full of rock, its upper rows have no air of their own to push off,
+  so it has to rise like a jack, from the ground, and the Stone Wall's order would need to know it's at the bottom.
+- **Condensing changes mass.** 1 M of free mana is about 1 kg; 1 M of matter is 0.25 kg of earth, and less of the rest.
+  What a particle gains or loses that way, at its speed, is booked as momentum from outside (`matter`). Matter that's
+  let go of stops dead in the ground, and the ground takes its momentum.
+- **What bodies do to the air comes from outside.** Gathering thins the air around the body, and pouring mana into a
+  point presses it together. That Energy is booked as `bodies` in the ledger, not drawn from the mind. It's small: a few
+  kJ a cast.
+- **Wind pushes particles by drag only.** Buoyancy comes from the air at rest (Archimedes), not from the pressure of
+  the air as it moves. A push of air pushes particles by dragging them, not by its pressure.
+- **The hand's grip has no limit.** It holds any weave in it still, however hard the world pushes on it. *Organic:* a
+  limit on what the body can hold.
+- **Heat isn't anywhere.** It's counted, by how it came about, but it doesn't warm a place, and nothing feels it.
 
 ---
 
@@ -109,15 +142,23 @@ or kept and named as a stand-in.
 | D19 | **The physics is as real as we can make it.** Spells get better by using the shortcuts reality gives, so the more real the world, the better the spells that can be written for it (§11). Every feature of a spell comes from it: this is the main objective (§0). |
 | D20 | **Mana is chemistry, Energy is physics.** Mana is what things are. Energy is how things happen: force, motion, electricity. Each is conserved on its own, and mana moves Energy only indirectly. Fire mana is the substance of heat; the motion that heat is, is Energy. |
 | D21 | **Free mana is a fluid of particles.** It has pressure, and spreads unless something holds it. Particles that share a velocity travel together. |
-| D22 | **Pushing mana costs mana.** It is poured onto a particle, and the poured mana goes loose where it was poured. A push changes a particle's speed only so much per tick: a caster speeds mana up by keeping the push going. *(How much it costs: D29.)* |
-| D23 | **A construct is held by pushing it.** The caster keeps its particles in by pushing them back, as many and as often as their mind allows. A particle that gets out of the caster's field leaves the weave. Locking a shape is a loop in a library, not an instruction. |
+| D22 | **Pushing mana costs mana.** It is poured onto a particle, and the poured mana goes loose where it was poured. *(How much it costs: D29. Where its Energy comes from: D32. How hard it can push: the mind's power, D32; it used to be a fixed 0.1 m/tick.)* |
+| D23 | **A construct is held by pushing it.** The caster keeps its particles in by pushing them back, as many and as often as their mind allows. Locking a shape is a loop in a library, not an instruction. *(What belongs to a weave: D34.)* |
 | D24 | **Orders are reactions ingrained in mana.** Each particle carries its order. An order can spend its own particle's mana to push it. |
 | D25 | **Orders don't spread to other mana**, except through a second flaw (§11, *The second flaw*). |
-| D26 | **A weave in hand is held still.** Its mana counts toward the body's load because the body holds it: it stays where it was laid until `MANI` lets it go. |
+| D26 | **A weave in hand is held still.** Its mana counts toward the body's load because the body holds it: it stays where it was laid until `MANI` lets it go. *(How: D37.)* |
 | D28 | **Things weigh.** A tick is 1/30 s, and things fall at 9.8 m/s². Matter held by mana weighs what that much matter weighs (a full cell of earth, 25 kg), and the mana holding it has to carry it. What rests on the ground is held up by the ground. |
-| D29 | **A push costs the kinetic energy it adds** (D22, made exact): mana poured onto a particle turns into its motion. Speeding up costs more the faster it's already going. Slowing down costs nothing: what's taken out of the motion is heat. Holding something up against its weight costs nothing; lifting it costs its weight times the height. |
-| D30 | **Earth held by mana is rock.** When a weave holding earth is let go of, its particles are bound to their neighbours, and keep their shape. Rock cracks where it's bent too far or made to hold too much, and comes apart as its mana lets go of the earth. |
+| D29 | **A push costs the kinetic energy it adds** (D22, made exact), to what's pushed and to what it's pushed off (D33), at `pushEnergy` a M of mana poured. Speeding up costs more the faster it's already going. Slowing down costs nothing: what's taken out of the motion is heat. Holding something up against its weight costs nothing on the ground; in the air, it costs the downdraft it makes. Lifting it costs its weight times the height. |
+| D30 | **Earth held by mana is rock.** Its particles are bound to their neighbours, and keep their shape. Rock cracks where it's bent too far or made to hold too much, and comes apart as its mana lets go of the earth. *(When it forms: D36.)* |
 | D31 | **An order only feels.** It knows its own particle (its mana, its speed, whether it touches something), the mana around it (how dense, which way it thickens, how it moves), its weave's age, and what its caster wrote into the weave's registers. It isn't told where it is, where its weave's centre is, or where its maker is. What it has to know beyond that, its caster works out and writes in: once for the whole weave, or tick by tick while they keep it up. |
+| D32 | **The Law of Transformation.** A mind can transform mana into Energy: that's what a push is. The mana isn't used up (mana has no spent state); it goes loose, still mana, and could be used again. What limits it is the mind. Each mind can transform only so much a tick (`power`, a mind stat, D15), and it strains for every joule; the strain eases as it rests (`recovery`), and past its mental capacity (`capacity`) transforming more harms it, lowering its condition: madness, counted. So in principle the same mana could drive one phenomenon after another without end, but holding a mind to it is beyond anyone, alone. An order is a mind too: its power is its particle's mana's (`orderPower` a M), and its kicks pour its own mana. Closes question 5. |
+| D33 | **Every push pushes something back.** A caster's push (`SHOV`) goes off their body, through their reach, and `SEND` throws mana out of it: the body is pushed back, across the ground, and their feet hold it as far as friction lets them. An order's kick goes off what's around its particle: the ground or other matter it's against on the side it pushes away from, or else the air it's in. The energy of the push (D29) counts both. |
+| D34 | **A weave is its particles, and each is on its own.** Each particle keeps its own copy of its weave's registers and passes it on to those touching it, `relay` times a tick; the newest write wins. A caster writes into what they touch. A particle that lets go (`DISS`) or frays goes alone. A particle belongs to its weave while it carries the order, and, until it's given one, while its caster can reach it. Everything a caster's body does or senses is within their reach: they feel, count and push only the particles they can reach. `HOLD` and the field are gone; closes question 4. |
+| D35 | **Touch is a force felt.** `TUCH` says whether something stopped or struck the particle when the world last moved: matter, the ground, a body, anyone's. Mana strikes its maker's body as it strikes anyone's; the casting hand is at arm's length (0.6 m) so that what's poured there doesn't. |
+| D36 | **Rock forms where earth is packed and still.** Earth held by mana, in a cell as full of earth as solid ground, binds to its neighbours that hardly move against it. Whose mana it is doesn't matter, nor whether it's in hand. |
+| D37 | **The hand holds what's in it by force.** A weave in hand presses on the mana and air around it, and they on it; the hand holds it still, bears its weight, and the body behind the hand feels the rest. |
+| D38 | **Free mana is a gas, and the air holds it up.** Each part of free mana has its own mass (`manaMass`: fire 0.97 kg a M, water 1.01, air 1, earth 1.02), and everything weighs its mass times g. The air weighs too, and at rest it's thicker low down. A parcel of mana pushes aside its own M's worth of air, and the air holds it up by what that weighs (Archimedes): fire, the lightest, rises; earth mana sinks a little; matter is what's heavy. Where there's no air, everything falls alike. |
+| D39 | **Friction and flame.** A pushed body slides until the ground's friction stops it (μg, its weight pressing on the ground). Flame spreads as a gas does, from more to less, evening out with its neighbours. |
 | D27 | **Knowing costs.** An order is ingrained one particle at a time, at a beat for every instruction it could run, and every beat it thinks burns its particle's mana. A short order is cheap to ingrain and cheap to keep; an order that senses more costs more. |
 
 ---
@@ -180,7 +221,7 @@ How matter behaves comes from its parts. Each part brings its own properties, an
 
 | Part | Brings | Alone it is |
 |---|---|---|
-| Fire | heat, rises, spreads thin into warmth | flame |
+| Fire | heat, rises (free fire mana is the lightest), spreads thin into warmth | flame |
 | Water | flows, fills what's below it | water |
 | Air | light, fills what's empty, is pushed by moving air mana | air |
 | Earth | heavy, holds together, piles up | stone, soil, sand |
@@ -204,16 +245,17 @@ These rules belong to the world, not to the machine:
    Condensed matter is real. It stays when the weave is gone. Nothing natural frees it again: burning only changes what
    matter is mixed with fire, and a flame thins out into warmth that is still matter. Freeing it is possible, but only through a
    flaw in condensing (§5, *The flaw*).
-4. **Free mana is a fluid of particles** (§11). It presses on itself and spreads, drags the air it moves through and is
-   dragged by it (**wind**), and strikes the bodies it runs into. Loose mana that has slowed to the speed of the air around it
-   settles into it.
+4. **Free mana is a fluid of particles** (§11), a gas. It presses on itself and spreads, drags the air it moves through
+   and is dragged by it (**wind**), and strikes the bodies it runs into, its maker's as much as anyone's. It weighs its
+   mass, and the air holds it up by what the air it pushes aside weighs (D38): fire mana, the lightest, rises. Loose mana
+   that has slowed to the speed of the air around it settles into it.
 5. **Matter blocks matter.** Mana holding matter can't move into a cell without room for it, unless that room is taken by
    its own weave's matter, and coming down it lands on any solid matter, however loose. Free mana stops against solid
-   matter. What rests on the ground is held up by it, and its friction keeps it from sliding. Being against matter, or a
-   body, is a **touch**.
-6. **Earth held by mana is rock** (D30). A weave's earth particles are bound to their neighbours when it's let go of. A
-   bond keeps its length, and breaks if it's bent too far, made to hold more than it can, or either particle stops holding
-   earth. Water held by mana is water: it holds together, and can't be squeezed past full.
+   matter. What rests on the ground is held up by it, and its friction keeps it from sliding. Being stopped or struck by
+   matter, or a body, is a **touch** (D35). *(Matter held by mana doesn't block yet: §0.)*
+6. **Earth held by mana is rock** (D30). Where it's packed as full as solid ground and still, its particles are bound to
+   their neighbours (D36). A bond keeps its length, and breaks if it's bent too far, made to hold more than it can, or
+   either particle stops holding earth. Water held by mana is water: it holds together, and can't be squeezed past full.
 7. **Holding costs.** A weave doesn't leak by itself any more. What holds it together is its caster's pushes or its own
    order, and an order burns its mana as it thinks (D27). Less mana binds less matter, so a Stone Wall slowly crumbles as its
    earth falls free.
@@ -236,8 +278,8 @@ stat = genetics × condition + training
 ```
 
 - **Genetics** is what they were born with: a people, a bloodline, a gift.
-- **Condition** is how they are right now, from 0 to 1. Tired, hurt or drunk lowers it. Overcharge harm lowers it too, which
-  is where harm ends up.
+- **Condition** is how they are right now, from 0 to 1. Tired, hurt or drunk lowers it. Overcharge harm lowers the body's,
+  and strain past the mind's capacity lowers the mind's: that's where harm ends up.
 - **Training** is what they've learned or drilled: a mage who has trained their streams works more of them than they were
   born with.
 
@@ -253,7 +295,7 @@ The tester shows all three, so the same caster can be tried rested, exhausted or
 | `affinity[0..3]` | 0–100% per part: how much of that part filtering keeps. |
 | `focus` | How many ticks a CIRCULATE holds a mana register. |
 | `streams` | How many mana registers (`m0`… up to `m7`) the caster can use. |
-| `reach` | How far from the body, in metres, the caster can push mana or ingrain an order into it. An adept reaches 4 m. |
+| `reach` | How far from the body, in metres, it can do or sense anything: gather, pour, push, probe, ingrain, write a weave's registers, feel its particles (D34). An adept reaches 4 m. It's the body's own: a push through it pushes the body back (D33). |
 
 ### The mind
 
@@ -263,6 +305,9 @@ The tester shows all three, so the same caster can be tried rested, exhausted or
 | `registers` | How many number registers the mind has (`n0`… up to `n31`). A child might think with 8. |
 | `memory` | How many numbers the mind's memory holds (up to 256), and how deep its stack goes. |
 | `conditioning` | Per spell: how many times the caster has cast it. |
+| `power` | The most Energy it can transform out of mana in one tick (D32): how hard it can push, in kg·(m/tick)², 900 J each. An adept's is 0.5 (450 J a tick). |
+| `capacity` | Its mental capacity: how much strain it bears. Every joule it transforms strains it; past its capacity, transforming more harms it (madness), and the tester counts how much. An adept's is 60 (54 kJ). |
+| `recovery` | How much strain eases each tick. An adept's is 0.02 (18 J a tick: a full capacity in about 90 s). |
 
 A mind with fewer than 32 registers can't run a routine that needs more. A library says what it needs, so a child's mind can't
 hold `Shapes.ball` as written, but a simpler ball could be written for one.
@@ -285,12 +330,15 @@ out of the machine without being written anywhere.
 1. **The mind thinks:** it runs instructions until the tick's beats run out or a `TICK`.
 2. **Holds run down.** A mana register whose hold has run out (`focus` ticks after its last CIRC) **joins the flow**.
 3. **The flow drains:** whatever is above the baseline leaves, at most `drain` per tick, into the air around the caster.
-4. **Overcharge:** if `flow + held mana + weaves still in hand > capacity`, the excess is counted as harm.
+4. **Overcharge:** if `flow + held mana + weaves still in hand > capacity`, the excess is counted as harm. **Strain** eases
+   by `recovery`; past the mind's `capacity`, the excess is counted as madness.
 5. **Weaves hold:** every weave takes hold of the matter its free mana can bind (and lets go of what it no longer can).
-6. **Orders run:** every ingrained particle of a weave set loose runs its order, and pays for it (§5).
-7. **The world moves:** the mana (weight, pressure, holding together, rock, the air, the ground, what it runs into),
-   particles at rest together merging and thin ones splitting, particles that strayed past their weave's field, loose mana
-   settling, pushed bodies, falling and flowing matter, the air flowing. A weave in hand stays still (D26).
+6. **Orders run:** each particle passes its copy of its weave's registers on to those touching it, then every ingrained
+   particle of a weave set loose runs its order, and pays for it (§5).
+7. **The world moves:** the mana (weight, buoyancy, pressure, holding together, rock, the air, the ground, what it runs
+   into), particles at rest together merging and thin ones splitting, particles with no order out of their caster's
+   reach leaving their weave, loose mana settling, pushed bodies sliding, rock forming where earth is packed and still,
+   falling and flowing matter, the air flowing. A weave in hand is held still by the hand, which bears it (D37).
 
 Holding comes before the orders, so a Stone Wall has its earth in hand before its first rise.
 
@@ -319,18 +367,22 @@ handle. Each weave has:
 
 - an **origin**, and a **frame** (x right, y up, z forward) that `TURN` rotates about the vertical. Positions given to `EMIT`
   are in the weave's frame, from its origin. A library can lay a ball out around `(0, 0, 0)` without knowing where it is.
-- **particles**: its mana, each particle with the matter it binds (§11). `PCNT` counts them and `PPOS`/`PVEL` sense one,
-  by its number;
-- a **field**: how far around its centre it reaches (`HOLD`). A particle that strays further leaves the weave;
-- **registers** `w0`–`w7`, numbers its order can read and write (a velocity, a phase);
+  Each particle is told which way its frame faces when it's poured, ingrained or touched by a `TURN`: its order kicks and
+  feels in it.
+- **particles**: its mana, each particle with the matter it binds (§11). A particle belongs to the weave while it carries
+  its order, and, until it's given one, while its caster can reach it (D34). The caster feels only those within reach:
+  `PCNT` counts them, and `PPOS`/`PVEL` sense one, by its number among them;
+- **registers** `w0`–`w7`, numbers its order can read and write (a velocity, a phase). Each particle keeps its own copy:
+  its order reads and writes that copy, and passes it on to the particles touching it, `relay` times a tick, the newest
+  write winning. A caster writes into what they touch (`WSET`), and the mana they pour carries what they've written;
 - an **order**: a routine (`ORDR`) that each particle it's ingrained into (`INGR`) runs, every tick, once the weave is set
   loose.
 
-A weave is **in hand** from `WEAV` until `MANI`: its mana counts toward the body's load, and stays where it was laid (D26).
-`MANI` sets it loose. From then on its mana moves, and is measured from its centre, which moves with it. `LOCK` can fix its
-input (no more mana goes into it) or its order (it can't be given another one). A shape isn't locked: it's held, by the
-caster's pushes (`SHOV`) or by its own order (`KICK`). A weave whose mana has all gone, or that came apart, can still be named
-by its caster: there's nothing in it.
+A weave is **in hand** from `WEAV` until `MANI`: its mana counts toward the body's load, and the hand holds it where it
+was laid, bearing its weight and what presses on it (D26, D37). `MANI` sets it loose. From then on its mana moves. `LOCK`
+can fix its input (no more mana goes into it) or its order (it can't be given another one). A shape isn't locked: it's
+held, by the caster's pushes (`SHOV`) or by its own order (`KICK`). A weave whose mana has all gone can still be named by
+its caster: there's nothing in it.
 
 ### The order: mana running code
 
@@ -344,10 +396,11 @@ that **each particle it's ingrained into runs every tick**, like a tiny mind ins
 | `n3` | How much free mana it holds. |
 | `n4` | The weave's age, in ticks since it was set loose. |
 
-An order can do arithmetic and jumps, read its weave's registers and the ports below, and use the **order** instructions
-(`KICK`, `TUCH`, `GETW`, `PUTW`, `DISS`, `CNDS`, `DENS`, `GRAD`, `NVEL`). It ends with `RET`. Every beat it thinks burns
-some of its particle's mana into the air (`orderBurn`). An order that thinks more than 64 beats in one tick **frays**: the
-weave comes apart, and its mana goes loose.
+An order can do arithmetic and jumps, read its copy of its weave's registers and the ports below, and use the **order**
+instructions (`KICK`, `TUCH`, `GETW`, `PUTW`, `DISS`, `CNDS`, `DENS`, `GRAD`, `NVEL`). It ends with `RET`. Every beat it
+thinks burns some of its particle's mana into the air (`orderBurn`). An order that thinks more than 64 beats in one tick
+**frays**: that particle goes loose, and forgets its order. The rest of its weave goes on. An order is a mind (D32): it
+transforms its particle's own mana into the Energy of its kicks, at most `orderPower` for each M it holds, a tick.
 
 What an order knows is what it reads (D31): its mana and its weave's age for free, the weave's registers, and, at a price in
 beats, its own speed (`VEL`), whether it touches something (`TUCH`), and what it feels around it (`DENS`, `GRAD`, `NVEL`).
@@ -416,11 +469,11 @@ keyboard, sliders).
 
 | Op | Mnemonic | Lore | Does |
 |---|---|---|---|
-| `40` | `PROB d, n:3, s` | PROBE | How much matter of part `s` is in the cell at `n:3`. |
-| `41` | `AIRM d, n:3, s` | PROBE | How much air mana of part `s` floats at `n:3`. |
-| `42` | `SEND m, n, n:3, n:3` | SEND | Let `n` M of `m` out at a position, with a velocity, loose. The speed is paid for from what's sent, by the kinetic energy it carries: a share goes into the air there. |
-| `43` | `WPOS n:3, w` | | Where the weave's centre is, in the world. |
-| `44` | `WVEL n:3, w` | | How the weave's mana moves on average, in its frame. |
+| `40` | `PROB d, n:3, s` | PROBE | How much matter of part `s` is in the cell at `n:3`. 0 out of reach. |
+| `41` | `AIRM d, n:3, s` | PROBE | How much air mana of part `s` floats at `n:3`. 0 out of reach. |
+| `42` | `SEND m, n, n:3, n:3` | SEND | Throw `n` M of `m` out at a position within reach, with a velocity, loose. The body is pushed back by it (D33). The mind transforms a share of what's thrown into the Energy the throw takes, no more than its power has left (D32): that share goes loose into the air there. |
+| `43` | `WPOS n:3, w` | | The middle of what the caster feels of the weave (its particles within reach), in the world. 0 if they feel none. |
+| `44` | `WVEL n:3, w` | | How what the caster feels of the weave moves on average, in its frame. |
 
 #### Weave
 
@@ -428,27 +481,26 @@ keyboard, sliders).
 |---|---|---|---|
 | `50` | `WEAV d, n:3` | | Begin a weave with its origin at `n:3`. Its id goes into `d`. In hand. |
 | `51` | `TURN w, n:3` | POSITION | Turn the weave's frame so forward points along `n:3` (about the vertical). |
-| `52` | `EMIT m, n, w, n:3` | | Pour `n` M of `m` into the weave as particles, at `n:3` in the weave's frame, within the cell there. Gives what there is if `m` holds less, and nothing at a point outside the world. |
-| `53` | `WSET w, #k, s` / `WGET d, w, #k` (`54`) | | Write and read a weave's registers. |
+| `52` | `EMIT m, n, w, n:3` | | Pour `n` M of `m` into the weave as particles, at `n:3` in the weave's frame (from its origin in hand, from the middle of what's felt of it once loose), within the cell there. They carry what's been written into the weave. Gives what there is if `m` holds less, and nothing out of reach or outside the world. |
+| `53` | `WSET w, #k, s` / `WGET d, w, #k` (`54`) | | Write register `k` into what the caster touches of the weave (the rest hears of it by touch); read the newest copy among what they touch, or what they wrote last. |
 | `55` | `ORDR w, L` | ORDER | Give the weave its order: the routine at `L`. |
 | `56` | `MANI w` | SEND | Set the weave loose. It leaves the body's load, its mana is free to move, and its ingrained particles run their order. |
 | `57` | `LOCK w, INPUT \| ORDER` | LOCK | Lock it. Only after `MANI`. |
-| `58` | `RELS w` | | Let the weave go: its mana goes loose where it is. |
-| `59` | `PCNT d, w` | | How many particles the weave holds. |
-| `5A` | `PPOS n:3, w, s` | PROBE | Where particle `s` is, from the weave's origin, in its frame. |
-| `5B` | `PVEL n:3, w, s` | PROBE | How particle `s` moves, in the weave's frame. |
-| `5C` | `SHOV m, w, n, n:3` | PUSH | Push particle `n`: change its velocity by `n:3`, at most `pushRate` a tick. It costs the kinetic energy it adds, at `pushEnergy` for each M, from `m`, poured into the air there (D29). Slowing a particle costs nothing. Only within reach. |
-| `5D` | `INGR w, s` | ORDER | Ingrain the weave's order into particle `s`. 4 beats, and one more for every instruction the order could run. Only within reach. |
-| `5E` | `HOLD w, s` | | The weave's field: `s` metres around its centre. |
+| `58` | `RELS w` | | Let go of what the caster touches of the weave: it goes loose where it is, and forgets its order. What's out of reach and ordered keeps going. |
+| `59` | `PCNT d, w` | | How many of the weave's particles the caster feels: those within reach, counted 0, 1, 2… in the order they were laid. |
+| `5A` | `PPOS n:3, w, s` | PROBE | Where felt particle `s` is, from the middle of what's felt of the weave, in its frame. |
+| `5B` | `PVEL n:3, w, s` | PROBE | How felt particle `s` moves, in the weave's frame. |
+| `5C` | `SHOV m, w, n, n:3` | PUSH | Push felt particle `n` off the body (D33): change its velocity by `n:3`. It costs the kinetic energy it adds to the particle and the body, at `pushEnergy` for each M, from `m`, poured into the air there (D29), and gets as much as the mind's power has left this tick (D32). Slowing a particle costs nothing. |
+| `5D` | `INGR w, s` | ORDER | Ingrain the weave's order into felt particle `s`, and tell it which way the weave faces. 4 beats, and one more for every instruction the order could run. |
 
 #### Order (only inside an order)
 
 | Op | Mnemonic | Does |
 |---|---|---|
-| `60` | `KICK n:3` | Push this particle: change its velocity by `n:3`, in the weave's frame, paid from its own mana (never more than half of it at once), by the kinetic energy it adds (D29). 4 beats. |
-| `61` | `TUCH d` | `d = 1` if this particle is against matter, or a body, that isn't its maker's. |
-| `62` | `GETW d, #k` / `PUTW #k, s` (`63`) | Read and write this weave's registers. |
-| `64` | `DISS` | The whole weave comes apart. Its mana goes loose where it is, and forgets its orders. |
+| `60` | `KICK n:3` | Push this particle off what's around it (D33): the ground or other solid matter it's against on the side it pushes away from, or else the air it's in. Change its velocity by `n:3`, in its weave's frame, paid from its own mana by the kinetic energy it adds to both (D29), up to its power (D32). 4 beats. |
+| `61` | `TUCH d` | `d = 1` if something stopped or struck this particle when the world last moved: matter, the ground, a body, anyone's (D35). |
+| `62` | `GETW d, #k` / `PUTW #k, s` (`63`) | Read and write this particle's copy of its weave's registers. A write counts from the next tick, and passes on by touch. |
+| `64` | `DISS` | This particle lets go: it goes loose where it is, and forgets its order. |
 | `65` | `CNDS s` | Condense `s` M of this particle's free mana into matter of the same parts (*make*). The particle carries it, bound by whatever free mana is left. Only as much as its cell has room for. |
 | `66` | `DENS d` | How dense the mana around this particle is (M/m³). 4 beats. |
 | `67` | `GRAD n:3` | Which way, and how steeply, the mana around it thickens. 4 beats. |
@@ -501,11 +553,11 @@ EMIT m1, n6, n4, n13:15    →  52 81 06 04 0D
 | `NO_NAME` | `FILT` by a part other than 0–3. Mana doesn't answer (the Law of the Four). |
 | `NOT_LOOSE` | `LOCK` before `MANI`. |
 | `LOCKED` | `EMIT` into a weave with locked input, or `ORDR` on one with a locked order. |
-| `FRAYED` | An order ran too long in one tick. The weave comes apart. |
+| `FRAYED` | An order ran too long in one tick. That particle goes loose. |
 | `NOT_YOURS` | A weave id that isn't one of this caster's. |
 | `NO_ORDER` | `INGR` into a weave that hasn't been given an order. |
 | `ORDER_ONLY` | An order's instruction (`KICK`, `TUCH`…) in a mind. |
-| `NOT_IN_ORDER` | A body, reach or weave instruction inside an order. The weave frays. |
+| `NOT_IN_ORDER` | A body, reach or weave instruction inside an order. That particle frays. |
 | `BAD_PORT` | `VEL` read by a mind, or a will port read by an order. |
 
 Overcharge is not a fault (D6). It's harm, counted by the tester.
@@ -574,10 +626,21 @@ ingrain: PCNT n5, n4
 .done:  RET
 
 ; throw: push every particle of a weave toward a velocity, round and round, until the weave moves at it or leaves the
-; caster's reach. Each push pays for itself from m0, and can only speed a particle up so much a tick.
+; caster's reach. Each pass works out once what the weave as a whole still lacks, at most 0.1 m/tick of it, and gives
+; every particle that same push, one after another, as fast as the mind can: a ball whose first particles were thrown
+; far ahead of its last would tear apart. Each push pays for itself from m0.
 ;   in: n0:2 the velocity (in the weave's frame), n4 weave
 throw:  IN    n15, REACH
         MUL   n15, n15            ; reach², to compare without a square root
+        MOV   n14, n0
+        MUL   n14, n0
+        MOV   n12, n1
+        MUL   n12, n1
+        ADD   n14, n12
+        MOV   n12, n2
+        MUL   n12, n2
+        ADD   n14, n12
+        MUL   n14, #0.0025        ; (5% of the speed)²
 .pass:  CIRC  m0                  ; keep holding what it pays with
         WPOS  n8:10, n4
         IN    n11:13, SELF
@@ -592,37 +655,35 @@ throw:  IN    n15, REACH
         CMP   n8, n15
         JGT   .done               ; out of reach: it's on its own
         WVEL  n8:10, n4
-        SUB   n8, n0
-        SUB   n9, n1
-        SUB   n10, n2
-        MUL   n8, n8
-        MUL   n9, n9
-        MUL   n10, n10
-        ADD   n8, n9
-        ADD   n8, n10             ; how far from the velocity it still is, squared
-        MOV   n11, n0
-        MUL   n11, n0
-        MOV   n12, n1
-        MUL   n12, n1
-        ADD   n11, n12
-        MOV   n12, n2
-        MUL   n12, n2
-        ADD   n11, n12
-        MUL   n11, #0.0025        ; (5% of the speed)²
-        CMP   n8, n11
-        JLE   .done               ; fast enough
-        PCNT  n5, n4
-        CMP   n5, #0
-        JEQ   .done               ; nothing left of it to push
-        LDI   n6, #0
-.p:     PVEL  n8:10, n4, n6
         MOV   n11, n0
         SUB   n11, n8
         MOV   n12, n1
         SUB   n12, n9
         MOV   n13, n2
-        SUB   n13, n10
-        SHOV  m0, n4, n6, n11:13
+        SUB   n13, n10            ; what it lacks
+        MOV   n8, n11
+        MUL   n8, n11
+        MOV   n9, n12
+        MUL   n9, n12
+        ADD   n8, n9
+        MOV   n9, n13
+        MUL   n9, n13
+        ADD   n8, n9              ; squared
+        CMP   n8, n14
+        JLE   .done               ; fast enough
+        CMP   n8, #0.01
+        JLE   .all                ; no more than 0.1 m/tick: all of it
+        SQRT  n8
+        LDI   n9, #0.1
+        DIV   n9, n8
+        MUL   n11, n9
+        MUL   n12, n9
+        MUL   n13, n9             ; 0.1 m/tick of it
+.all:   PCNT  n5, n4
+        CMP   n5, #0
+        JEQ   .done               ; nothing left of it to push
+        LDI   n6, #0
+.p:     SHOV  m0, n4, n6, n11:13
         ADD   n6, #1
         CMP   n6, n5
         JLT   .p
@@ -685,16 +746,17 @@ keep:   WPOS  n8:10, n4
         RET
 ```
 
-`throw` pushes every particle in turn, so it costs about 20 beats a particle a pass. An adept throwing a 72-particle fireball
-gets round it once every five ticks, and the ball leaves their reach before it's as fast as they meant. A master gets round
-it every tick.
+`throw` works out once a pass what the weave as a whole still lacks, and gives every particle it feels the same push, at
+most 0.1 m/tick of it, so it costs about 16 beats a particle a pass. A mind pushes one particle at a time: a ball whose
+first particles were thrown at full speed while its last waited would tear apart, so it goes in steps. An adept gets
+round a 45-particle fireball about every two ticks. Each push goes off the caster's body, which is pushed back (D33).
 
 ### Shapes
 
 A shape lays the mana in `m1` out in the weave, around its origin. It's plain geometry. A big shape takes a mind many
 ticks to lay out, longer than a hold lasts, so each shape re-`CIRC`s its mana as it goes. Without that, the mana slips into
 the body's flow halfway through, and half a wall is laid out with nothing. The weave is in hand while it's laid out, so
-what's laid stays where it's laid (D26).
+what's laid stays where it's laid (D26), and only what's within reach can be laid at all.
 
 The ball is built the way you'd draw one by hand. Take the radius, and go out from the centre in shells. Each shell is
 rings around the up axis, from its top to its bottom: a ring at angle φ down the shell has radius `ρ sin φ` and height
@@ -1030,12 +1092,13 @@ Ways for mana to move itself, knowing only what it feels and what it's told (D31
 each. `heading` is told one angle and flies along it; `steer` is told an angle and a speed and feels its own speed to keep
 to them. `cling` and `cohere` hold a weave together: where the mana around a particle is thinner than its caster said the
 edge is (`edge`), it kicks itself back toward thicker mana; `cohere` only while it's drifting away from its neighbours. An
-order that works something out once (a sine and a cosine) keeps it in the weave's registers for every particle after.
+order that works something out once (a sine and a cosine) keeps it in its registers, and the particles touching it hear
+of it. Every kick pushes off the air the particle is in (D33).
 
 ```
 ; heading: flies along one angle, w1 (up from forward, in radians), speeding up 0.04 m/tick every tick for its first 8
 ; ticks. It knows nothing else: not how fast it's going, not where the rest of its weave is. The sine and cosine are
-; worked out on its first tick and kept in w5 and w6 for every particle after: a weave can remember for its mana.
+; worked out once and kept in w5 and w6, and pass on to the particles touching it: a weave can remember for its mana.
 heading: CMP  n4, #8
         JGE   .done
         CALL  angle
@@ -1046,7 +1109,7 @@ heading: CMP  n4, #8
 .done:  RET
 
 ; angle: the sine and cosine of w1, into n7 and n8. Worked out once and kept in w5 and w6 (a cosine of 0 means not yet),
-; or given there by the caster, who can work it out once for the whole weave.
+; where the particles touching it hear of it; or given there by the caster, who can work it out once for the whole weave.
 angle:  GETW  n8, #6
         CMP   n8, #0
         JNE   .known
@@ -1283,7 +1346,6 @@ StoneWall:
         CIRC  m0                  ; CIRCULATE
         FILT  m1, m0, #EARTH      ; FILTER: earth × affinity; the residue stays in m0
         WEAV  n20, n16:18         ; a weave on the ground at the aim
-        HOLD  n20, #3             ; a field big enough for the whole wall
         IN    n0:2, SELF
         MOV   n3, n16
         MOV   n4, n17
@@ -1358,7 +1420,6 @@ Fireball:
         LDI   n6, #0
         MEAS  n7, m1
         EMIT  m1, n7, n16, n4:6   ; all the fire, poured into one point, held still in the hand
-        HOLD  n16, #1.5           ; the field: how far it may spread and still be this weave
         MOV   n4, n16
         LDI   n0, #0.5
         CALL  edge                ; how thin its mana is at 0.5 m out: where its order holds it
@@ -1387,7 +1448,7 @@ Fireball:
         JNE   .hit
         CALL  cling               ; back toward thicker mana if it strays past its edge
         RET
-.hit:   PUTW  #0, n5              ; the whole weave bursts from the next tick
+.hit:   PUTW  #0, n5              ; it bursts from the next tick, and the word passes by touch
         PUTW  #4, n4              ; counting from now
         RET
 .burst: CALL  burst               ; REACT: it spends itself flying apart
@@ -1424,8 +1485,10 @@ ball, and `cling` catches it where the mana is as thin as at 0.5 m out: the cast
 writes it into the weave, since the order can't know where the radius is. Laying it out with `ball` took an adept 48 ticks in 3D; pouring takes a few
 instructions, and ingraining about 12 ticks. The residue in `m0`, the parts that weren't fire, pays for the throw.
 
-Once it's out of reach, nothing but its order holds it. In the test world an adept's fireball flies 8 m to the pillar with
-all its particles together, having spent about a sixth of its mana on the way, and bursts against it.
+Once it's out of reach, nothing but its order holds it. In the test world an adept's fireball flies 8 m to the pillar in
+0.7 s with 96% of its mana within a metre of its middle, and bursts against it: the particles that touch it first pass
+the word to the rest by touch. Throwing it, the caster is pushed back a metre across the ground, and their mind strains
+for the 2 kJ it took.
 
 ### Gust
 
@@ -1474,7 +1537,9 @@ spell Gust(Metadata data) {
 ```
 
 Each pass keeps the residue and adds a fresh gather. If the body drains slower than the caster gathers, its load climbs, and a
-long Gust overcharges. It needs only two streams. Its speed is paid for from what it sends: at 0.6 m/tick, about a quarter.
+long Gust overcharges. It needs only two streams. Its speed is transformed out of a share of what it sends (D32), and every
+breath pushes its caster back as hard as it pushes its target: a gust that blows someone back a metre and a half slides
+its caster back as far.
 
 ### Water Shield
 
@@ -1488,7 +1553,6 @@ WaterShield:
         FILT  m1, m0, #WATER      ; FILTER
         IN    n1:3, SELF
         WEAV  n17, n1:3           ; POSITION: a weave around the caster
-        HOLD  n17, #2             ; a field wider than the shell
         MOV   n4, n17
         LDI   n0, #1.2
         CALL  shield              ; a shell of water mana, 1.2 m
@@ -1530,10 +1594,13 @@ Metadata WaterShield(Metadata data) {
 }
 ```
 
-This shield *makes* its water instead of finding it. The water is real, and held up by the mana left free. Every tick its
-order burns a little of that mana, and every step its caster takes costs it the push to follow, so it holds less and less
-water. It follows only while its caster keeps it up, telling it each tick how to move; let be, it holds still where it is. When its mana is gone, the water falls in a splash at the caster's feet. A shield cast beside a river could
-*influence* the river's water instead, and keep all of its mana free to hold it.
+This shield *makes* its water instead of finding it. The water is real, and held up by the mana left free, pushing off the
+air. Every tick its order burns a little of that mana, and every step its caster takes costs it the push to follow, so it
+holds less and less water. It follows only while its caster keeps it up, telling it each tick how to move (they write it
+into what they touch of it, and the rest hears by touch); let be, it holds still where it is. Its caster can walk about
+in it, but not into it: its water strikes them as it strikes anyone. When its mana is gone, the water falls in a splash at
+the caster's feet. A shield cast beside a river could *influence* the river's water instead, and keep all of its mana free
+to hold it.
 
 ### What compiling the writings in Quire would say
 
@@ -1599,10 +1666,10 @@ the `.masm` files in `spells/` and `lib/` directly.
 - **Panels**:
   - *Mind*: what it runs next, beats left this tick, flags, `n0`–`n31` (the ones that changed are lit; ones this mind
     doesn't have are dimmed), return addresses, the stack and memory.
-  - *Body*: load against capacity, flow, drain, focus, harm, condition, and `m0`–`m7` as four coloured parts, each with
-    how long it's still held or that it's slipping.
-  - *Weaves*: each weave's state, locks, order, its particles and how many are ingrained, its field, mana, the matter it
-    holds, and `w0`–`w7`.
+  - *Body*: load against capacity, flow, drain, focus, harm, the mind's strain against its capacity and any madness,
+    condition, and `m0`–`m7` as four coloured parts, each with how long it's still held or that it's slipping.
+  - *Weaves*: each weave's state, locks, order, its particles and how many are ingrained, mana, the matter it holds, and
+    `w0`–`w7`: the newest copy among its particles.
   - *Profile*: beats by routine and the costliest lines (D18).
   - *Events* and the ledger.
   - *Caster*: child, adept or master; every stat as genetics and training, with what it comes to now; condition; how
@@ -1611,7 +1678,7 @@ the `.masm` files in `spells/` and `lib/` directly.
   - *Reference*: every instruction and port.
 
 - *Order*: any particle of any weave, chosen by number or by clicking it in the world, and its order from the last tick,
-  instruction by instruction: step forward and back, its 16 registers at each step, the weave's registers, how it kicked,
+  instruction by instruction: step forward and back, its 16 registers at each step, its copy of the weave's registers, how it kicked,
   the mana its thinking burned, and its beats against the 64 it has. A breakpoint in order code (a weave's `.order`, or a
   library routine it calls) pauses the run after the tick a particle hit it, on that particle and that instruction. The
   machine records this only when asked (`Sim.traceOrders`), since every particle of every weave is recorded every tick.
@@ -1671,6 +1738,8 @@ npm run listings                           SPEC's code listings, brought up to d
    - **Air that flows.** *Built.*
    - **The Energy ledger.** *Built.*
    - **What an order knows** (D31): it only feels, and what else it needs its caster writes into its weave. *Built.*
+   - **The main objective** (§0): the audit's sixteen places, made organic (D32–D39). *Built.* What it turned up is the
+     next work (§0, *What's left*).
 4. **The language**, compiling to what phase 1 runs by hand.
 5. Casters, spells and libraries read from Quire.
 6. **Other notations** (later): runes, circuits and scores.
@@ -1700,33 +1769,39 @@ Energy   Σ motion  +  Σ heat  +  Σ electricity  +  …                    =  
 ```
 
 Mana is chemistry: what a thing is made of. Energy is physics: force, motion, heat as motion, electricity. Mana can't take
-hold of Energy directly. It only moves it indirectly, the way pouring mana onto a particle sets it moving (*Pushing*).
-Fire mana is the substance of heat: what burns, what is hot. The heat itself, the motion in it, is Energy.
+hold of Energy directly. A mind can: it transforms mana into Energy, which is what a push is (the Law of Transformation,
+D32). The mana isn't used up; it goes loose, still mana. What the Energy costs is the mind's strain. Fire mana is the
+substance of heat: what burns, what is hot. The heat itself, the motion in it, is Energy.
 
-A push turns mana into motion (D29), so mana pays for the Energy it puts in; nothing else pays yet (open question 5). The
-machine keeps two more ledgers that physics needs.
+The machine keeps two more ledgers that physics needs.
 
 **Momentum.** Everything inside the world pushes on everything else equally and oppositely (particle and particle, particle
 and air, air and air, particle and body), so the world's momentum changes only by what comes from outside it, and the tests
 check that every tick (`World.momentumError`).
 
 **Energy** (`src/vm/energy.ts`, `Sim.keepEnergy`). The world holds Energy as motion (of particles, the air and bodies), as
-height (weight lifted, of particles and of the ground's matter), and stored: in mana's gas pressed together, in matter
-packed past full, in what coheres pulled apart, and in the air pressed or drawn thin. Each is measured from the air at rest,
-so mana that moves into or out of the air as dense as it is brings nothing with it. Motion becomes **heat** wherever two
-things even out their speeds: in the mana's thickness, the air dragging and its own thickness, landing on the ground and
-sliding on it, rock keeping its shape, particles merging, mana settling into the air. That heat is counted where it
-happens, to the joule, and kept by how it was made (`World.heat`). Casters and orders put Energy in with every push and
-kick. So, every tick:
+height (weight lifted, of particles, the air and the ground's matter, less what the air holds up of a parcel of mana), and
+stored: in mana's gas pressed together, in matter packed past full, in what coheres pulled apart, in the air pressed or
+drawn thin, and in mana held in bodies. Each is measured from the air at rest, so mana that moves into or out of the air,
+or into or out of a body, as dense as the air is, brings nothing with it: at rest, mana in the air is worth the same at
+every height, its weight and its pressure trading off, and a parcel of mana is held up from the height where the air is
+as thick as it is on average. Motion becomes **heat** wherever two things even out their speeds: in the mana's thickness,
+the air dragging and its own thickness, landing on the ground and sliding on it, a body's feet, a hand holding still what
+the world pushes on, rock keeping its shape, particles merging, mana let into the air, a push that slows. That heat is
+counted where it happens, to the joule, and kept by how it was made (`World.heat`). Minds put Energy in with every push
+and kick, counted push by push (`minds`); bodies change it a little by gathering mana and pouring it (`bodies`). So, every
+tick:
 
 ```
-held now + heat  =  held at the start + what casters and orders put in + what the numbers got wrong
+held now + heat  =  held at the start + what minds and bodies put in + what the numbers got wrong
 ```
 
 The last term is real, and is counted, not hidden in the heat: each step that should keep Energy is measured before and
 after, and what it got wrong is kept by step. It's the price of stepping time rather than flowing it. For a Fireball, a
 Gust or a Water Shield it's under 2% of the Energy that moves through. A Stone Wall, gathering 500 M at once, thins the air
-around its caster so hard that the air's refilling gets about 8% wrong.
+around its caster so hard that the air's refilling gets about 9% wrong. Most of what a Stone Wall's `bodies` puts in (about
+200 kJ) is the air rushing into the cells its earth was bound out of, while the earth is still in them: matter held by
+mana doesn't block the air yet (§0).
 
 The density mana's pressure works from is summed with the same kernel its pushes follow (the spiky kernel), so that its
 pressure is exactly the pull of the energy its gas stores, and the ledger can count it.
@@ -1755,9 +1830,15 @@ The air is a gas (`src/vm/air.ts`). It presses from dense to thin, at its own sp
 than real air's 340, to keep the steps few, and still fast beside its winds). It carries itself along, and its mana and its
 momentum with it, from cell to cell. Solid cells and the world's edge are closed: it flows around them, and what it pushes
 on them is momentum given to the world. Its thickness (`airViscosity`) evens out its speed between neighbours and holds it
-still against the ground. So a gust travels on as a jet once it's let go, a fireball leaves a wake and pushes air ahead of
-it, wind turns up and over a pillar, and the hole a caster gathers from fills back in from around it. Air that has all but
-stopped stops, and air at rest, as dense as the rest of it, costs nothing to run.
+still against the ground. It weighs: at rest it's thicker low down than high up (by e every `airSound²/g` metres, 33 m),
+its weight and its pressure in balance. So a gust travels on as a jet once it's let go, a fireball leaves a wake and pushes
+air ahead of it, wind turns up and over a pillar, and the hole a caster gathers from fills back in from around it. Air
+that has all but stopped stops, and air at rest, as thick as rest would have it, costs nothing to run.
+
+The air holds up what's in it (D38). A parcel of free mana is a gas like the air, so it pushes aside its own M's worth of
+air, and the air at rest holds it up by what that weighs: `RAW_MASS` (1 kg) a M, the weight of raw mana. Free mana of each
+part has its own mass (`manaMass`): fire 0.97 kg a M, so it rises; water 1.01 and earth 1.02, so they sink, slowly; air
+1, so it floats. Matter isn't held up: it's what's heavy. Where there's no air, everything falls alike.
 
 When particles come to rest beside each other, they merge, to keep their number down: closer than `mergeRange`, moving
 within `mergeSpeed` of each other, and together no more than `maxMote`. The new particle sits at their centre of mass with
@@ -1777,46 +1858,51 @@ become about 45. A merged particle runs its order once where two ran it before, 
 
 Each part has its own numbers, in `physics.ts`, by part number. The machine still knows no element names (D2).
 
-| Part | Pressure | Weight | Holds together | So |
+| Part | Pressure | In the air, free | Holds together | So |
 |---|---|---|---|---|
-| 0 (fire) | high | rises | barely | spreads fast and rises. Easy to pour, hard to hold. |
-| 1 (water) | low | heavy | some | flows down. A shell of it sags unless held up. |
-| 2 (air) | high | light | no | fills what's empty. The easiest to pour. |
-| 3 (earth) | very low | heavy | strongly | barely spreads. It has to be laid out by hand. |
+| 0 (fire) | high | the lightest: rises | barely | spreads fast and rises. Easy to pour, hard to hold. |
+| 1 (water) | low | a little heavier: sinks slowly | some | its matter flows down. A shell of it sags unless held up. |
+| 2 (air) | high | as heavy as the air: floats | no | fills what's empty. The easiest to pour. |
+| 3 (earth) | very low | the heaviest: sinks slowly | strongly | barely spreads. It has to be laid out by hand. |
 
-*Built:* each part's pressure, thickness, weight (`fall`: fire rises a little, air floats, water and earth fall) and how it
-holds together (`cohesion`, a pull between neighbours, strongest at half the smoothing length). Matter held by mana adds its
-weight and its mass (`matterMass`), can't be packed past full (`matterStiffness`), and pulls on its neighbours as water
-does (`matterCohesion`). Earth held by a weave becomes rock when the weave is let go of (D30): each particle is bound to
-its neighbours within `bondRange`, and the bonds hold their length, a dozen passes a step, so that the ground's support
-reaches up through a wall. The ground holds up what rests on it, with friction.
+*Built:* each part's pressure, thickness, mass (`manaMass`; the air holds it up, D38) and how it holds together
+(`cohesion`, a pull between neighbours, strongest at half the smoothing length). Matter held by mana adds its weight and
+its mass (`matterMass`), can't be packed past full (`matterStiffness`), and pulls on its neighbours as water does
+(`matterCohesion`). Earth held by mana becomes rock where it's packed as full as solid ground and still (D30, D36): each
+particle is bound to its neighbours within `bondRange`, and the bonds hold their length, a dozen passes a step, so that
+the ground's support reaches up through a wall. The ground holds up what rests on it, with friction.
 
 An adept's fireball is 72 particles of a quarter of an M each (`mote`).
 
 
 ### Pushing
 
-A push pours mana onto a particle and changes its velocity, up to a limit per tick (`pushRate`). The poured mana turns into
-the particle's motion: a push costs the **kinetic energy it adds**, measured against the ground, at `pushEnergy` for each M
-(D29). One M is 900 J. So:
+A push pours mana onto a particle and changes its velocity. A mind transforms the poured mana into the particle's motion
+(D32): a push costs the **kinetic energy it adds**, to the particle and to what it's pushed off (D33), at `pushEnergy` for
+each M (D29). One M is 900 J. It gets as much as the mind's power has left this tick: an adept's 450 J a tick, an order's
+`orderPower` for each M its particle holds. Every push pushes something back: a caster's goes off their body, through
+their reach, and the ground under their feet takes what friction holds; an order's goes off the ground behind its particle,
+or the air it's in. So:
 
 - Speeding something up from rest costs ½mv². Speeding it up further costs more for the same change, the faster it
   already goes: the same 0.05 m/tick costs a 0.3 m/tick fireball thirteen times what it costs one at rest.
 - Slowing something down costs nothing. What's taken out of its motion becomes heat.
-- Holding something up against its weight costs nothing: each tick the push only takes back the speed it gained falling.
-  Lifting it costs its weight times the height: lifting a 2 m Stone Wall of 375 kg of earth costs about 10 M.
+- Holding something up against its weight costs nothing on the ground: each tick the push only takes back the speed it
+  gained falling. Held up in the air, it pushes the air down, a little more each tick, and pays for that downdraft.
+  Lifting it costs its weight times the height, and a little more for the air it climbs by: lifting a 2 m Stone Wall of
+  375 kg of earth costs about 13 M.
 - Pushing sideways across a motion costs only what the sideways speed adds.
 
-The poured mana goes **loose where it was poured**. Nothing is lost, but a construct pushed for a long time sits in a haze
-of spent mana.
+The poured mana goes **loose where it was poured**, still mana: nothing is used up. A construct pushed for a long time sits
+in a haze of the mana it was pushed with, and that mana could be gathered and used again. What runs out is the mind.
 
 So a fireball isn't thrown in one instruction. The caster pushes it along the aim tick after tick, holding it together
 while it speeds up. A heavier ball takes longer to get going.
 
 ### Holding
 
-A weave is the particles in its caster's **field**. The caster keeps the field like a hold (`CIRC`), and it reaches only
-so far from their body. A particle outside the field leaves the weave. Its order stays with it: it is still that mana.
+A weave is the particles that carry its order, and, until they're given one, those its caster can reach (D34). The caster
+feels and pushes only what's within their reach. A particle with no order that strays out of it leaves the weave.
 
 Pressure pushes a held construct apart all the time. The caster keeps it together by pushing its particles back in,
 spending beats on each one. A push that only slows a straying particle costs no mana (D29); one that sends it back faster
@@ -1837,7 +1923,7 @@ more cheaply. A sphere is the cheapest shape to hold, because it has the least s
 
 ### Released mana
 
-A construct the caster lets go of, or throws past their field, is held by nothing. Its particles share one velocity, so in
+A construct the caster lets go of, or throws past their reach, with no order in it, is held by nothing. Its particles share one velocity, so in
 its own frame the ball stands still, and only its own pressure pulls it apart. It holds together for about its radius over
 how fast it spreads, and travels as far as its speed carries it in that time. Faster goes further, and costs more to throw.
 Denser hits harder, and comes apart sooner. The air strips its front as it flies.
@@ -1848,8 +1934,8 @@ impact needs no code.
 ### Orders
 
 An order is a reaction or a phenomenon ingrained in mana: each particle carries it and runs it every tick, within its
-beats (§5). An order can sense the particle and its neighbourhood, touch, condense, and **push its own particle, paying
-with that particle's own mana**. So:
+beats (§5). An order can sense the particle and its neighbourhood, touch, condense, and **push its own particle off the
+air or the ground around it, paying with that particle's own mana** (D32, D33). So:
 
 - *Burst on touch:* each particle spends some of itself to fly outward. The explosion is the fireball's own mana, spent.
 - *Hold itself:* each particle at the edge, where it feels the mana thin, pushes itself back toward thicker mana. The
@@ -1864,7 +1950,7 @@ A strong order holds tighter or bursts harder, and burns through its mana sooner
   24-beat order takes an adept about ten ticks, and the ball isn't held while it's being ingrained.
 - *Running it* burns the particle's own mana, a little for every beat it thinks. An order that decides quickly when there's
   nothing to do (most particles, most ticks) lasts much longer than one that works everything out every time.
-- *Pushing* is paid from the particle, as before.
+- *Pushing* is paid from the particle, and only as hard as its mana lets its order push.
 
 So a well-written order is short, and quick to say "nothing to do": D18 again, inside the mana.
 
@@ -1892,7 +1978,8 @@ Like the first flaw, it isn't an instruction, nothing in the libraries uses it, 
 2. Particles in the world, beside the air grid, which now moves (`src/vm/fluid.ts`). The ledger counts them, and a second
    ledger counts momentum.
 3. The instructions in §5: sensing and pushing particles (`PCNT`, `PPOS`, `PVEL`, `SHOV`, `WPOS`, `WVEL`), ingraining
-   (`INGR`), the field (`HOLD`), and in orders `KICK`, `DENS`, `GRAD`, `NVEL` and `VEL`. `MOVE` and `LOCK SHAPE` are gone.
+   (`INGR`), and in orders `KICK`, `DENS`, `GRAD`, `NVEL` and `VEL`. `MOVE` and `LOCK SHAPE` are gone, and since D34 so is
+   the field (`HOLD`).
 4. The libraries and the four spells, rewritten (§6, §7).
 5. The bench (below).
 6. Weight, matter's mass, the ground's support and friction, water that holds together and can't be squeezed, rock, and
@@ -1900,6 +1987,9 @@ Like the first flaw, it isn't an instruction, nothing in the libraries uses it, 
 7. Particles merging and splitting, and the second flaw.
 8. The air as a gas that flows (`src/vm/air.ts`).
 9. The Energy ledger (`src/vm/energy.ts`).
+10. The main objective's audit, made organic (§0, D32–D39): pushes that push back, Energy from the mind, reach on
+    everything, registers passed by touch, particles that go alone, touch as a force felt, rock from a condition, the hand
+    that holds by force, buoyancy and an air that weighs, friction under bodies, flame that diffuses.
 
 Things the machine found that the sandbox couldn't:
 
@@ -1927,18 +2017,41 @@ Things the machine found that the sandbox couldn't:
 - **Merging is an optimisation nobody wrote.** A fireball held by its order merges as it flies (72 particles to about 45),
   and a merged particle thinks once where two did: the ball burns about 40% less.
 
+What making it organic found (D32–D39):
+
+- **Throwing is shoving.** A push goes off the body, so throwing an 18 M fireball (18 kg) at 13 m/s slides an adept back
+  a metre, and a Gust slides its caster back as far as it blows its target. Mana weighs what it weighs; to throw without
+  being thrown, a mage would brace, throw less, or throw slower.
+- **A strong mind tears what it throws.** With no limit on how fast a particle can be sped up but the mind's power, a mind
+  that pushes particles one at a time sends its first ones off at full speed while the last wait, and the ball tears. A
+  good throw works out the push once a pass and gives every particle the same step (`throw`, 0.1 m/tick): cheaper too.
+- **A hand runs out of grip on its own mana.** A pass over a fireball took longer than a hold lasts (`focus`): the mana
+  to push with slipped into the body's flow halfway through, and the ball slowed. Holding it while you work (`CIRC`) is
+  part of throwing.
+- **Mana strikes its maker.** A shield's caster who walks into its front is pushed along by it, and the shield follows
+  them on. A fireball let go of too close would burst in its caster's face: the hand is at arm's length.
+- **A word spreads only by touch.** A particle that strayed from the ball never hears of the hit: it goes on clinging,
+  alone, until its mana is gone.
+- **Hovering costs a downdraft.** An order that holds its particle up in the air pushes the air down, a little more each
+  tick, and pays for it: a Water Shield held up by its order lasts nearly a minute, and its water then comes down.
+- **A parcel's buoyancy has to be the air's weight.** Pushing particles by the moving air's pressure, without the air
+  knowing the particle is there, drove the air away from every particle: wind from nothing, which the Energy ledger caught
+  (38 units of error in one Fireball). Archimedes in air at rest is exact.
+
 ### How the spells do now
 
 The targets, and where the four spells stand against them (2D, an adept), with ticks of 1/30 s:
 
 | Spell | Target | Now |
 |---|---|---|
-| Fireball | Leaves the hand within a second, reaches a pillar 9 m away with most of its mana | Let go after 0.4 s, hits after 0.9 s more, 95% of its mana together |
-| Stone Wall | Rises in seconds, stands on its own for half a minute or more | Rises and stands in 4 s, holds half its earth for 38 s, then crumbles |
-| Water Shield | Holds its water around its caster for several seconds | Makes 11.5 M of water, holds half of it for 7 s |
-| Gust | Knocks someone back | Pushes a 60 kg body back 1.4 m |
+| Fireball | Leaves the hand within a second, reaches a pillar 9 m away with most of its mana | Let go after 0.5 s, hits after 0.7 s more, 96% of its mana together. Its caster slides back 1.25 m, and strains 2 kJ |
+| Stone Wall | Rises in seconds, stands on its own for half a minute or more | Rises and stands in 2.4 s, holds half its earth for 29 s, then crumbles |
+| Water Shield | Holds its water around its caster for several seconds | Makes 11.5 M of water, holds half of it for 57 s |
+| Gust | Knocks someone back | Pushes a 60 kg body back 1.7 m; its caster slides back 2 m, and strains 3 kJ |
 
-The numbers in `physics.ts` were left where they are: every spell meets its target.
+The numbers in `physics.ts` were left where they are, but for the new ones (`manaMass`, `orderPower`, `relay`,
+`bondSpeed`, `flameSpread`, and the mind's `power`, `capacity` and `recovery`): every spell meets its target. Two now do
+more than they did, and that's yours to tune: the throw and the gust shove their caster back, and the shield lasts.
 
 ### The bench
 
@@ -1993,6 +2106,17 @@ finds now, as a baseline (nothing tuned):
 - **Lengths:** `cling` makes a 14-instruction order and `cohere` a 26; with `touch` and `burst`, the Fireball's order is
   52 instructions, and an adept ingrains it in 15 ticks.
 
+**Since D32–D39** (2D, nothing tuned). Belonging is by order now, so `together` is the share of what a weave still holds
+that's within 1 m of its middle (twice the ball's radius), and a throw arrives when the front of that reaches the pillar:
+
+- **By hand, a thrown ball isn't the caster's once it leaves their reach.** Its particles carry no order, so they go
+  loose, and nothing holds them: `ThrowHand` and `ThrowHandHeld` keep nothing of it at the pillar.
+- **Held still by hand, it's thinking.** Every particle, every other one, or the surface: they all keep the ball in the
+  weave (it's in reach), and a master holds it to 0.42 m where an adept's spreads to 0.5–1 m.
+- **Thrown, an order still holds it.** `cling` gets 98–99% of a thrown ball to the pillar together, with 95% of its mana
+  still in it; `cohere` 87–93%. `steer` is still the fastest, in 17 ticks, all of it together, having spent 15% of its
+  mana flying itself; `heading` gets there, but as a scatter (35–37% together).
+
 The sandbox's findings (2D, its own physics). The first group follows from the physics, and should hold whatever the
 numbers are tuned to:
 
@@ -2040,12 +2164,14 @@ machine.
    program the elves have always read straight, with no language in between. This needs its own design pass.
 3. **Who found the flaw?** A flaw nobody teaches still has a history: who first condensed less than nothing, what it cost
    them, and who keeps it quiet. That's lore for Quire.
-4. **The field.** Is a caster's field a ball around the weave's origin, or the particles they're keeping up with? Which body
+4. *Closed by D34: there's no field; a caster acts within their reach, and a weave is the particles that carry its order.*
+   **The field.** Is a caster's field a ball around the weave's origin, or the particles they're keeping up with? Which body
    stat sets how far it reaches, and does it weaken with distance?
-5. **Energy's price.** A push costs mana, by the kinetic energy it adds (D29), and the Energy ledger now counts every joule
-   (§11). Whether a caster's own Energy (stamina, `condition`) pays too, and whether heat should warm anything (fire mana is
-   what's hot; heat is the motion), is left for you: the ledger shows how much there'd be to pay. A Fireball's throw is
-   about 1 kJ, lifting a Stone Wall about 9 kJ.
+5. *Closed by D32: a mind transforms mana into Energy, and the mind pays, in strain. Whether heat should warm anything is
+   still open (§0, What's left).* **Energy's price.** A push costs mana, by the kinetic energy it adds (D29), and the Energy
+   ledger now counts every joule (§11). Whether a caster's own Energy (stamina, `condition`) pays too, and whether heat
+   should warm anything (fire mana is what's hot; heat is the motion), is left for you: the ledger shows how much there'd be
+   to pay. A Fireball's throw is about 1 kJ, lifting a Stone Wall about 9 kJ.
 6. **How far does a particle feel?** *(Question 6, what an order knows, is closed: D31.)* A particle feels the mana within
    the smoothing length, 0.25 m. A 3D fireball of 0.5 m is only two of those across, with about two particles in each, so a
    few particles bunched at its edge feel as thick as its middle, and an order can't tell where the edge is: in 3D, holding

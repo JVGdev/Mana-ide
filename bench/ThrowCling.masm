@@ -20,7 +20,7 @@ ThrowCling:
         JNE   .hit
         CALL  cling
         RET
-.hit:   PUTW  #0, n5              ; the whole weave bursts from the next tick
+.hit:   PUTW  #0, n5              ; it bursts from the next tick, and the word passes by touch
         PUTW  #4, n4
         RET
 .burst: CALL  burst

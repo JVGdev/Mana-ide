@@ -28,6 +28,9 @@
     { label: 'speed', stat: mind.speed, effective: () => c()?.speed ?? 0, hint: 'beats of thought a tick' },
     { label: 'registers', stat: mind.registers, effective: () => c()?.registers ?? 0, hint: 'number registers, n0–n31' },
     { label: 'memory', stat: mind.memory, effective: () => c()?.memory ?? 0, hint: 'numbers the memory holds' },
+    { label: 'power', stat: mind.power, effective: () => c()?.power ?? 0, hint: 'Energy it can transform out of mana a tick (×900 J)', step: 0.05 },
+    { label: 'capacity', stat: mind.capacity, effective: () => c()?.mindCapacity ?? 0, hint: 'strain it bears before transforming harms it (×900 J)' },
+    { label: 'recovery', stat: mind.recovery, effective: () => c()?.recovery ?? 0, hint: 'strain it eases a tick (×900 J)', step: 0.005 },
   ])
 
   const effective = (r: Row) => {

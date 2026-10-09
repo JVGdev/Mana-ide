@@ -33,10 +33,21 @@ ingrain: PCNT n5, n4
 .done:  RET
 
 ; throw: push every particle of a weave toward a velocity, round and round, until the weave moves at it or leaves the
-; caster's reach. Each push pays for itself from m0, and can only speed a particle up so much a tick.
+; caster's reach. Each pass works out once what the weave as a whole still lacks, at most 0.1 m/tick of it, and gives
+; every particle that same push, one after another, as fast as the mind can: a ball whose first particles were thrown
+; far ahead of its last would tear apart. Each push pays for itself from m0.
 ;   in: n0:2 the velocity (in the weave's frame), n4 weave
 throw:  IN    n15, REACH
         MUL   n15, n15            ; reach², to compare without a square root
+        MOV   n14, n0
+        MUL   n14, n0
+        MOV   n12, n1
+        MUL   n12, n1
+        ADD   n14, n12
+        MOV   n12, n2
+        MUL   n12, n2
+        ADD   n14, n12
+        MUL   n14, #0.0025        ; (5% of the speed)²
 .pass:  CIRC  m0                  ; keep holding what it pays with
         WPOS  n8:10, n4
         IN    n11:13, SELF
@@ -51,37 +62,35 @@ throw:  IN    n15, REACH
         CMP   n8, n15
         JGT   .done               ; out of reach: it's on its own
         WVEL  n8:10, n4
-        SUB   n8, n0
-        SUB   n9, n1
-        SUB   n10, n2
-        MUL   n8, n8
-        MUL   n9, n9
-        MUL   n10, n10
-        ADD   n8, n9
-        ADD   n8, n10             ; how far from the velocity it still is, squared
-        MOV   n11, n0
-        MUL   n11, n0
-        MOV   n12, n1
-        MUL   n12, n1
-        ADD   n11, n12
-        MOV   n12, n2
-        MUL   n12, n2
-        ADD   n11, n12
-        MUL   n11, #0.0025        ; (5% of the speed)²
-        CMP   n8, n11
-        JLE   .done               ; fast enough
-        PCNT  n5, n4
-        CMP   n5, #0
-        JEQ   .done               ; nothing left of it to push
-        LDI   n6, #0
-.p:     PVEL  n8:10, n4, n6
         MOV   n11, n0
         SUB   n11, n8
         MOV   n12, n1
         SUB   n12, n9
         MOV   n13, n2
-        SUB   n13, n10
-        SHOV  m0, n4, n6, n11:13
+        SUB   n13, n10            ; what it lacks
+        MOV   n8, n11
+        MUL   n8, n11
+        MOV   n9, n12
+        MUL   n9, n12
+        ADD   n8, n9
+        MOV   n9, n13
+        MUL   n9, n13
+        ADD   n8, n9              ; squared
+        CMP   n8, n14
+        JLE   .done               ; fast enough
+        CMP   n8, #0.01
+        JLE   .all                ; no more than 0.1 m/tick: all of it
+        SQRT  n8
+        LDI   n9, #0.1
+        DIV   n9, n8
+        MUL   n11, n9
+        MUL   n12, n9
+        MUL   n13, n9             ; 0.1 m/tick of it
+.all:   PCNT  n5, n4
+        CMP   n5, #0
+        JEQ   .done               ; nothing left of it to push
+        LDI   n6, #0
+.p:     SHOV  m0, n4, n6, n11:13
         ADD   n6, #1
         CMP   n6, n5
         JLT   .p

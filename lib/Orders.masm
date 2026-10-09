@@ -9,7 +9,7 @@
 
 ; heading: flies along one angle, w1 (up from forward, in radians), speeding up 0.04 m/tick every tick for its first 8
 ; ticks. It knows nothing else: not how fast it's going, not where the rest of its weave is. The sine and cosine are
-; worked out on its first tick and kept in w5 and w6 for every particle after: a weave can remember for its mana.
+; worked out once and kept in w5 and w6, and pass on to the particles touching it: a weave can remember for its mana.
 heading: CMP  n4, #8
         JGE   .done
         CALL  angle
@@ -20,7 +20,7 @@ heading: CMP  n4, #8
 .done:  RET
 
 ; angle: the sine and cosine of w1, into n7 and n8. Worked out once and kept in w5 and w6 (a cosine of 0 means not yet),
-; or given there by the caster, who can work it out once for the whole weave.
+; where the particles touching it hear of it; or given there by the caster, who can work it out once for the whole weave.
 angle:  GETW  n8, #6
         CMP   n8, #0
         JNE   .known

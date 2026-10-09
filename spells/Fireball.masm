@@ -13,7 +13,6 @@ Fireball:
         LDI   n6, #0
         MEAS  n7, m1
         EMIT  m1, n7, n16, n4:6   ; all the fire, poured into one point, held still in the hand
-        HOLD  n16, #1.5           ; the field: how far it may spread and still be this weave
         MOV   n4, n16
         LDI   n0, #0.5
         CALL  edge                ; how thin its mana is at 0.5 m out: where its order holds it
@@ -42,7 +41,7 @@ Fireball:
         JNE   .hit
         CALL  cling               ; back toward thicker mana if it strays past its edge
         RET
-.hit:   PUTW  #0, n5              ; the whole weave bursts from the next tick
+.hit:   PUTW  #0, n5              ; it bursts from the next tick, and the word passes by touch
         PUTW  #4, n4              ; counting from now
         RET
 .burst: CALL  burst               ; REACT: it spends itself flying apart

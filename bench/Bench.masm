@@ -22,7 +22,6 @@ pour:   IN    n17, AMOUNT
         LDI   n6, #0
         MEAS  n7, m1
         EMIT  m1, n7, n16, n4:6
-        HOLD  n16, #1.5
         WSET  n16, #2, #0.5
         MOV   n4, n16
         LDI   n0, #0.5

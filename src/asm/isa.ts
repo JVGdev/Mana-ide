@@ -102,7 +102,6 @@ export const OPS: Op[] = [
   { code: 0x5b, name: 'PVEL', operands: ['t', 'n', 's'], beats: BODY },
   { code: 0x5c, name: 'SHOV', operands: ['m', 'n', 'n', 't'], beats: BODY },
   { code: 0x5d, name: 'INGR', operands: ['n', 's'], beats: BODY },
-  { code: 0x5e, name: 'HOLD', operands: ['n', 's'], beats: BODY },
   // Order: only inside a particle's order
   { code: 0x60, name: 'KICK', operands: ['t'], beats: BODY, order: true },
   { code: 0x61, name: 'TUCH', operands: ['n'], beats: MIND, order: true },
