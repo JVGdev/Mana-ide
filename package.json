@@ -12,6 +12,7 @@
     "test": "vitest run",
     "engine:test": "cargo test --manifest-path engine/Cargo.toml",
     "engine:wasm": "wasm-pack build engine/mana-wasm --target web --release",
+    "parity": "sh -c 'for f in engine/parity/*.ts; do ${MANA_NODE:-node} --import tsx \"$f\" || exit 1; done'",
     "check": "tsc --noEmit && svelte-check --tsconfig ./tsconfig.json --workspace tester --fail-on-warnings",
     "tester": "vite --config tester/vite.config.ts",
     "build:tester": "vite build --config tester/vite.config.ts",
