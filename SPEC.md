@@ -17,6 +17,73 @@ The examples throughout are the four spells of Ikozu: **Stone Wall**, **Fireball
 
 ---
 
+## 0. The main objective
+
+**Every feature of a spell comes from Ikozu's physics.** This is the project's first rule. Every other decision serves it,
+and where one conflicts with it, this one wins.
+
+What happens in the machine has three sources, and only three:
+
+- **The mage's mind**: what it computes. That's the assembly, and thinking costs what it costs a real processor (D18).
+- **The mage's body**: what a living caster can do to mana (gather it, hold it, pour it, push it, sense it), within the
+  limits of their body: reach, power, capacity, how fast they think.
+- **The world's physics**: everything mana and matter do by themselves.
+
+Nothing else. No instruction, port or rule exists to make a particular spell work. A ball holds together, a fireball
+bursts, a wall stands and a shield follows its caster only because the physics lets them, and a mage worked out how.
+
+- **The physics is real science**, as close to it as it can be, and logical in Ikozu's world. Conservation holds exactly
+  (mana, momentum, Energy). Every force has its equal and opposite pair. Nothing acts at a distance unless something
+  carries it there.
+- **When a simple spell is too hard to make, tune the world, not the spell.** Change the physics' numbers until the
+  world feels right for the story. Never add a special case.
+- **Making the spells is the author's job.** The libraries and spells here show how the system works. They aren't tuned
+  or balanced, and they aren't the last word on any spell.
+
+The check for any part of the machine, old or new: *is this something the world does, or something a spell was given?*
+
+### Where the machine doesn't meet it yet
+
+An audit of the code against this objective (on `claude/orders-only-feel`, after D31) found these. Each is to be fixed,
+or kept and named as a stand-in.
+
+**Breaks a law of the world:**
+
+1. **A kick has nothing to push against.** An order's `KICK` adds momentum booked as from outside; the mana it pays with
+   leaves at the particle's old speed. *Organic:* a rocket, whose spent mana is thrown back.
+2. **A caster's push recoils on nobody.** `SHOV` and `SEND` give mana momentum from outside; the caster's body feels
+   nothing. *Organic:* the momentum comes from the body, or from mana thrown at the target.
+3. **A push's Energy comes from nowhere.** The mana paid goes loose, still mana, and the kinetic energy is booked as
+   outside. *Organic:* a store it comes out of: the body, or a state the mana drops to (question 5).
+4. **The weave's registers are telepathy.** One particle's `PUTW` reaches every particle next tick, wherever it is, and a
+   caster's `WSET` reaches its weave from any distance. *Organic:* each particle keeps its own copy and passes it on by
+   contact; a caster writes within reach.
+5. **A weave dies all at once.** One particle's `DISS`, or one particle thinking past 64 beats, ends every particle the
+   same tick. *Organic:* each particle lets go or frays on its own, and it spreads only as neighbours feel it.
+6. **Belonging is measured from the centre.** A particle further from its weave's centre than the field leaves it, even
+   after the caster is gone. *Organic:* it belongs while it carries the order; the field is the caster's, while they hold.
+7. **A mage acts anywhere.** Only `SHOV` and `INGR` check reach; `WEAV`, `EMIT`, `SEND`, `PROB`, `AIRM`, `PPOS`, `PVEL`,
+   `WPOS` and `WSET` don't. *Organic:* everything the body does or senses is within reach.
+
+**Shortcuts that physics should produce:**
+
+8. **Touch knows who owns what.** `TUCH` ignores its maker's body. *Organic:* touch is a force felt; ownership isn't.
+9. **Rock forms when the caster lets go** (`MANI`). *Organic:* from a condition: earth packed and still, bonding.
+10. **Fire rises by a fixed share of gravity** (`fall`), and the air doesn't press on particles. *Organic:* buoyancy,
+    from the air it displaces.
+11. **A push changes speed by at most 0.1 m/tick** (`pushRate`), whatever it weighs. *Organic:* a limit on the body's
+    power, Energy per tick.
+12. **A weave in hand is frozen** (D26), and strains nothing. *Organic:* the hand holds it with a force the body feels.
+
+**Stand-ins, to name and replace when a spell leans on them:**
+
+13. Flames spread by a fixed share (`fireSpread`), not by heat.
+14. A pushed body loses 30% of its speed a tick (`bodyFriction`), not friction against the ground.
+15. `DENS`, `GRAD` and `NVEL` read the simulation's sums, not a force the particle feels (question 6).
+16. Slow loose mana joins the air grid (`looseRest`): a change of representation, exact in mana and momentum.
+
+---
+
 ## 1. Decisions so far
 
 | # | Decision |
@@ -39,7 +106,7 @@ The examples throughout are the four spells of Ikozu: **Stone Wall**, **Fireball
 | D17 | **Burning doesn't free anything.** What fire burns is still matter, and so is the fire. |
 | D18 | **Spells can be optimized like real algorithms.** Thought costs what it costs a real processor: adding is quick, dividing is slow, a sine is slower. The same spell written better casts faster. The libraries are first drafts, to be made better by whoever writes spells. |
 | D11 | The tester is a practical tool, maybe the kind Ikozu's mage-engineers would have, but not dressed up in lore. |
-| D19 | **The physics is as real as we can make it.** Spells get better by using the shortcuts reality gives, so the more real the world, the better the spells that can be written for it (§11). |
+| D19 | **The physics is as real as we can make it.** Spells get better by using the shortcuts reality gives, so the more real the world, the better the spells that can be written for it (§11). Every feature of a spell comes from it: this is the main objective (§0). |
 | D20 | **Mana is chemistry, Energy is physics.** Mana is what things are. Energy is how things happen: force, motion, electricity. Each is conserved on its own, and mana moves Energy only indirectly. Fire mana is the substance of heat; the motion that heat is, is Energy. |
 | D21 | **Free mana is a fluid of particles.** It has pressure, and spreads unless something holds it. Particles that share a velocity travel together. |
 | D22 | **Pushing mana costs mana.** It is poured onto a particle, and the poured mana goes loose where it was poured. A push changes a particle's speed only so much per tick: a caster speeds mana up by keeping the push going. *(How much it costs: D29.)* |
