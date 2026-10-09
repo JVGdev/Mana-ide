@@ -1236,9 +1236,35 @@ Sensing and pushing are reach instructions: 4 beats each.
 
 1. A 2D sandbox, outside the machine: a ball of particles with pressure, and a caster with beats and mana pushing it by each
    strategy in *Holding*. It should show that holding works, and what each strategy costs, before the machine changes.
+   *Built* (`sandbox/`, below).
 2. Particles in the world, beside the air grid, with the ledger counting them.
 3. The new instructions, and orders on particles.
 4. The libraries and the four spells, rewritten.
+
+### The sandbox
+
+`npm run sandbox` opens it; `npm run sandbox:compare -- hold` (or `throw`) prints every strategy side by side. The fluid is
+smoothed-particle hydrodynamics: every force between two particles is equal and opposite, and the sandbox checks both
+ledgers, mana and momentum, every tick. The caster's routines pay the machine's prices: 8 beats to sense a particle, 4 to
+push it, and the arithmetic in between. What it found, with the numbers in `sandbox/sim.ts`:
+
+- **Unheld, a fireball comes apart.** 120 M laid out in 0.5 m keeps a fifth of its mana in the weave after 40 ticks.
+- **Holding works, and the mind is the limit.** Every strategy uses all the beats it has; mana barely matters (4–6 M to
+  hold a fireball for 40 ticks). An adept pushes about 8 particles a tick, a master about 40, and a master's ball stays
+  tighter.
+- **Every other particle is not cheaper by itself.** A visit costs the same whichever particle it's on; pushing every other
+  one only changes which get pushed. Looking first and pushing only the surface did best for an adept at rest.
+- **An order holds best by far.** Each particle runs its own order every tick, all at once, while the caster's mind goes
+  one particle at a time. Thrown by a master, a ball held by its own order reaches the wall with 92% of its mana together;
+  the best a caster managed by hand was 45%. It pays by shrinking. That's why a fireball carries its order.
+- **Reach limits a throw.** Pushes speed a ball up only so fast, and it leaves the caster's reach before it's up to
+  speed: a master's 0.4 m/tick throw goes at 0.29.
+- **You can't throw fire by pushing its back.** Pressure carries a push forward only at about the speed mana spreads
+  (0.03 m/tick), far slower than a throw: the back packs in and the front lags. Stiff mana, like earth, should carry it.
+- **The numbers disagree with the world.** The air holds 40 M a cell, 10 of it fire. Fireball's 120 M in a 0.5 m ball is
+  about 9.5 M a cell in 2D, and 3.6 in 3D: thinner than the fire already in the air. The sandbox treats the air as empty.
+  With the air's own pressure in the physics, a fireball has to be denser than the air around it, or it doesn't push out
+  at all.
 
 ---
 

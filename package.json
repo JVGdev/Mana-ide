@@ -13,6 +13,9 @@
     "check": "tsc --noEmit && svelte-check --tsconfig ./tsconfig.json --workspace tester --fail-on-warnings",
     "tester": "vite --config tester/vite.config.ts",
     "build:tester": "vite build --config tester/vite.config.ts",
+    "sandbox": "vite --config sandbox/vite.config.ts",
+    "sandbox:compare": "tsx sandbox/compare.ts",
+    "sandbox:bundle": "tsx sandbox/bundle.ts",
     "mas": "tsx src/cli/mas.ts",
     "mvm": "tsx src/cli/mvm.ts"
   },
@@ -29,6 +32,7 @@
     "@sveltejs/vite-plugin-svelte": "^7.3.1",
     "@types/node": "^22.20.5",
     "codemirror": "^6.0.2",
+    "esbuild": "^0.28.2",
     "svelte": "^5.57.2",
     "svelte-check": "^4.7.6",
     "tsx": "^4.23.15",

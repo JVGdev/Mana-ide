@@ -25,6 +25,18 @@ Weaves run their orders in every cell, every tick. The Order panel shows any one
 instruction, forward and back; pick the cell by number or click it in the world. A breakpoint in order code pauses on the
 cell that hit it.
 
+## The mana fluid sandbox
+
+```
+npm run sandbox
+npm run sandbox:compare -- throw
+```
+
+Mana as a fluid of particles, in 2D, outside the machine (SPEC §11): a fireball pushes itself apart, and a caster holds it
+by pushing its particles back in, paying beats and mana for every push. Pick a caster and a way of holding, throw it at the
+wall, change the physics, and compare every way of holding side by side. `npm run sandbox:bundle` writes it as one HTML
+file, `sandbox/dist/sandbox.html`, that opens anywhere.
+
 ## Assemble a spell
 
 ```
@@ -90,3 +102,4 @@ mana. The full key is in `src/render.ts`.
 - `src/profile.ts`: where a cast's beats went.
 - `lib/`: the libraries.
 - `spells/`: Stone Wall, Fireball, Gust and Water Shield.
+- `sandbox/`: the mana fluid sandbox. `sim.ts` is the physics, `mind.ts` the caster, `strategies.ts` the ways of holding.
