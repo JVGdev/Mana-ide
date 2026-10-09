@@ -1,18 +1,21 @@
 ; Transformations: what a weave can become.
 
-; expand (an order): each cell flies out from the origin, twice as far each tick.
-; After 3 ticks the weave lets go. It reads when it began from w4.
-expand: GETW  n5, #4
+; burst (an order): each particle spends some of itself flying out from the centre, faster the further out it was. After
+; 3 ticks the weave lets go. It reads when it began from w4.
+burst:  GETW  n5, #4
         MOV   n6, n4
         SUB   n6, n5              ; ticks since it began
         CMP   n6, #3
         JGE   .gone
-        MOVE  n0:2                ; out along its own position: twice as far
+        MUL   n0, #0.4
+        MUL   n1, #0.4
+        MUL   n2, #0.4
+        KICK  n0:2                ; out along where it is: the flare
         RET
-.gone:  DISS                      ; its mana goes loose: the flare
+.gone:  DISS                      ; its mana goes loose
         RET
 
-; condense (an order): on the first tick, half of each cell's mana condenses into matter (make)
+; condense (an order): on the first tick, half of each particle's mana condenses into matter (make)
 condense:
         CMP   n4, #0
         JNE   .done

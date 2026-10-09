@@ -1,4 +1,5 @@
-; Shapes: geometry. Each lays the mana in m1 out in a weave, around its origin.
+; Shapes: geometry. Each lays the mana in m1 out in a weave, around its origin. Once laid out, a shape is held by
+; pushing: by its caster, or by an order in its particles (cohere).
 
 ; ball: the mana in m1, spread through a ball around the weave's origin. A ball is shells, from the centre out to the
 ; radius. Each shell is rings around the up axis, from its top to its bottom, and each ring is points along its
@@ -129,7 +130,7 @@ shield: IN    n5, CELL
         EMIT  m1, n7, n4, n13:15
         RET
 
-; wall: a block of the ground under the weave's origin, given the order to rise
+; wall: a block of the ground under the weave's origin, given the order to rise (ingrain it, then set it loose)
 ;   in: n0 height, n1 length, n2 thickness (m), n4 weave (on the ground, turned to face out)
 wall:   IN    n5, CELL
         DIV   n0, n5
@@ -181,15 +182,106 @@ wall:   IN    n5, CELL
         ORDR  n4, rise
         RET
 
-; rise (an order): each cell climbs one cell a tick, until the weave has risen w0 metres
-rise:   IN    n5, CELL
-        MOV   n6, n4
-        MUL   n6, n5              ; risen so far
+; rise (an order): the weave climbs until its centre has risen w0 metres, then stops. Each particle pushes itself toward
+; the speed that gets it there (at most 0.1 m a tick, slowing as it nears), paying with itself: climbing slowly costs
+; less. The first tick, it notes where the centre began, in w1. Once it's there (w2 = 1), each particle only stops
+; itself if it drifts, which costs little.
+rise:   CMP   n4, #0
+        JNE   .go
+        IN    n5:7, ORIGIN
+        PUTW  #1, n6              ; where it began
+        RET
+.go:    IN    n8:10, VEL
+        GETW  n5, #2
+        CMP   n5, #0
+        JNE   .stand
+        IN    n5:7, ORIGIN
+        GETW  n7, #1
+        SUB   n6, n7              ; risen so far
         GETW  n7, #0
-        CMP   n6, n7
-        JGE   .done
-        LDI   n0, #0
-        MOV   n1, n5
-        LDI   n2, #0
-        MOVE  n0:2                ; up one cell, carrying its earth
+        SUB   n7, n6              ; still to go
+        MUL   n7, #0.3
+        MIN   n7, #0.1
+        MAX   n7, #0              ; the speed it wants: up
+        CMP   n7, #0.005
+        JGT   .push
+        PUTW  #2, #1              ; there: from now on, it stands
+.push:  LDI   n11, #0
+        SUB   n11, n8
+        MOV   n12, n7
+        SUB   n12, n9
+        LDI   n13, #0
+        SUB   n13, n10
+        KICK  n11:13
+        RET
+.stand: MOV   n5, n9
+        ABS   n5
+        CMP   n5, #0.002
+        JLT   .done               ; still: nothing to do
+        LDI   n7, #0
+        JMP   .push
+.done:  RET
+
+; cohere (an order): a particle further from its weave's centre than w2 metres pushes itself back toward it, paying with
+; itself. Inside, it only checks how far out it is, without a square root: cheap, which is most particles, most ticks.
+; It measures its speed against its neighbours', so a thrown ball holds together however fast it flies.
+cohere: MOV   n5, n0
+        MUL   n5, n0
+        MOV   n6, n1
+        MUL   n6, n1
+        ADD   n5, n6
+        MOV   n6, n2
+        MUL   n6, n2
+        ADD   n5, n6              ; r²
+        GETW  n6, #2
+        MUL   n6, n6              ; R²
+        CMP   n5, n6
+        JLE   .done               ; inside: nothing to do
+        SQRT  n5                  ; r
+        LDI   n6, #1
+        DIV   n6, n5
+        MUL   n0, n6
+        MUL   n1, n6
+        MUL   n2, n6              ; n0:2: out, one metre long
+        IN    n7:9, VEL
+        NVEL  n10:12
+        SUB   n7, n10
+        SUB   n8, n11
+        SUB   n9, n12             ; its speed against its neighbours'
+        MUL   n7, n0
+        MUL   n8, n1
+        MUL   n9, n2
+        ADD   n7, n8
+        ADD   n7, n9              ; how fast it's moving out
+        GETW  n6, #2
+        SUB   n5, n6
+        MUL   n5, #-0.2           ; how fast it should move out: back in, faster the further it's strayed
+        SUB   n5, n7              ; the change
+        CMP   n5, #0
+        JGE   .done               ; already coming back fast enough
+        MUL   n0, n5
+        MUL   n1, n5
+        MUL   n2, n5
+        KICK  n0:2
+.done:  RET
+
+; pull (an order): past w2 metres from its weave's centre, a particle pushes itself a little back toward it, paying with
+; itself. No square root, and it doesn't feel its neighbours: short, so it's quick to ingrain, and rough: what it
+; pulls back, it doesn't slow, so the edge of the weave sways.
+pull:   MOV   n5, n0
+        MUL   n5, n0
+        MOV   n6, n1
+        MUL   n6, n1
+        ADD   n5, n6
+        MOV   n6, n2
+        MUL   n6, n2
+        ADD   n5, n6              ; r²
+        GETW  n6, #2
+        MUL   n6, n6              ; R²
+        CMP   n5, n6
+        JLE   .done
+        MUL   n0, #-0.1
+        MUL   n1, #-0.1
+        MUL   n2, #-0.1
+        KICK  n0:2                ; back in, harder the further out
 .done:  RET

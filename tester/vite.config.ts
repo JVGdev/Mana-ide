@@ -1,4 +1,4 @@
-// The spell tester. In development it reads and saves the .masm files in lib/ and spells/ directly;
+// The spell tester. In development it reads and saves the .masm files in spells/, bench/ and lib/ directly;
 // built, it carries copies of them and keeps your edits in the browser.
 
 import { defineConfig, type Plugin } from 'vite'
@@ -9,9 +9,9 @@ import { join, normalize } from 'node:path'
 
 const root = fileURLToPath(new URL('.', import.meta.url))
 const repo = join(root, '..')
-const DIRS = ['spells', 'lib']
+const DIRS = ['spells', 'bench', 'lib']
 
-/** Only .masm files directly in spells/ or lib/. */
+/** Only .masm files directly in spells/, bench/ or lib/. */
 function safe(path: string): string | undefined {
   const clean = normalize(path).replace(/\\/g, '/')
   const [dir, name, ...rest] = clean.split('/')
@@ -38,7 +38,7 @@ function files(): Plugin {
           const path = safe(decodeURIComponent((req.url ?? '').replace(/^\//, '')))
           if (!path) {
             res.statusCode = 400
-            res.end('only .masm files in spells/ or lib/')
+            res.end('only .masm files in spells/, bench/ or lib/')
             return
           }
           let body = ''

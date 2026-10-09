@@ -7,6 +7,7 @@ export type MasmFile = { path: string; text: string; saved: string }
 
 const BUILT: Record<string, string> = {
   ...import.meta.glob('../../../spells/*.masm', { query: '?raw', import: 'default', eager: true }),
+  ...import.meta.glob('../../../bench/*.masm', { query: '?raw', import: 'default', eager: true }),
   ...import.meta.glob('../../../lib/*.masm', { query: '?raw', import: 'default', eager: true }),
 }
 
@@ -31,12 +32,9 @@ function writeDraft(path: string, text: string | null) {
 
 export const baseName = (path: string) => path.slice(path.lastIndexOf('/') + 1)
 
-/** Spells first, then libraries, each by name. */
-const order = (a: { path: string }, b: { path: string }) => {
-  const sa = a.path.startsWith('spells/')
-  const sb = b.path.startsWith('spells/')
-  return sa === sb ? a.path.localeCompare(b.path) : sa ? -1 : 1
-}
+/** Spells first, then the bench's, then libraries, each by name. */
+const rank = (path: string) => (path.startsWith('spells/') ? 0 : path.startsWith('bench/') ? 1 : 2)
+const order = (a: { path: string }, b: { path: string }) => rank(a.path) - rank(b.path) || a.path.localeCompare(b.path)
 
 class Files {
   list = $state<MasmFile[]>([])
@@ -76,7 +74,11 @@ class Files {
   /** By the name a `.use` gives, or the file name the assembler records. */
   byName(name: string): MasmFile | undefined {
     const file = name.endsWith('.masm') ? name : `${name}.masm`
-    return this.list.find((f) => f.path === `spells/${file}`) ?? this.list.find((f) => f.path === `lib/${file}`)
+    for (const dir of ['spells', 'bench', 'lib']) {
+      const f = this.list.find((f) => f.path === `${dir}/${file}`)
+      if (f) return f
+    }
+    return undefined
   }
 
   edit(path: string, text: string) {

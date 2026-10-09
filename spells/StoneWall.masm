@@ -1,5 +1,5 @@
 ; Stone Wall: the ground heaves up into a wall of rock.
-        .use  Elements, Shapes
+        .use  Elements, Basics, Shapes
 
 StoneWall:
         IN    n16:18, AIM         ; a point on the ground
@@ -11,6 +11,7 @@ StoneWall:
         CIRC  m0                  ; CIRCULATE
         FILT  m1, m0, #EARTH      ; FILTER: earth × affinity; the residue stays in m0
         WEAV  n20, n16:18         ; a weave on the ground at the aim
+        HOLD  n20, #3             ; a field big enough for the whole wall
         IN    n0:2, SELF
         MOV   n3, n16
         MOV   n4, n17
@@ -23,9 +24,10 @@ StoneWall:
         LDI   n0, #2              ; 2 m high
         LDI   n1, #4              ; 4 m long
         LDI   n2, #0.5            ; 0.5 m thick
-        CALL  wall                ; ORDER: the ground is laid out to rise
+        CALL  wall                ; the ground laid out, and its order to rise
+        MOV   n4, n20
+        CALL  ingrain             ; ORDER: into every particle, before any of it moves
         MANI  n20                 ; SEND: it rises
-        LOCK  n20, SHAPE          ; LOCK: it stays a wall
         MOV   n0, n20
         HALT                      ; m0 isn't held any more: it joins the flow
 .fail:  FAIL  #1                  ; no earth there

@@ -3,8 +3,9 @@ import { assemble } from '../src/asm/assembler.ts'
 import { resolver } from '../src/load.ts'
 import { adept, type CasterStats } from '../src/vm/caster.ts'
 import { total } from '../src/vm/parts.ts'
-import { Sim } from '../src/vm/sim.ts'
+import { Sim, orderLength } from '../src/vm/sim.ts'
 import { World } from '../src/vm/world.ts'
+import { PHYSICS } from '../src/vm/physics.ts'
 
 function setup(src: string, tweak?: (s: CasterStats) => void) {
   const world = World.withGround(32, 24, 1, 8)
@@ -150,7 +151,7 @@ here:   CMP   n0, #5
   })
 
   it("won't run an order's instructions", () => {
-    const { sim, cast } = setup('MOVE n0:2\nHALT')
+    const { sim, cast } = setup('KICK n0:2\nHALT')
     sim.runCasts()
     expect(cast.fault).toMatch(/ORDER_ONLY/)
   })
@@ -243,7 +244,7 @@ describe('the body', () => {
 
 describe('weaves', () => {
   it('must be set loose before they are locked', () => {
-    const { sim, cast } = setup('IN n0:2, AIM\nWEAV n3, n0:2\nLOCK n3, SHAPE\nHALT')
+    const { sim, cast } = setup('IN n0:2, AIM\nWEAV n3, n0:2\nLOCK n3, INPUT\nHALT')
     sim.runCasts()
     expect(cast.fault).toMatch(/NOT_LOOSE/)
   })
@@ -295,6 +296,7 @@ describe('weaves', () => {
         LDI   n7, #40
         EMIT  m0, n7, n3, n4:6
         ORDR  n3, spin
+        INGR  n3, #0
         MANI  n3
         HALT
 spin:   JMP   spin`)
@@ -322,6 +324,12 @@ spin:   JMP   spin`)
         MEAS  n7, m1
         EMIT  m1, n7, n3, n4:6
         ORDR  n3, unmake
+        PCNT  n8, n3
+        LDI   n9, #0
+again:  INGR  n3, n9
+        ADD   n9, #1
+        CMP   n9, n8
+        JLT   again
         MANI  n3
         HALT
 unmake: CNDS  #${amount}
@@ -329,18 +337,169 @@ unmake: CNDS  #${amount}
     const freed = (amount: number) => {
       const { sim } = setup(src(amount))
       const before = sim.ledger()
-      sim.step()
+      sim.run(2) // it's set loose, and its order runs, in the first tick
       const weave = [...sim.weaves.values()][0]
-      const free = total(weave.cells[0].free)
-      sim.step()
       const after = sim.ledger()
       expect(after.total).toBeCloseTo(before.total, 6)
-      return { free: total(weave.cells[0].free) - free, condensed: before.condensed - after.condensed }
+      return { free: weave.mana() - 6, condensed: before.condensed - after.condensed } // 40 raw: 6 M of earth
     }
     const flaw = freed(-10)
     expect(flaw.free).toBeGreaterThan(9)
     expect(flaw.condensed).toBeGreaterThan(9)
     // A full cell has no room, so condensing the same amount the right way round makes nothing.
     expect(freed(10).condensed).toBeCloseTo(0, 6)
+  })
+})
+
+/** A spell that gathers fire and pours it into a weave at a point ahead of the caster, before the code given. */
+const pour = (rest: string, gather = 120) => `
+        .use  Elements
+        GATH  m0, #${gather}
+        CIRC  m0
+        FILT  m1, m0, #FIRE
+        LDI   n0, #4
+        LDI   n1, #4
+        LDI   n2, #0.125
+        WEAV  n3, n0:2
+        LDI   n4, #0
+        LDI   n5, #0
+        LDI   n6, #0
+        MEAS  n7, m1
+        EMIT  m1, n7, n3, n4:6
+        HOLD  n3, #5
+${rest}`
+
+describe('mana as a fluid', () => {
+  it('pours into particles, held still in the hand, and spreads by its own pressure once let go', () => {
+    const { sim } = setup(pour('        TICK\n        TICK\n        TICK\n        TICK\n        MANI  n3\n        HALT'))
+    sim.step()
+    const weave = [...sim.weaves.values()][0]
+    expect(weave.particles.length).toBe(Math.ceil(18 / PHYSICS.mote)) // 120 raw, a quarter fire, 60% kept
+    const spread = () => {
+      const c = weave.centre()!.pos
+      return Math.max(...weave.particles.map((p) => Math.hypot(p.pos[0] - c[0], p.pos[1] - c[1])))
+    }
+    const laid = spread()
+    sim.run(2)
+    expect(spread()).toBeCloseTo(laid, 9) // in hand: still
+    sim.run(10)
+    expect(spread()).toBeGreaterThan(laid * 4)
+    expect(sim.world.momentumError()).toBeLessThan(1e-9)
+  })
+
+  it('pushes a particle by pouring mana onto it, only so much a tick, and only within reach', () => {
+    // One particle: a quarter of 1⅔ M is fire, and 60% of that is 0.25 M.
+    const src = pour(
+      `        LDI   n8, #0.5
+        LDI   n9, #0
+        LDI   n10, #0
+        LDI   n11, #0
+        MEAS  n20, m0
+        SHOV  m0, n3, n11, n8:10
+        MEAS  n21, m0
+        MANI  n3
+        HALT`,
+      5 / 3,
+    )
+    const { sim, cast } = setup(src)
+    sim.step()
+    const weave = [...sim.weaves.values()][0]
+    expect(weave.particles.length).toBe(1)
+    const p = weave.particles[0]
+    expect(p.vel[0]).toBeCloseTo(PHYSICS.pushRate, 2) // asked for 0.5, got a tick's worth (less what the air took)
+    expect(sim.world.impulse.push[0]).toBeCloseTo(0.25 * PHYSICS.pushRate, 6) // 1⅔ is a float32
+    // It cost what a push of that size costs, and that mana went loose into the air.
+    expect(cast.frame.n[20] - cast.frame.n[21]).toBeCloseTo((0.25 * PHYSICS.pushRate) / PHYSICS.pushYield, 6)
+    // Out of reach, nothing happens.
+    const far = setup(src, (s) => (s.body.reach.genetics = 0.5))
+    far.sim.step()
+    expect([...far.sim.weaves.values()][0].particles[0].vel[0]).toBe(0)
+    expect(far.cast.frame.n[20]).toBe(far.cast.frame.n[21])
+  })
+
+  it('ingrains an order particle by particle, at a beat for every instruction it could run', () => {
+    const { sim, cast } = setup(
+      pour(`        ORDR  n3, order
+        INGR  n3, #0
+        INGR  n3, #1
+        MANI  n3
+        HALT
+order:  CALL  sub
+        CMP   n0, #0
+        JEQ   .out
+        NOP
+.out:   RET
+sub:    NOP
+        RET`),
+    )
+    sim.runCasts()
+    expect(orderLength(cast.program, cast.program.labels.get('order')!)).toBe(7)
+    const weave = [...sim.weaves.values()][0]
+    expect(weave.particles.filter((p) => p.order).length).toBe(2)
+    const ingr = [...cast.program.lines].filter(([, l]) => l.text.trim().startsWith('INGR')).map(([a]) => a)
+    for (const a of ingr) expect(cast.profile.get(a)!.beats).toBe(4 + 7)
+  })
+
+  it('runs an order in every ingrained particle, which burns its own mana to think and pays to push itself', () => {
+    const { sim } = setup(
+      pour(`        ORDR  n3, kick
+        INGR  n3, #0
+        MANI  n3
+        HALT
+kick:   LDI   n0, #0
+        LDI   n1, #0.05
+        LDI   n2, #0
+        KICK  n0:2
+        RET`),
+    )
+    sim.step()
+    const weave = [...sim.weaves.values()][0]
+    const p = weave.particles[0]
+    const before = total(p.free)
+    sim.traceOrders = true
+    sim.step()
+    const trace = sim.traces.get(weave.id)!
+    expect(trace.length).toBe(1) // only the ingrained one
+    expect(trace[0].burned).toBeCloseTo(trace[0].beats * PHYSICS.orderBurn, 12)
+    const kickCost = (before * 0.05) / PHYSICS.pushYield // it kicks first; its thinking is paid for after
+    expect(total(p.free)).toBeCloseTo(before - kickCost - trace[0].burned, 9)
+    expect(sim.world.momentumError()).toBeLessThan(1e-9)
+  })
+
+  it('lets a particle feel its neighbours: how dense, which way it thickens, how they move', () => {
+    const { sim } = setup(
+      pour(`        ORDR  n3, feel
+        INGR  n3, #0
+        MANI  n3
+        HALT
+feel:   DENS  n5
+        GRAD  n6:8
+        NVEL  n9:11
+        IN    n12:14, VEL
+        RET`),
+    )
+    sim.run(2)
+    sim.traceOrders = true
+    sim.step()
+    const n = [...sim.traces.values()][0][0].n
+    expect(n[5]).toBeGreaterThan(0)
+    expect(Math.hypot(n[6], n[7], n[8])).toBeGreaterThan(0)
+  })
+
+  it('loses particles that stray past its field, and they settle into the air when they slow', () => {
+    const { sim } = setup(pour('        HOLD  n3, #0.3\n        MANI  n3\n        HALT'))
+    sim.run(15)
+    const weave = [...sim.weaves.values()][0]
+    const loose = sim.world.particles.filter((p) => !p.weave)
+    expect(weave?.particles.length ?? 0).toBeLessThan(72)
+    expect(loose.length + (weave?.particles.length ?? 0)).toBeLessThanOrEqual(72)
+    const before = sim.ledger().total
+    sim.run(60)
+    expect(sim.ledger().total).toBeCloseTo(before, 6)
+    expect(sim.world.particles.filter((p) => !p.weave).length).toBeLessThan(loose.length)
+  })
+
+  it("won't lock a shape: a shape is held by pushing", () => {
+    expect(() => setup('IN n0:2, AIM\nWEAV n3, n0:2\nMANI n3\nLOCK n3, SHAPE\nHALT')).toThrow(/held by pushing/)
   })
 })

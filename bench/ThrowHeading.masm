@@ -1,0 +1,27 @@
+; Thrown by its own order: it's told one angle, and speeds itself up along it for 8 ticks. Nothing holds it together.
+; The caster only pours it, ingrains it and lets go.
+        .use  Bench, Shapes, Reactions, Transformations, Orders
+
+ThrowHeading:
+        CALL  pour
+        CALL  aim
+        WSET  n16, #1, n3           ; the angle, up from forward
+        ORDR  n16, .order
+        CALL  release
+        LOCK  n16, INPUT
+        MOV   n0, n16
+        HALT
+
+.order: GETW  n5, #0              ; the phase: 0 flying, 1 bursting
+        CMP   n5, #0
+        JNE   .burst
+        CALL  touch
+        CMP   n5, #0
+        JNE   .hit
+        CALL  heading
+        RET
+.hit:   PUTW  #0, n5              ; the whole weave bursts from the next tick
+        PUTW  #4, n4
+        RET
+.burst: CALL  burst
+        RET

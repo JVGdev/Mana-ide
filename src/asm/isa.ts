@@ -20,7 +20,7 @@ export type Op = {
   operands: OperandKind[]
   /** Beats of thought it takes. */
   beats: number
-  /** Only inside a weave's order. */
+  /** Only inside a particle's order. */
   order?: boolean
 }
 
@@ -85,6 +85,8 @@ export const OPS: Op[] = [
   { code: 0x40, name: 'PROB', operands: ['n', 't', 's'], beats: BODY },
   { code: 0x41, name: 'AIRM', operands: ['n', 't', 's'], beats: BODY },
   { code: 0x42, name: 'SEND', operands: ['m', 'n', 't', 't'], beats: BODY },
+  { code: 0x43, name: 'WPOS', operands: ['t', 'n'], beats: BODY },
+  { code: 0x44, name: 'WVEL', operands: ['t', 'n'], beats: BODY },
   // Weave
   { code: 0x50, name: 'WEAV', operands: ['n', 't'], beats: BODY },
   { code: 0x51, name: 'TURN', operands: ['n', 't'], beats: BODY },
@@ -95,13 +97,22 @@ export const OPS: Op[] = [
   { code: 0x56, name: 'MANI', operands: ['n'], beats: BODY },
   { code: 0x57, name: 'LOCK', operands: ['n', 'K'], beats: BODY },
   { code: 0x58, name: 'RELS', operands: ['n'], beats: BODY },
-  // Order: only inside a weave's order
-  { code: 0x60, name: 'MOVE', operands: ['t'], beats: MIND, order: true },
+  { code: 0x59, name: 'PCNT', operands: ['n', 'n'], beats: BODY },
+  { code: 0x5a, name: 'PPOS', operands: ['t', 'n', 's'], beats: BODY },
+  { code: 0x5b, name: 'PVEL', operands: ['t', 'n', 's'], beats: BODY },
+  { code: 0x5c, name: 'SHOV', operands: ['m', 'n', 'n', 't'], beats: BODY },
+  { code: 0x5d, name: 'INGR', operands: ['n', 's'], beats: BODY },
+  { code: 0x5e, name: 'HOLD', operands: ['n', 's'], beats: BODY },
+  // Order: only inside a particle's order
+  { code: 0x60, name: 'KICK', operands: ['t'], beats: BODY, order: true },
   { code: 0x61, name: 'TUCH', operands: ['n'], beats: MIND, order: true },
   { code: 0x62, name: 'GETW', operands: ['n', 'K'], beats: MIND, order: true },
   { code: 0x63, name: 'PUTW', operands: ['K', 's'], beats: MIND, order: true },
   { code: 0x64, name: 'DISS', operands: [], beats: MIND, order: true },
   { code: 0x65, name: 'CNDS', operands: ['s'], beats: MIND, order: true },
+  { code: 0x66, name: 'DENS', operands: ['n'], beats: BODY, order: true },
+  { code: 0x67, name: 'GRAD', operands: ['t'], beats: BODY, order: true },
+  { code: 0x68, name: 'NVEL', operands: ['t'], beats: BODY, order: true },
 ]
 
 export const IMMEDIATE_BIT = 0x80
@@ -123,12 +134,17 @@ export const PORTS: { name: string; code: number; size: number; order?: boolean 
   { name: 'CAPACITY', code: 0x09, size: 1 },
   { name: 'ORIGIN', code: 0x0a, size: 3, order: true },
   { name: 'MAKER', code: 0x0b, size: 3, order: true },
+  { name: 'REACH', code: 0x0c, size: 1 },
+  { name: 'VEL', code: 0x0d, size: 3, order: true },
 ]
 export const PORT_BY_NAME = new Map(PORTS.map((p) => [p.name, p]))
 export const PORT_BY_CODE = new Map(PORTS.map((p) => [p.code, p]))
 
-/** Names a K operand can be written as. */
-export const LOCKS: Record<string, number> = { SHAPE: 0, INPUT: 1, ORDER: 2 }
-export const LOCK_NAMES = ['SHAPE', 'INPUT', 'ORDER']
+/**
+ * Names a K operand can be written as. A shape isn't locked any more: it's held, by pushing (SPEC §11). #0 is left where
+ * SHAPE was, and locks nothing.
+ */
+export const LOCKS: Record<string, number> = { INPUT: 1, ORDER: 2 }
+export const LOCK_NAMES = ['', 'INPUT', 'ORDER']
 
 export const MANA_BIT = 0x80

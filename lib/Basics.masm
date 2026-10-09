@@ -19,18 +19,114 @@ toward: SUB   n3, n0
         MUL   n5, n6
         RET
 
-; fly (an order): every cell moves by the weave's velocity, kept in w1–w3
-fly:    GETW  n0, #1
-        GETW  n1, #2
-        GETW  n2, #3
-        MOVE  n0:2
-        RET
+; ingrain: the weave's order (ORDR) into every one of its particles, one by one. Each takes a beat for every instruction
+; the order could run, so a long order takes a while to ingrain. It keeps holding m0 as it goes, for what comes after.
+;   in: n4 weave
+ingrain: PCNT n5, n4
+        LDI   n6, #0
+.next:  CMP   n6, n5
+        JGE   .done
+        CIRC  m0
+        INGR  n4, n6
+        ADD   n6, #1
+        JMP   .next
+.done:  RET
 
-; anchor (an order): the weave follows its maker
+; throw: push every particle of a weave toward a velocity, round and round, until the weave moves at it or leaves the
+; caster's reach. Each push pays for itself from m0, and can only speed a particle up so much a tick.
+;   in: n0:2 the velocity (in the weave's frame), n4 weave
+throw:  IN    n15, REACH
+        MUL   n15, n15            ; reach², to compare without a square root
+.pass:  CIRC  m0                  ; keep holding what it pays with
+        WPOS  n8:10, n4
+        IN    n11:13, SELF
+        SUB   n8, n11
+        SUB   n9, n12
+        SUB   n10, n13
+        MUL   n8, n8
+        MUL   n9, n9
+        MUL   n10, n10
+        ADD   n8, n9
+        ADD   n8, n10
+        CMP   n8, n15
+        JGT   .done               ; out of reach: it's on its own
+        WVEL  n8:10, n4
+        SUB   n8, n0
+        SUB   n9, n1
+        SUB   n10, n2
+        MUL   n8, n8
+        MUL   n9, n9
+        MUL   n10, n10
+        ADD   n8, n9
+        ADD   n8, n10             ; how far from the velocity it still is, squared
+        MOV   n11, n0
+        MUL   n11, n0
+        MOV   n12, n1
+        MUL   n12, n1
+        ADD   n11, n12
+        MOV   n12, n2
+        MUL   n12, n2
+        ADD   n11, n12
+        MUL   n11, #0.0025        ; (5% of the speed)²
+        CMP   n8, n11
+        JLE   .done               ; fast enough
+        PCNT  n5, n4
+        CMP   n5, #0
+        JEQ   .done               ; nothing left of it to push
+        LDI   n6, #0
+.p:     PVEL  n8:10, n4, n6
+        MOV   n11, n0
+        SUB   n11, n8
+        MOV   n12, n1
+        SUB   n12, n9
+        MOV   n13, n2
+        SUB   n13, n10
+        SHOV  m0, n4, n6, n11:13
+        ADD   n6, #1
+        CMP   n6, n5
+        JLT   .p
+        JMP   .pass
+.done:  RET
+
+; anchor (an order): the weave follows its maker, keeping where it was from them when it was set loose (noted the first
+; tick, in w5–w7). Each particle pushes itself toward the speed that would bring the weave there in two ticks, paying
+; with itself, and does nothing when it's near enough to that speed.
 anchor: IN    n5:7, MAKER
         IN    n8:10, ORIGIN
+        CMP   n4, #0
+        JNE   .follow
+        SUB   n8, n5
+        SUB   n9, n6
+        SUB   n10, n7
+        PUTW  #5, n8
+        PUTW  #6, n9
+        PUTW  #7, n10             ; where it is from its maker
+        RET
+.follow: GETW n11, #5
+        ADD   n5, n11
+        GETW  n11, #6
+        ADD   n6, n11
+        GETW  n11, #7
+        ADD   n7, n11             ; where it should be
         SUB   n5, n8
         SUB   n6, n9
         SUB   n7, n10
-        MOVE  n5:7
-        RET
+        MUL   n5, #0.5
+        MUL   n6, #0.5
+        MUL   n7, #0.5            ; the speed it wants
+        IN    n8:10, VEL
+        SUB   n5, n8
+        SUB   n6, n9
+        SUB   n7, n10             ; how far from it
+        MOV   n8, n5
+        ABS   n8
+        MOV   n9, n6
+        ABS   n9
+        ADD   n8, n9
+        MOV   n9, n7
+        ABS   n9
+        ADD   n8, n9
+        CMP   n8, #0.01
+        JLT   .done
+        KICK  n5:7
+.done:  RET

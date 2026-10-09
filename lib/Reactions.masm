@@ -1,5 +1,5 @@
-; Reactions: what a weave can notice.
+; Reactions: what a particle can notice.
 
-; touch: n5 = 1 if this cell is against something that isn't its own
+; touch: n5 = 1 if this particle is against something that isn't its own
 touch:  TUCH  n5
         RET

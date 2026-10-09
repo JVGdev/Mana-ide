@@ -2,6 +2,7 @@
 
 import { PHYSICS } from './physics.ts'
 import { add, dominant, share, take, total, zero, type Parts } from './parts.ts'
+import type { Program } from '../asm/assembler.ts'
 
 export type Vec = [number, number, number]
 
@@ -16,8 +17,38 @@ export type Body = {
   half: Vec
 }
 
-/** Mana let out loose: sent, or left behind by a weave that came apart. */
-export type Loose = { pos: Vec; vel: Vec; parts: Parts }
+/** An order ingrained in a particle: the routine at `addr` of the spell that ingrained it. */
+export type Ingrained = { program: Program; addr: number }
+
+/**
+ * A particle of free mana: one simulated particle stands for a crowd of real ones (SPEC §11). It's in a weave, or loose
+ * (weave 0): sent, spent, or let go.
+ */
+export type Particle = {
+  id: number
+  pos: Vec
+  vel: Vec
+  free: Parts
+  /** Matter it holds bound, or condensed itself. Bound matter moves with its mana and is held up by it. */
+  carried: Parts
+  weave: number
+  order: Ingrained | null
+  /** How much more pushes can change its velocity this tick, m/tick. */
+  dvLeft: number
+  /** The tick it was last pushed, by its caster or its order. */
+  pushedAt: number
+  /** How dense the mana around it is (M/m³), which way it thickens, and how its neighbours move: what it can feel. */
+  rho: number
+  grad: Vec
+  nvel: Vec
+  acc: Vec
+}
+
+/**
+ * Momentum given to the world from outside it: pushes, orders' kicks, rising, the ground and walls, what gathering takes
+ * out of the air, and what mana takes with it when it condenses (matter held by mana has no momentum of its own).
+ */
+export type Impulses = Record<'push' | 'kick' | 'rise' | 'walls' | 'gather' | 'matter', Vec>
 
 export const FIRE = 0
 export const WATER = 1
@@ -31,10 +62,14 @@ export class World {
   readonly air: Parts[]
   /** Condensed mana in each cell that no weave holds. */
   readonly matter: Parts[]
-  loose: Loose[] = []
+  /** How the air in each cell moves: x, y, z, cell by cell. */
+  readonly airVel: Float64Array
+  particles: Particle[] = []
   bodies: Body[] = []
   tick = 0
+  impulse: Impulses = { push: [0, 0, 0], kick: [0, 0, 0], rise: [0, 0, 0], walls: [0, 0, 0], gather: [0, 0, 0], matter: [0, 0, 0] }
   private nextBody = 1
+  private nextParticle = 1
 
   constructor(
     readonly w: number,
@@ -44,6 +79,7 @@ export class World {
     this.size = w * h * d
     this.air = Array.from({ length: this.size }, () => zero())
     this.matter = Array.from({ length: this.size }, () => zero())
+    this.airVel = new Float64Array(this.size * 3)
   }
 
   index(x: number, y: number, z: number): number {
@@ -112,7 +148,8 @@ export class World {
         }
   }
 
-  addBody(name: string, pos: Vec, mass = 1, half: Vec = [0.25, 0.9, 0.25]): Body {
+  /** A body's mass is in M, like mana's: a person is about 60. */
+  addBody(name: string, pos: Vec, mass = 60, half: Vec = [0.25, 0.9, 0.25]): Body {
     const body: Body = { id: this.nextBody++, name, pos: [...pos], vel: [0, 0, 0], mass, half }
     this.bodies.push(body)
     return body
@@ -130,65 +167,118 @@ export class World {
     )
   }
 
+  // Particles and air
+
+  /** New particles of free mana at a point, at most a mote each, spread over `spread` metres so their pressure can act. */
+  pour(parts: Parts, at: Vec, weave: number, vel: Vec = [0, 0, 0], spread = PHYSICS.pour): Particle[] {
+    const out: Particle[] = []
+    const n = Math.ceil(total(parts) / PHYSICS.mote - 1e-9)
+    if (n <= 0) return out
+    for (let k = 0; k < n; k++) {
+      const id = this.nextParticle++
+      // A fixed scatter by id, so the same spell always lays out the same way.
+      const u = frac(id * 0.7548776662) - 0.5
+      const v = frac(id * 0.5698402910) - 0.5
+      const w = frac(id * 0.3141592653) - 0.5
+      // Within the cell the point is in: mana poured at a point is poured into that cell.
+      const inCell = (x: number, d: number) => {
+        const lo = Math.floor(x / this.cell + 1e-7) * this.cell
+        return Math.min(lo + this.cell * 0.999, Math.max(lo + this.cell * 0.001, x + d))
+      }
+      const pos: Vec = [inCell(at[0], u * 2 * spread), inCell(at[1], v * 2 * spread), this.d === 1 ? at[2] : inCell(at[2], w * 2 * spread)]
+      const p: Particle = {
+        id,
+        pos,
+        vel: [...vel],
+        free: parts.map((x) => x / n) as Parts,
+        carried: zero(),
+        weave,
+        order: null,
+        dvLeft: PHYSICS.pushRate,
+        pushedAt: -1,
+        rho: 0,
+        grad: [0, 0, 0],
+        nvel: [0, 0, 0],
+        acc: [0, 0, 0],
+      }
+      this.particles.push(p)
+      out.push(p)
+    }
+    parts.fill(0)
+    return out
+  }
+
+  /** Mana let into the air of a cell, carrying momentum (px, py, pz) into it. */
+  addAir(i: number, parts: Parts, momentum: Vec = [0, 0, 0]) {
+    if (i < 0) return
+    const before = total(this.air[i])
+    const after = before + total(parts)
+    if (after <= 0) return
+    for (let k = 0; k < 3; k++) this.airVel[i * 3 + k] = (before * this.airVel[i * 3 + k] + momentum[k]) / after
+    add(this.air[i], parts)
+  }
+
+  /** Mana drawn out of the air of a cell. What it takes leaves with its share of the air's momentum. */
+  takeAir(i: number, f: number): Parts {
+    const got = share(this.air[i], f)
+    for (let k = 0; k < 3; k++) this.impulse.gather[k] -= total(got) * this.airVel[i * 3 + k]
+    return got
+  }
+
   // Each tick
 
-  /** Air mana evens out between neighbouring cells. */
+  /** Air mana evens out between neighbouring cells, and what moves carries its momentum. */
   diffuseAir() {
     const rate = PHYSICS.airDiffusion / 2
+    const v = this.airVel
     for (let i = 0; i < this.size; i++) {
       const [x, y, z] = this.coords(i)
       for (const j of [this.index(x + 1, y, z), this.index(x, y + 1, z), this.index(x, y, z + 1)]) {
         if (j < 0) continue
         const a = this.air[i]
         const b = this.air[j]
+        const ta = total(a)
+        const tb = total(b)
+        let moved = 0
         for (let k = 0; k < 4; k++) {
           const f = (a[k] - b[k]) * rate
           a[k] -= f
           b[k] += f
+          moved += f
+        }
+        if (Math.abs(moved) < 1e-12) continue
+        // `moved` M went from i to j (or back, if negative), with the speed of where it came from.
+        const from = moved > 0 ? i : j
+        const na = ta - moved
+        const nb = tb + moved
+        for (let k = 0; k < 3; k++) {
+          const p = moved * v[from * 3 + k]
+          const pa = ta * v[i * 3 + k] - p
+          const pb = tb * v[j * 3 + k] + p
+          v[i * 3 + k] = na > 1e-12 ? pa / na : 0
+          v[j * 3 + k] = nb > 1e-12 ? pb / nb : 0
         }
       }
     }
   }
 
-  /** Loose mana flies, slows, pushes bodies, and settles back into the air. */
-  moveLoose() {
-    const still: Loose[] = []
-    for (const p of this.loose) {
-      const next: Vec = [p.pos[0] + p.vel[0], p.pos[1] + p.vel[1], p.pos[2] + p.vel[2]]
-      const j = this.cellOf(next)
-      if (j < 0 || this.solidAt(j)) {
-        this.settle(p)
-        continue
-      }
-      p.pos = next
-      const body = this.bodyAt(p.pos)
-      if (body) {
-        const push = (p.parts[AIR] * PHYSICS.push) / body.mass
-        body.vel[0] += p.vel[0] * push
-        body.vel[2] += p.vel[2] * push
-      }
-      p.vel = [p.vel[0] * PHYSICS.looseDrag, p.vel[1] * PHYSICS.looseDrag, p.vel[2] * PHYSICS.looseDrag]
-      if (Math.hypot(...p.vel) < PHYSICS.looseRest) this.settle(p)
-      else still.push(p)
-    }
-    this.loose = still
-  }
-
-  settle(p: Loose) {
-    add(this.air[this.clampedCellOf(p.pos)], p.parts)
-    p.parts = zero()
-  }
-
-  /** Bodies pushed by wind slide along the ground until friction stops them. */
+  /** Bodies pushed by mana slide along the ground until friction stops them. */
   moveBodies() {
     for (const b of this.bodies) {
-      if (Math.abs(b.vel[0]) + Math.abs(b.vel[2]) < 1e-6) continue
+      if (Math.abs(b.vel[0]) + Math.abs(b.vel[2]) < 1e-6) {
+        this.impulse.walls[0] -= b.mass * b.vel[0]
+        this.impulse.walls[2] -= b.mass * b.vel[2]
+        b.vel = [0, 0, 0]
+        continue
+      }
       const next: Vec = [b.pos[0] + b.vel[0], b.pos[1], b.pos[2] + b.vel[2]]
       const i = this.cellOf(next)
+      const before: Vec = [...b.vel]
       if (i >= 0 && !this.solidAt(i)) b.pos = next
       else b.vel = [0, 0, 0]
       b.vel[0] *= PHYSICS.bodyFriction
       b.vel[2] *= PHYSICS.bodyFriction
+      for (const k of [0, 2]) this.impulse.walls[k] += b.mass * (b.vel[k] - before[k])
     }
   }
 
@@ -247,7 +337,7 @@ export class World {
         }
   }
 
-  /** All the mana in the world that isn't in a caster or a weave. */
+  /** All the mana in the world that isn't in a caster, by where it is. Particles in weaves are counted by the machine. */
   mana(): { air: number; matter: number; loose: number } {
     let air = 0
     let matter = 0
@@ -255,6 +345,28 @@ export class World {
       air += total(this.air[i])
       matter += total(this.matter[i])
     }
-    return { air, matter, loose: this.loose.reduce((s, p) => s + total(p.parts), 0) }
+    let loose = 0
+    for (const p of this.particles) if (!p.weave) loose += total(p.free) + total(p.carried)
+    return { air, matter, loose }
   }
+
+  /** Momentum in the world (particles, air, bodies) less what came from outside: zero, when nothing is lost. */
+  momentumError(): number {
+    const m: Vec = [0, 0, 0]
+    for (const p of this.particles) {
+      const mass = total(p.free)
+      for (let k = 0; k < 3; k++) m[k] += mass * p.vel[k]
+    }
+    for (let i = 0; i < this.size; i++) {
+      const mass = total(this.air[i])
+      if (mass) for (let k = 0; k < 3; k++) m[k] += mass * this.airVel[i * 3 + k]
+    }
+    for (const b of this.bodies) for (let k = 0; k < 3; k++) m[k] += b.mass * b.vel[k]
+    for (const j of Object.values(this.impulse)) for (let k = 0; k < 3; k++) m[k] -= j[k]
+    return Math.hypot(...m)
+  }
+}
+
+function frac(x: number): number {
+  return x - Math.floor(x)
 }

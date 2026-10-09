@@ -1,0 +1,115 @@
+; Orders: ways for mana to move itself, from knowing almost nothing to feeling everything around it. Each is an order: a
+; particle runs it every tick, burning a little of its own mana for every beat it thinks, and pays for its kicks with
+; itself. Which one to use is a trade: a short order is cheap to ingrain and cheap to run, and does less. The bench
+; (npm run bench) compares them.
+;
+; They're written for a weave turned to face where it goes (TURN): in its frame +z is forward and y is up. An order is
+; told where its particle is from its weave's centre (n0:2), its mana (n3) and its age in ticks (n4).
+
+; heading: flies along one angle, w1 (up from forward, in radians), speeding up 0.04 m/tick every tick for its first 8
+; ticks. It knows nothing else: not how fast it's going, not where the rest of its weave is. The sine and cosine are
+; worked out on its first tick and kept in w5 and w6 for every particle after: a weave can remember for its mana.
+heading: CMP  n4, #8
+        JGE   .done
+        CALL  angle
+        MUL   n7, #0.04
+        MUL   n8, #0.04
+        LDI   n6, #0
+        KICK  n6:8
+.done:  RET
+
+; angle: the sine and cosine of w1, into n7 and n8. Worked out once and kept in w5 and w6 (a cosine of 0 means not yet),
+; or given there by the caster, who can work it out once for the whole weave.
+angle:  GETW  n8, #6
+        CMP   n8, #0
+        JNE   .known
+        GETW  n7, #1
+        MOV   n8, n7
+        SIN   n7
+        COS   n8
+        PUTW  #5, n7
+        PUTW  #6, n8
+        RET
+.known: GETW  n7, #5
+        RET
+
+; steer: flies along w1 at w3 m/tick. It feels its own speed (IN VEL) and kicks itself toward the speed it wants, so it
+; also cancels whatever else moves it: the spread of its own pressure, the drag of the air.
+steer:  CALL  angle
+        GETW  n9, #3
+        MUL   n7, n9
+        MUL   n8, n9              ; the velocity it wants: (0, n7, n8)
+        IN    n9:11, VEL
+        LDI   n6, #0
+        SUB   n6, n9
+        SUB   n7, n10
+        SUB   n8, n11             ; what it lacks
+        MOV   n9, n6
+        ABS   n9
+        MOV   n10, n7
+        ABS   n10
+        ADD   n9, n10
+        MOV   n10, n8
+        ABS   n10
+        ADD   n9, n10
+        CMP   n9, #0.01
+        JLT   .done               ; near enough: think no more
+        KICK  n6:8
+.done:  RET
+
+; feel: holds a weave together knowing only what its particle feels, not where the weave's centre is. Where the mana
+; around it is thinner than w3 (M/m³), it's at the edge. If it's drifting away from its neighbours there, it kicks
+; itself back toward the thicker mana, harder the steeper it thins: the kick is ∇ρ/ρ, scaled, with no square root.
+feel:   DENS  n5
+        GETW  n9, #3
+        CMP   n5, n9
+        JGE   .done               ; thick enough: it's inside
+        GRAD  n6:8                ; toward thicker mana
+        IN    n11:13, VEL
+        NVEL  n0:2
+        SUB   n11, n0
+        SUB   n12, n1
+        SUB   n13, n2             ; its speed against its neighbours'
+        MUL   n11, n6
+        MUL   n12, n7
+        MUL   n13, n8
+        ADD   n11, n12
+        ADD   n11, n13
+        CMP   n11, #0
+        JGT   .done               ; already coming back in
+        LDI   n12, #0.01
+        DIV   n12, n5
+        MUL   n6, n12
+        MUL   n7, n12
+        MUL   n8, n12
+        KICK  n6:8
+.done:  RET
+
+; feelBurst: burst (Transformations) for an order that only feels: each particle flies 0.2 m/tick out toward where the
+; mana thins, for 3 ticks from w4, then the weave lets go.
+feelBurst: GETW n5, #4
+        MOV   n6, n4
+        SUB   n6, n5
+        CMP   n6, #3
+        JGE   .gone
+        GRAD  n6:8
+        MOV   n9, n6
+        MUL   n9, n6
+        MOV   n10, n7
+        MUL   n10, n7
+        ADD   n9, n10
+        MOV   n10, n8
+        MUL   n10, n8
+        ADD   n9, n10
+        CMP   n9, #0
+        JEQ   .done               ; in the very middle: nowhere is out
+        SQRT  n9
+        LDI   n10, #-0.2
+        DIV   n10, n9
+        MUL   n6, n10
+        MUL   n7, n10
+        MUL   n8, n10
+        KICK  n6:8
+.done:  RET
+.gone:  DISS
+        RET
