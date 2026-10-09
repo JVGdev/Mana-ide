@@ -1,9 +1,10 @@
 ; Bench: what the bench's spells share (npm run bench, SPEC §11 The bench). A ball of fire poured into the hand, then held
 ; or thrown, by hand or by its own order, to see what each way costs and how well it does.
-        .use  Elements, Basics, Holding
+        .use  Elements, Basics, Holding, Orders
 
 ; pour: gathers AMOUNT, pours its fire into one point at the hand, and keeps the rest in m0 to push with. It's turned to
-; face the aim: in its frame +z is forward and y is up. Its order (if it gets one) holds it to w2 = 0.5 m.
+; face the aim: in its frame +z is forward and y is up. Its order (if it gets one) holds it to a ball of 0.5 m: by hand,
+; w2 is how far out that is; by feel (Orders: cling, cohere), w3 is how thin the mana is there.
 ;   out: n16 the weave, still in hand; n7 the mana poured
 pour:   IN    n17, AMOUNT
         GATH  m0, n17
@@ -23,20 +24,9 @@ pour:   IN    n17, AMOUNT
         EMIT  m1, n7, n16, n4:6
         HOLD  n16, #1.5
         WSET  n16, #2, #0.5
-        RET
-
-; edge: how thin the mana is at the ball's edge, for an order that only feels (Orders.feel): 3/4 of its mana spread
-; evenly through a ball of 0.5 m (in 2D, a disc one cell deep), into w3.   in: n7 its mana, n16
-edge:   IN    n8, DEPTH
-        CMP   n8, #1
-        JNE   .ball
-        IN    n9, CELL
-        MUL   n9, #0.785398       ; π·0.5²
-        JMP   .div
-.ball:  LDI   n9, #0.523599       ; 4/3·π·0.5³
-.div:   MUL   n7, #0.75
-        DIV   n7, n9
-        WSET  n16, #3, n7
+        MOV   n4, n16
+        LDI   n0, #0.5
+        CALL  edge
         RET
 
 ; release: its order into every particle, then let go.   in: n16

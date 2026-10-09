@@ -1,5 +1,5 @@
 ; Shapes: geometry. Each lays the mana in m1 out in a weave, around its origin. Once laid out, a shape is held by
-; pushing: by its caster, or by an order in its particles (cohere).
+; pushing: by its caster, or by an order in its particles (Orders: cling, cohere).
 
 ; ball: the mana in m1, spread through a ball around the weave's origin. A ball is shells, from the centre out to the
 ; radius. Each shell is rings around the up axis, from its top to its bottom, and each ring is points along its
@@ -150,23 +150,25 @@ wall:   IN    n5, CELL
         DIV   n7, n6              ; mana per cell
         MOV   n10, n1
         SUB   n10, #1
-        DIV   n10, #2             ; (L − 1) / 2, to centre the length
+        DIV   n10, #2
+        FLOOR n10                 ; ⌊(L − 1) / 2⌋, to centre the length on whole cells
         MOV   n11, n2
         SUB   n11, #1
-        DIV   n11, #2             ; (T − 1) / 2, to centre the thickness
+        DIV   n11, #2
+        FLOOR n11                 ; ⌊(T − 1) / 2⌋, to centre the thickness
         LDI   n9, #0              ; d: 0 … H−1, down into the ground
 .d:     CIRC  m1                  ; keep holding it, layer by layer
         LDI   n8, #0              ; t: across
 .t:     LDI   n3, #0              ; a: along
 .a:     MOV   n13, n3
         SUB   n13, n10
-        MUL   n13, n5             ; x = (a − (L−1)/2) · cell
+        MUL   n13, n5             ; x = (a − ⌊(L−1)/2⌋) · cell
         MOV   n14, n9
         NEG   n14
         MUL   n14, n5             ; y = −d · cell
         MOV   n15, n8
         SUB   n15, n11
-        MUL   n15, n5             ; z = (t − (T−1)/2) · cell
+        MUL   n15, n5             ; z = (t − ⌊(T−1)/2⌋) · cell
         EMIT  m1, n7, n4, n13:15
         ADD   n3, #1
         CMP   n3, n1
@@ -178,110 +180,60 @@ wall:   IN    n5, CELL
         CMP   n9, n0
         JLT   .d
         MUL   n0, n5              ; H, back in metres
-        WSET  n4, #0, n0          ; how far to rise, for the order
+        ADD   n0, #0.05           ; and a little more, to clear the ground
+        MOV   n3, n0
+        DIV   n3, #0.1
+        ADD   n3, #0.499
+        ROUND n3                  ; ticks to climb, at no more than 0.1 m a tick
+        WSET  n4, #0, n3
+        DIV   n0, n3
+        WSET  n4, #1, n0          ; how fast: it climbs exactly H + 0.05 m
+        MUL   n2, n5              ; how far to step back: its thickness, onto the ground in front of its trench
+        MOV   n6, n2
+        DIV   n6, #0.05
+        ADD   n6, #0.499
+        ROUND n6                  ; ticks to step, at no more than 0.05 m a tick
+        DIV   n2, n6
+        WSET  n4, #4, n2          ; how fast
+        ADD   n6, n3
+        WSET  n4, #3, n6          ; when it's there
         ORDR  n4, rise
         RET
 
-; rise (an order): the weave climbs until its centre has risen w0 metres, then stops. Each particle pushes itself toward
-; the speed that gets it there (at most 0.1 m a tick, slowing as it nears), paying with itself: climbing slowly costs
-; less. The first tick, it notes where the centre began, in w1. Once it's there (w2 = 1), each particle only stops
-; itself if it drifts, which costs little.
-rise:   CMP   n4, #0
-        JNE   .go
-        IN    n5:7, ORIGIN
-        PUTW  #1, n6              ; where it began
-        RET
-.go:    IN    n8:10, VEL
-        GETW  n5, #2
-        CMP   n5, #0
-        JNE   .stand
-        IN    n5:7, ORIGIN
-        GETW  n7, #1
-        SUB   n6, n7              ; risen so far
-        GETW  n7, #0
-        SUB   n7, n6              ; still to go
-        MUL   n7, #0.3
-        MIN   n7, #0.1
-        MAX   n7, #0              ; the speed it wants: up
-        CMP   n7, #0.005
-        JGT   .push
-        PUTW  #2, #1              ; there: from now on, it stands
-.push:  LDI   n11, #0
-        SUB   n11, n8
-        MOV   n12, n7
-        SUB   n12, n9
+; rise (an order): the wall climbs out of the ground, steps back toward its maker, and comes down on solid ground in
+; front of the trench it came from, where it stands on its own. It can't see where it is: it goes by the clock its caster
+; worked out (wall), and by feeling its own speed. Phases, in w2, for whoever watches: 0 climbing, 1 stepping, 2 standing.
+;   Climbing, its first w0 ticks: up at w1 m a tick.
+;   Stepping, until tick w3: back at w4 m a tick.
+;   Each tick it kicks itself to the speed it wants, and a little faster than that, by half of what it falls in a tick
+;   (9.8 m/s² is 0.011 m/tick²), so that it holds itself up as it goes.
+;   Standing: it stops dead, lets go of itself and drops the last few centimetres onto the ground, which holds it up from
+;   then on. Its rock holds its shape. Its order thinks three beats a tick, which is all it costs to keep.
+rise:   GETW  n5, #2
+        CMP   n5, #2
+        JEQ   .done               ; standing: nothing to do
+        IN    n8:10, VEL
+        LDI   n11, #0
+        SUB   n11, n8             ; nothing sideways
+        LDI   n12, #0
         LDI   n13, #0
-        SUB   n13, n10
+        SUB   n13, n10            ; nor forward or back
+        GETW  n6, #0
+        CMP   n4, n6
+        JGE   .step
+        GETW  n12, #1             ; climbing: up
+        JMP   .kick
+.step:  GETW  n6, #3
+        CMP   n4, n6
+        JGE   .stand
+        PUTW  #2, #1
+        GETW  n7, #4
+        SUB   n13, n7             ; stepping: back, toward its maker
+.kick:  ADD   n12, #0.0055        ; and half of what it'll fall this tick
+        SUB   n12, n9
+        KICK  n11:13
+.done:  RET
+.stand: PUTW  #2, #2              ; there: stop, and let go
+        SUB   n12, n9
         KICK  n11:13
         RET
-.stand: MOV   n5, n9
-        ABS   n5
-        CMP   n5, #0.002
-        JLT   .done               ; still: nothing to do
-        LDI   n7, #0
-        JMP   .push
-.done:  RET
-
-; cohere (an order): a particle further from its weave's centre than w2 metres pushes itself back toward it, paying with
-; itself. Inside, it only checks how far out it is, without a square root: cheap, which is most particles, most ticks.
-; It measures its speed against its neighbours', so a thrown ball holds together however fast it flies.
-cohere: MOV   n5, n0
-        MUL   n5, n0
-        MOV   n6, n1
-        MUL   n6, n1
-        ADD   n5, n6
-        MOV   n6, n2
-        MUL   n6, n2
-        ADD   n5, n6              ; r²
-        GETW  n6, #2
-        MUL   n6, n6              ; R²
-        CMP   n5, n6
-        JLE   .done               ; inside: nothing to do
-        SQRT  n5                  ; r
-        LDI   n6, #1
-        DIV   n6, n5
-        MUL   n0, n6
-        MUL   n1, n6
-        MUL   n2, n6              ; n0:2: out, one metre long
-        IN    n7:9, VEL
-        NVEL  n10:12
-        SUB   n7, n10
-        SUB   n8, n11
-        SUB   n9, n12             ; its speed against its neighbours'
-        MUL   n7, n0
-        MUL   n8, n1
-        MUL   n9, n2
-        ADD   n7, n8
-        ADD   n7, n9              ; how fast it's moving out
-        GETW  n6, #2
-        SUB   n5, n6
-        MUL   n5, #-0.2           ; how fast it should move out: back in, faster the further it's strayed
-        SUB   n5, n7              ; the change
-        CMP   n5, #0
-        JGE   .done               ; already coming back fast enough
-        MUL   n0, n5
-        MUL   n1, n5
-        MUL   n2, n5
-        KICK  n0:2
-.done:  RET
-
-; pull (an order): past w2 metres from its weave's centre, a particle pushes itself a little back toward it, paying with
-; itself. No square root, and it doesn't feel its neighbours: short, so it's quick to ingrain, and rough: what it
-; pulls back, it doesn't slow, so the edge of the weave sways.
-pull:   MOV   n5, n0
-        MUL   n5, n0
-        MOV   n6, n1
-        MUL   n6, n1
-        ADD   n5, n6
-        MOV   n6, n2
-        MUL   n6, n2
-        ADD   n5, n6              ; r²
-        GETW  n6, #2
-        MUL   n6, n6              ; R²
-        CMP   n5, n6
-        JLE   .done
-        MUL   n0, #-0.1
-        MUL   n1, #-0.1
-        MUL   n2, #-0.1
-        KICK  n0:2                ; back in, harder the further out
-.done:  RET

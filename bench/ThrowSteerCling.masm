@@ -1,14 +1,14 @@
-; Thrown by its own order: steer, and pull back in when it strays from the centre: the longest order here. Working out
+; Thrown by its own order: steer, and cling to thicker mana when it strays past the edge: the longest order here. Working out
 ; its direction on its first tick as well would take it past 64 beats, and it would fray: so the caster works it out once
 ; (w5, w6) and the order is told it. The caster only pours it, ingrains it and lets go.
-        .use  Bench, Shapes, Reactions, Transformations, Orders
+        .use  Bench, Reactions, Transformations, Orders
 
-ThrowSteerPull:
+ThrowSteerCling:
         CALL  pour
         CALL  aim
         WSET  n16, #1, n3           ; the angle, up from forward
         IN    n6, FORCE
-        WSET  n16, #3, n6           ; the speed
+        WSET  n16, #7, n6           ; the speed
         DIV   n1, n6
         DIV   n2, n6
         WSET  n16, #5, n1           ; the direction: up
@@ -25,7 +25,7 @@ ThrowSteerPull:
         CALL  touch
         CMP   n5, #0
         JNE   .hit
-        CALL  pull
+        CALL  cling
         CALL  steer
         RET
 .hit:   PUTW  #0, n5              ; the whole weave bursts from the next tick

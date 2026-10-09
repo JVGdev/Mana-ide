@@ -3,7 +3,7 @@ import { spell } from '../src/load.ts'
 import { fireball, gust, onGround, stoneWall, waterShield, type Scene } from '../src/scenes.ts'
 import { PHYSICS } from '../src/vm/physics.ts'
 import { total } from '../src/vm/parts.ts'
-import { EARTH, WATER } from '../src/vm/world.ts'
+import { EARTH, WATER, massOf } from '../src/vm/world.ts'
 
 const burn = PHYSICS.orderBurn
 afterEach(() => {
@@ -34,23 +34,37 @@ const carried = (s: Scene, part: number) => {
 }
 
 describe('Stone Wall', () => {
-  it('lifts the ground into a wall 2 m high and leaves a trench (2D)', () => {
+  it('lifts the ground out of a trench and sets it down in front of it, where it stands on its own (2D)', () => {
     const s = stoneWall(2)
     const cast = s.sim.cast(s.caster, spell('StoneWall'))
-    run(s, 90)
+    const w = s.sim.world
+    let massAtRelease = 0
+    run(s, 170, () => {
+      const weave = s.sim.weaves.get(cast.result ?? 1)
+      if (weave && !weave.inHand && !massAtRelease) massAtRelease = weave.particles.reduce((m, p) => m + massOf(p), 0)
+    })
     expect(cast.state).toBe('halted')
     const weave = s.sim.weaves.get(cast.result!)!
     expect(weave.particles.every((p) => p.order)).toBe(true) // every particle was ingrained before it moved
-    const w = s.sim.world
-    // It stands on the ground now, where the trench was, holding most of its earth.
+    expect(weave.regs[2]).toBe(2) // standing
+    // It stands on the ground in front of the trench, 2 m high, its rock whole.
     const ys = weave.particles.map((p) => p.pos[1])
-    expect(Math.min(...ys)).toBeGreaterThan(s.ground * w.cell - 0.5) // its foot still in the top of the trench
-    expect(Math.max(...ys)).toBeLessThan(s.ground * w.cell + 2.25)
-    for (const p of weave.particles) expect([16, 17]).toContain(w.coords(w.cellOf(p.pos))[0])
-    expect(carried(s, EARTH)).toBeGreaterThan(800)
-    // Where it came from is a trench, open at the top: what earth it dropped on the way up has fallen to the bottom.
-    for (let y = s.ground - 3; y < s.ground; y++) expect(w.matter[w.index(16, y, 0)][EARTH]).toBeLessThan(PHYSICS.solid)
-    expect(w.matter[w.index(15, s.ground - 1, 0)][EARTH]).toBe(100)
+    expect(Math.min(...ys)).toBeGreaterThan(s.ground * w.cell - 0.05)
+    expect(Math.max(...ys)).toBeGreaterThan(s.ground * w.cell + 1.9)
+    for (const p of weave.particles) expect([13, 14, 15, 16]).toContain(w.coords(w.cellOf(p.pos))[0])
+    const foot = weave.particles.filter((p) => p.pos[1] < s.ground * w.cell + 0.25).map((p) => p.pos[0])
+    expect(Math.min(...foot)).toBeGreaterThan(3.45) // its foot on the ground in front of the trench
+    expect(Math.max(...foot)).toBeLessThan(4.05)
+    expect(w.bonds.length).toBeGreaterThan(4000)
+    expect(weave.particles.every((p) => Math.abs(p.vel[1]) < 1e-3)).toBe(true) // still: the ground holds it up
+    expect(carried(s, EARTH)).toBeGreaterThan(700)
+    // Lifting it cost what lifting costs: its weight times the height, at pushEnergy for each M.
+    const lift = (massAtRelease * PHYSICS.gravity * 2.05) / PHYSICS.pushEnergy
+    expect(s.sim.spent.kick).toBeGreaterThan(lift * 0.85)
+    expect(s.sim.spent.kick).toBeLessThan(lift * 1.25)
+    // Where it came from is a trench, and what it dropped on the way up lies at the bottom of it.
+    for (let y = s.ground - 4; y < s.ground; y++) expect(w.matter[w.index(16, y, 0)][EARTH]).toBeLessThan(PHYSICS.solid)
+    expect(w.matter[w.index(13, s.ground - 1, 0)][EARTH]).toBe(100)
   })
 
   it('is weaker for a caster with little earth in them', () => {
@@ -58,7 +72,7 @@ describe('Stone Wall', () => {
       const s = stoneWall(2)
       s.caster.stats.body.affinity[EARTH].genetics = affinity
       s.sim.cast(s.caster, spell('StoneWall'))
-      run(s, 90)
+      run(s, 170)
       return carried(s, EARTH)
     }
     expect(strength(0.15)).toBeLessThan(strength(0.6) * 0.5)
@@ -77,11 +91,13 @@ describe('Stone Wall', () => {
   it('crumbles as its order burns its mana away, holding up less and less', () => {
     const s = stoneWall(2)
     s.sim.cast(s.caster, spell('StoneWall'))
-    run(s, 90)
+    run(s, 170)
     const standing = carried(s, EARTH)
+    const bonds = s.sim.world.bonds.length
     PHYSICS.orderBurn = 0.002 // a costlier order: the same wall, standing for less long
     run(s, 120)
     expect(carried(s, EARTH)).toBeLessThan(standing * 0.3)
+    expect(s.sim.world.bonds.length).toBeLessThan(bonds * 0.3) // its rock comes apart as it lets go
     const w = s.sim.world
     let fallen = 0
     for (let i = 0; i < w.size; i++) fallen += w.matter[i][EARTH]
@@ -96,20 +112,22 @@ describe('Fireball', () => {
       const cast = s.sim.cast(s.caster, spell('Fireball'))
       let burstAt: number | undefined
       let reached = 0
-      let together = 0
+      let released = 0
+      let strayed = 0
       run(s, 70, (t) => {
-        const weave = s.sim.weaves.get(cast.result ?? -1)
+        const weave = s.sim.weaves.get(cast.result ?? -1) ?? [...s.sim.weaves.values()][0]
         if (!weave) return
+        if (!weave.inHand && !released) released = weave.mana()
         reached = Math.max(reached, weave.origin[0])
         if (burstAt === undefined && weave.regs[0] === 1) {
           burstAt = t
-          together = weave.particles.length
+          strayed = s.sim.strayed
         }
       })
       expect(cast.state).toBe('halted')
       expect(burstAt).toBeDefined()
       expect(reached).toBeGreaterThan(10) // the pillar's face is at 11 m
-      expect(together).toBeGreaterThan(60) // of its 72 particles, held by their own order all the way there
+      expect(strayed).toBeLessThan(released * 0.15) // held by its own order all the way there
       const gone = s.sim.events.find((e) => e.kind === 'dissolve')
       expect(gone?.detail).toBe('its order let it go')
       expect(s.sim.weaves.size).toBe(0)
@@ -141,10 +159,11 @@ describe('Fireball', () => {
     s.sim.step()
     const weave = s.sim.weaves.get(1)!
     const traces = s.sim.traces.get(weave.id)!
-    expect(traces.length).toBe(weave.particles.length)
+    expect(traces.length).toBeGreaterThan(10)
+    expect(new Set(traces.map((t) => t.id)).size).toBe(traces.length) // one for each particle that ran its order
     const t = traces[3]
     expect(t.steps[0].addr).toBe(cast.program.labels.get('Fireball.order'))
-    expect(Array.from(t.steps[0].n.slice(0, 3))).toEqual(t.off) // it starts knowing where it is from the centre
+    expect(Array.from(t.steps[0].n.slice(0, 3))).toEqual([0, 0, 0]) // it isn't told where it is: it only feels
     expect(t.outcome).toBe('done')
     expect(t.beats).toBeGreaterThan(5)
     expect(t.beats).toBeLessThanOrEqual(64)
@@ -184,16 +203,23 @@ describe('Gust', () => {
 })
 
 describe('Water Shield', () => {
-  it('makes water around the caster, and follows them', () => {
+  it('makes water around the caster, and follows them while they keep it up', () => {
     const s = waterShield(2)
+    s.caster.will.maintain = true
     const cast = s.sim.cast(s.caster, spell('WaterShield'))
-    finish(s, cast, 2)
-    const weave = s.sim.weaves.get(cast.result!)!
+    for (let t = 0; t < 200 && !s.sim.weaves.get(1)?.locks.input; t++) run(s, 1)
+    run(s, 2)
+    const weave = s.sim.weaves.get(1)!
     expect(weave.locks.input).toBe(true)
     expect(carried(s, WATER)).toBeGreaterThan(5)
+    const x = weave.origin[0]
     s.caster.body.pos[0] += 1
     run(s, 25)
-    expect(weave.origin[0]).toBeCloseTo(s.caster.body.pos[0], 1)
+    expect(weave.origin[0] - x).toBeCloseTo(1, 1) // its caster tells it how to move: its order can't see them
+    s.caster.will.maintain = false
+    run(s, 2)
+    expect(cast.state).toBe('halted')
+    expect(Array.from(weave.regs.slice(5, 8))).toEqual([0, 0, 0]) // let be, it holds still where it is
   })
 
   it('falls in a splash as its order burns its mana away', () => {

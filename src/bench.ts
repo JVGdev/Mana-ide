@@ -5,7 +5,6 @@ import { join } from 'node:path'
 import { assembleFile } from './load.ts'
 import { fireball, hold, type Scene } from './scenes.ts'
 import { adept, master, type CasterStats } from './vm/caster.ts'
-import { PHYSICS } from './vm/physics.ts'
 import { orderLength } from './vm/sim.ts'
 import type { Weave } from './vm/weave.ts'
 
@@ -18,8 +17,6 @@ export type Variant = {
   name: string
   /** Who holds it: the caster's hand, its own order, or nobody. */
   by: 'nobody' | 'hand' | 'order'
-  /** The order only feels: it isn't told where the centre is (PHYSICS.orderKnowsCentre off). */
-  feelOnly?: boolean
 }
 
 export const VARIANTS: Variant[] = [
@@ -27,17 +24,15 @@ export const VARIANTS: Variant[] = [
   { id: 'HoldEvery', kind: 'hold', name: 'Hand: every particle', by: 'hand' },
   { id: 'HoldOther', kind: 'hold', name: 'Hand: every other', by: 'hand' },
   { id: 'HoldSurface', kind: 'hold', name: 'Hand: the surface', by: 'hand' },
-  { id: 'HoldPull', kind: 'hold', name: 'Order: pull (knows the centre)', by: 'order' },
-  { id: 'HoldCohere', kind: 'hold', name: 'Order: cohere (centre and neighbours)', by: 'order' },
-  { id: 'HoldFeel', kind: 'hold', name: 'Order: feel (neighbours only)', by: 'order', feelOnly: true },
+  { id: 'HoldCling', kind: 'hold', name: 'Order: cling (feels the mana thin)', by: 'order' },
+  { id: 'HoldCohere', kind: 'hold', name: "Order: cohere (and its neighbours' speed)", by: 'order' },
   { id: 'ThrowHand', kind: 'throw', name: 'Hand, not held', by: 'hand' },
   { id: 'ThrowHandHeld', kind: 'throw', name: 'Hand, held while in reach', by: 'hand' },
-  { id: 'ThrowPull', kind: 'throw', name: 'Hand, held by pull (the Fireball)', by: 'order' },
+  { id: 'ThrowCling', kind: 'throw', name: 'Hand, held by cling (the Fireball)', by: 'order' },
   { id: 'ThrowCohere', kind: 'throw', name: 'Hand, held by cohere', by: 'order' },
-  { id: 'ThrowFeel', kind: 'throw', name: 'Hand, held by feel', by: 'order', feelOnly: true },
   { id: 'ThrowHeading', kind: 'throw', name: 'Order: heading (an angle)', by: 'order' },
   { id: 'ThrowSteer', kind: 'throw', name: 'Order: steer (an angle and a speed)', by: 'order' },
-  { id: 'ThrowSteerPull', kind: 'throw', name: 'Order: steer and pull', by: 'order' },
+  { id: 'ThrowSteerCling', kind: 'throw', name: 'Order: steer and cling', by: 'order' },
 ]
 
 export const CASTERS = { adept, master } as const
@@ -66,7 +61,10 @@ export type Result = {
   arrived: boolean
   /** Ticks from letting go to the end. */
   ticks: number
-  /** Share of its particles, and of its mana, still in the weave. */
+  /**
+   * Share of its mana that stayed with it, whether it's still in it or was spent by it (not strayed out of its field);
+   * and share still in it.
+   */
   together: number
   kept: number
   /** Root-mean-square distance of its particles from its centre, metres. */
@@ -91,87 +89,83 @@ function spread(w: Weave): number {
 /** Casts one variant in one layout, and measures it. `each` sees every tick, for tests. */
 export function runVariant(v: Variant, caster: CasterName, dims: 2 | 3, layout: number, each?: (s: Scene) => void): Result {
   const start = performance.now()
-  const knows = PHYSICS.orderKnowsCentre
-  PHYSICS.orderKnowsCentre = !v.feelOnly
-  try {
-    const s = v.kind === 'hold' ? hold(dims) : fireball(dims)
-    const stats: CasterStats = CASTERS[caster]()
-    s.caster.stats = stats
-    s.caster.will.amount = AMOUNTS[layout]
-    const cast = s.sim.cast(s.caster, assembleFile(join(BENCH_DIR, `${v.id}.masm`)))
-    const sim = s.sim
-    const r: Result = {
-      variant: v.id,
-      caster,
-      dims,
-      layout,
-      ingrain: 0,
-      particles: 0,
-      mana: 0,
-      arrived: false,
-      ticks: 0,
-      together: 0,
-      kept: 0,
-      spread: 0,
-      push: 0,
-      kick: 0,
-      burn: 0,
-      handBeats: 0,
-      ms: 0,
+  const s = v.kind === 'hold' ? hold(dims) : fireball(dims)
+  const stats: CasterStats = CASTERS[caster]()
+  s.caster.stats = stats
+  s.caster.will.amount = AMOUNTS[layout]
+  const cast = s.sim.cast(s.caster, assembleFile(join(BENCH_DIR, `${v.id}.masm`)))
+  const sim = s.sim
+  const r: Result = {
+    variant: v.id,
+    caster,
+    dims,
+    layout,
+    ingrain: 0,
+    particles: 0,
+    mana: 0,
+    arrived: false,
+    ticks: 0,
+    together: 0,
+    kept: 0,
+    spread: 0,
+    push: 0,
+    kick: 0,
+    burn: 0,
+    handBeats: 0,
+    ms: 0,
+  }
+  let weave: Weave | undefined
+  let letGo = -1
+  let beatsAtLetGo = 0
+  let strayedAtLetGo = 0
+  const spentAtLetGo = { push: 0, kick: 0, burn: 0 }
+  const measure = (w: Weave | undefined) => {
+    r.ticks = sim.tick - letGo
+    r.together = w ? 1 - (sim.strayed - strayedAtLetGo) / r.mana : 0
+    r.kept = w ? w.mana() / r.mana : 0
+    r.spread = w ? spread(w) : 0
+    r.push = sim.spent.push - spentAtLetGo.push
+    r.kick = sim.spent.kick - spentAtLetGo.kick
+    r.burn = sim.spent.burn - spentAtLetGo.burn
+    r.handBeats = (cast.beats - beatsAtLetGo) / Math.max(1, r.ticks)
+  }
+  for (let t = 0; t < 160; t++) {
+    sim.step()
+    each?.(s)
+    weave ??= [...sim.weaves.values()][0]
+    if (!weave) continue
+    const live = sim.weaves.get(weave.id)
+    if (letGo < 0) {
+      if (weave.inHand) continue
+      letGo = sim.tick - 1
+      r.ingrain = letGo - cast.startedAt
+      r.particles = weave.particles.length
+      r.mana = weave.mana()
+      beatsAtLetGo = cast.beats
+      strayedAtLetGo = sim.strayed
+      Object.assign(spentAtLetGo, sim.spent)
     }
-    let weave: Weave | undefined
-    let letGo = -1
-    let beatsAtLetGo = 0
-    const spentAtLetGo = { push: 0, kick: 0, burn: 0 }
-    const measure = (w: Weave | undefined) => {
-      r.ticks = sim.tick - letGo
-      r.together = w ? w.particles.length / r.particles : 0
-      r.kept = w ? w.mana() / r.mana : 0
-      r.spread = w ? spread(w) : 0
-      r.push = sim.spent.push - spentAtLetGo.push
-      r.kick = sim.spent.kick - spentAtLetGo.kick
-      r.burn = sim.spent.burn - spentAtLetGo.burn
-      r.handBeats = (cast.beats - beatsAtLetGo) / Math.max(1, r.ticks)
-    }
-    for (let t = 0; t < 160; t++) {
-      sim.step()
-      each?.(s)
-      weave ??= [...sim.weaves.values()][0]
-      if (!weave) continue
-      const live = sim.weaves.get(weave.id)
-      if (letGo < 0) {
-        if (weave.inHand) continue
-        letGo = sim.tick - 1
-        r.ingrain = letGo - cast.startedAt
-        r.particles = weave.particles.length
-        r.mana = weave.mana()
-        beatsAtLetGo = cast.beats
-        Object.assign(spentAtLetGo, sim.spent)
-      }
-      if (v.kind === 'hold') {
-        if (sim.tick - letGo >= HOLD_TICKS) {
-          s.caster.will.maintain = false
-          measure(live)
-          r.arrived = !!live
-          break
-        }
-        continue
-      }
-      // A throw has arrived when its front reaches the pillar.
-      const front = live ? Math.max(...live.particles.map((p) => p.pos[0])) : 0
-      if (front >= PILLAR - 0.05) {
+    if (v.kind === 'hold') {
+      if (sim.tick - letGo >= HOLD_TICKS) {
+        s.caster.will.maintain = false
         measure(live)
-        r.arrived = true
+        r.arrived = !!live
         break
       }
-      if (!live) break
+      continue
     }
-    if (letGo >= 0 && !r.arrived && v.kind === 'throw') measure(sim.weaves.get(weave!.id))
-    r.ms = performance.now() - start
-    return r
-  } finally {
-    PHYSICS.orderKnowsCentre = knows
+    // A throw has arrived when its front reaches the pillar.
+    const front = live ? Math.max(...live.particles.map((p) => p.pos[0])) : 0
+    if (front >= PILLAR - 0.05) {
+      measure(live)
+      r.arrived = true
+      break
+    }
+    if (!live) break
   }
+  if (letGo >= 0 && !r.arrived && v.kind === 'throw') measure(sim.weaves.get(weave!.id))
+  r.ms = performance.now() - start
+  return r
 }
 
 export type Summary = Omit<Result, 'layout' | 'arrived' | 'ms'> & { arrived: number; ms: number }

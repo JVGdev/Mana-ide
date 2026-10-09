@@ -14,6 +14,7 @@
     "tester": "vite --config tester/vite.config.ts",
     "build:tester": "vite build --config tester/vite.config.ts",
     "bench": "tsx src/cli/bench.ts",
+    "listings": "tsx scripts/listings.ts",
     "mas": "tsx src/cli/mas.ts",
     "mvm": "tsx src/cli/mvm.ts"
   },

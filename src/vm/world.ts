@@ -37,18 +37,38 @@ export type Particle = {
   dvLeft: number
   /** The tick it was last pushed, by its caster or its order. */
   pushedAt: number
-  /** How dense the mana around it is (M/m³), which way it thickens, and how its neighbours move: what it can feel. */
+  /** How dense the mana around it is (M/m³), as its pressure works it out (the spiky kernel). */
   rho: number
+  /** How dense it feels the mana around it is, which way it thickens, and how its neighbours move: what DENS, GRAD and NVEL read. */
+  felt: number
   grad: Vec
   nvel: Vec
+  /** How dense the matter held around it is: its mass per m³. */
+  rhoM: number
+  /** The force on it this step. */
   acc: Vec
+  /** Its mass, as of this step (massOf). */
+  mass: number
+}
+
+/** Two particles of rock held together (PHYSICS.bondRange): a spring `rest` metres long. */
+export type Bond = { a: Particle; b: Particle; rest: number }
+
+/**
+ * A particle's mass: its free mana, and the matter it holds (PHYSICS.matterMass). Pushing it, the air dragging it,
+ * and its weight all go by this.
+ */
+export function massOf(p: Particle): number {
+  const m = PHYSICS.matterMass
+  return p.free[0] + p.free[1] + p.free[2] + p.free[3] + p.carried[0] * m[0] + p.carried[1] * m[1] + p.carried[2] * m[2] + p.carried[3] * m[3]
 }
 
 /**
- * Momentum given to the world from outside it: pushes, orders' kicks, rising, the ground and walls, what gathering takes
- * out of the air, and what mana takes with it when it condenses (matter held by mana has no momentum of its own).
+ * Momentum given to the world from outside it: pushes, orders' kicks, weight, the ground and walls, what gathering takes
+ * out of the air, and matter changing its mass: condensing (1 M of matter weighs less than 1 M of free mana), and matter
+ * let go of, which stops dead in the ground.
  */
-export type Impulses = Record<'push' | 'kick' | 'rise' | 'walls' | 'gather' | 'matter', Vec>
+export type Impulses = Record<'push' | 'kick' | 'gravity' | 'walls' | 'gather' | 'matter', Vec>
 
 export const FIRE = 0
 export const WATER = 1
@@ -67,7 +87,19 @@ export class World {
   particles: Particle[] = []
   bodies: Body[] = []
   tick = 0
-  impulse: Impulses = { push: [0, 0, 0], kick: [0, 0, 0], rise: [0, 0, 0], walls: [0, 0, 0], gather: [0, 0, 0], matter: [0, 0, 0] }
+  impulse: Impulses = { push: [0, 0, 0], kick: [0, 0, 0], gravity: [0, 0, 0], walls: [0, 0, 0], gather: [0, 0, 0], matter: [0, 0, 0] }
+  /** Rock: pairs of particles bound together. */
+  bonds: Bond[] = []
+  /**
+   * Energy that motion has turned into heat, by how: kg·(m/tick)², the kilogram being 1 M of free mana (one is 900 J).
+   * Counted where it happens, exactly: two things that even out their speeds lose what the evening out takes (D29).
+   */
+  heat: Record<string, number> = {}
+
+  /** Motion turned into heat. */
+  warm(how: string, energy: number) {
+    if (energy) this.heat[how] = (this.heat[how] ?? 0) + energy
+  }
   private nextBody = 1
   private nextParticle = 1
 
@@ -197,15 +229,35 @@ export class World {
         dvLeft: PHYSICS.pushRate,
         pushedAt: -1,
         rho: 0,
+        felt: 0,
         grad: [0, 0, 0],
         nvel: [0, 0, 0],
+        rhoM: 0,
         acc: [0, 0, 0],
+        mass: 0,
       }
       this.particles.push(p)
       out.push(p)
     }
     parts.fill(0)
     return out
+  }
+
+  /** A new particle like `p`, with a new id and nothing in it yet. */
+  spawn(p: Particle): Particle {
+    const q: Particle = {
+      ...p,
+      id: this.nextParticle++,
+      pos: [...p.pos],
+      vel: [...p.vel],
+      free: zero(),
+      carried: zero(),
+      grad: [...p.grad],
+      nvel: [...p.nvel],
+      acc: [0, 0, 0],
+    }
+    this.particles.push(q)
+    return q
   }
 
   /** Mana let into the air of a cell, carrying momentum (px, py, pz) into it. */
@@ -226,41 +278,6 @@ export class World {
   }
 
   // Each tick
-
-  /** Air mana evens out between neighbouring cells, and what moves carries its momentum. */
-  diffuseAir() {
-    const rate = PHYSICS.airDiffusion / 2
-    const v = this.airVel
-    for (let i = 0; i < this.size; i++) {
-      const [x, y, z] = this.coords(i)
-      for (const j of [this.index(x + 1, y, z), this.index(x, y + 1, z), this.index(x, y, z + 1)]) {
-        if (j < 0) continue
-        const a = this.air[i]
-        const b = this.air[j]
-        const ta = total(a)
-        const tb = total(b)
-        let moved = 0
-        for (let k = 0; k < 4; k++) {
-          const f = (a[k] - b[k]) * rate
-          a[k] -= f
-          b[k] += f
-          moved += f
-        }
-        if (Math.abs(moved) < 1e-12) continue
-        // `moved` M went from i to j (or back, if negative), with the speed of where it came from.
-        const from = moved > 0 ? i : j
-        const na = ta - moved
-        const nb = tb + moved
-        for (let k = 0; k < 3; k++) {
-          const p = moved * v[from * 3 + k]
-          const pa = ta * v[i * 3 + k] - p
-          const pb = tb * v[j * 3 + k] + p
-          v[i * 3 + k] = na > 1e-12 ? pa / na : 0
-          v[j * 3 + k] = nb > 1e-12 ? pb / nb : 0
-        }
-      }
-    }
-  }
 
   /** Bodies pushed by mana slide along the ground until friction stops them. */
   moveBodies() {
@@ -354,7 +371,7 @@ export class World {
   momentumError(): number {
     const m: Vec = [0, 0, 0]
     for (const p of this.particles) {
-      const mass = total(p.free)
+      const mass = massOf(p)
       for (let k = 0; k < 3; k++) m[k] += mass * p.vel[k]
     }
     for (let i = 0; i < this.size; i++) {

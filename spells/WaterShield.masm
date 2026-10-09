@@ -17,9 +17,11 @@ WaterShield:
         CALL  ingrain             ; ORDER
         MANI  n17                 ; SEND
         LOCK  n17, INPUT          ; LOCK: nothing more goes into it
+        MOV   n4, n17
+        CALL  keep                ; MAINTAIN: it goes where its caster goes, for as long as they keep it up
         MOV   n0, n17
         HALT
 
 .order: CALL  condense            ; MAKE: half its mana becomes water, held by the other half
-        CALL  anchor              ; and it follows its maker, paying with itself
+        CALL  follow              ; and it moves as it's told, paying with itself
         RET
