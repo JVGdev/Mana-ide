@@ -8,7 +8,8 @@ import { add, take, total, zero, type Parts } from './parts.ts'
 import { Caster, type CasterStats, type ManaRegister } from './caster.ts'
 import { Weave } from './weave.ts'
 import { EARTH, World, massOf, type Particle, type Vec } from './world.ts'
-import { airFlow, mergeAndSplit, stepFluid, type Change, type FluidHooks } from './fluid.ts'
+import { mergeAndSplit, stepFluid, type Change, type FluidHooks } from './fluid.ts'
+import { stepAir } from './air.ts'
 
 export class Fault extends Error {
   constructor(
@@ -295,7 +296,7 @@ export class Sim {
       othersCarried: (p, cell) => this.carried[cell] - (this.carriedBy.get(p.weave)?.get(cell) ?? 0),
     }
     stepFluid(w, hooks)
-    airFlow(w)
+    stepAir(w)
     // Particles at rest together merge, and big ones spread thin split.
     this.regroup(mergeAndSplit(w, hooks))
     for (const weave of [...this.weaves.values()]) this.keep(weave)
@@ -304,7 +305,6 @@ export class Sim {
     w.moveBodies()
     this.measureCarried()
     w.settleMatter(this.carried)
-    w.diffuseAir()
     for (const p of w.particles) p.dvLeft = PHYSICS.pushRate
     w.tick++
   }

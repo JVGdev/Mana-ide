@@ -222,7 +222,7 @@ out of the machine without being written anywhere.
 6. **Orders run:** every ingrained particle of a weave set loose runs its order, and pays for it (§5).
 7. **The world moves:** the mana (weight, pressure, holding together, rock, the air, the ground, what it runs into),
    particles at rest together merging and thin ones splitting, particles that strayed past their weave's field, loose mana
-   settling, pushed bodies, falling and flowing matter, air mana evening out. A weave in hand stays still (D26).
+   settling, pushed bodies, falling and flowing matter, the air flowing. A weave in hand stays still (D26).
 
 Holding comes before the orders, so a Stone Wall has its earth in hand before its first rise.
 
@@ -1468,9 +1468,17 @@ Each particle has:
 Particles push on their neighbours with **pressure**: mana packed denser than it rests spreads out. Every push between two
 particles is equal and opposite, so momentum is conserved. Mana is conserved because particles are counted.
 
-**Air mana** at rest stays a grid, as it is now. A particle that slows down and belongs to no weave settles into the grid
-and loses its order; `GATH` draws from the grid. A particle moving through the air drags on the air mana around it and is
-dragged by it, both ways. That drag is wind.
+**Air mana** stays a grid. A particle that slows down and belongs to no weave settles into the grid and loses its order;
+`GATH` draws from the grid. A particle moving through the air drags on the air mana around it and is dragged by it, both
+ways. That drag is wind.
+
+The air is a gas (`src/vm/air.ts`). It presses from dense to thin, at its own speed of sound (`airSound`, 18 m/s: slower
+than real air's 340, to keep the steps few, and still fast beside its winds). It carries itself along, and its mana and its
+momentum with it, from cell to cell. Solid cells and the world's edge are closed: it flows around them, and what it pushes
+on them is momentum given to the world. Its thickness (`airViscosity`) evens out its speed between neighbours and holds it
+still against the ground. So a gust travels on as a jet once it's let go, a fireball leaves a wake and pushes air ahead of
+it, wind turns up and over a pillar, and the hole a caster gathers from fills back in from around it. Air that has all but
+stopped stops, and air at rest, as dense as the rest of it, costs nothing to run.
 
 When particles come to rest beside each other, they merge, to keep their number down: closer than `mergeRange`, moving
 within `mergeSpeed` of each other, and together no more than `maxMote`. The new particle sits at their centre of mass with

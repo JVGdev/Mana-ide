@@ -266,41 +266,6 @@ export class World {
 
   // Each tick
 
-  /** Air mana evens out between neighbouring cells, and what moves carries its momentum. */
-  diffuseAir() {
-    const rate = PHYSICS.airDiffusion / 2
-    const v = this.airVel
-    for (let i = 0; i < this.size; i++) {
-      const [x, y, z] = this.coords(i)
-      for (const j of [this.index(x + 1, y, z), this.index(x, y + 1, z), this.index(x, y, z + 1)]) {
-        if (j < 0) continue
-        const a = this.air[i]
-        const b = this.air[j]
-        const ta = total(a)
-        const tb = total(b)
-        let moved = 0
-        for (let k = 0; k < 4; k++) {
-          const f = (a[k] - b[k]) * rate
-          a[k] -= f
-          b[k] += f
-          moved += f
-        }
-        if (Math.abs(moved) < 1e-12) continue
-        // `moved` M went from i to j (or back, if negative), with the speed of where it came from.
-        const from = moved > 0 ? i : j
-        const na = ta - moved
-        const nb = tb + moved
-        for (let k = 0; k < 3; k++) {
-          const p = moved * v[from * 3 + k]
-          const pa = ta * v[i * 3 + k] - p
-          const pb = tb * v[j * 3 + k] + p
-          v[i * 3 + k] = na > 1e-12 ? pa / na : 0
-          v[j * 3 + k] = nb > 1e-12 ? pb / nb : 0
-        }
-      }
-    }
-  }
-
   /** Bodies pushed by mana slide along the ground until friction stops them. */
   moveBodies() {
     for (const b of this.bodies) {
