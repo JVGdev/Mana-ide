@@ -4,19 +4,20 @@
 last plan (now in git history) is built, and so is the audit's list (SPEC D32–D39). This plan is what that work turned up
 (SPEC §0, What's left), shaped by your answers of 9 October.*
 
-*Speed doesn't constrain any of it: realism comes first, and the engine is moving to a better language later. Each step is
-specified in SPEC as physics, so the new engine can build the same thing, and the tests go with it.*
+*Speed doesn't constrain any of it: realism comes first. The engine moves to Rust before step 2 (step R), so that steps 2–4
+are built once, in the engine that keeps them. Each step is still specified in SPEC as physics, and the tests go with it.*
 
 ```
 0 Land organic-physics
-1 Mass is mana ─────────► 2 One matter ─────────► 3 Real air ─────────► 4 Heat
-5 The mind's reach   (independent)
-6 Bodies pay for gathering   (small; after 1)
+1 Mass is mana ──► R The engine in Rust ──► 2 One matter ──► 3 Real air ──► 4 Heat
+5 The mind's reach   (independent; after R)
+6 Bodies pay for gathering   (small; after R)
                                                           all ─► 7 Spells, bench, SPEC
 ```
 
-1 comes first because every number after it depends on the weights. 2 is the biggest step, and 3 and 4 build on it: real
-air is a gas made of matter, and heat lives in matter, mana and air alike. 5 can be built any time.
+1 comes first because every number after it depends on the weights. R comes next because 2 replaces the whole matter
+engine, and building it in TypeScript first would mean building it twice. 2 is the biggest physics step, and 3 and 4 build
+on it: real air is a gas made of matter, and heat lives in matter, mana and air alike. 5 can be built any time after R.
 
 ## Decided (9 October)
 
@@ -27,6 +28,8 @@ air is a gas made of matter, and heat lives in matter, mana and air alike. 5 can
 | C | What makes a fire hot? | Fire mana is more easily turned into heat. Heat, like light, is Energy. | A mind can transform mana into heat as well as into motion (D32). How easily depends on the part: fire into heat most easily. Light is Energy too: hot things glow, and carry heat away as they do (step 4). |
 | D | How does influence reach past the aura? | The aura's touch is easy. Further, a mage has to work: unaided, he works out the space's geometry in his mind and pinpoints x, y, z. Probing the space with raw free mana, which sends knowledge back, is one way to do it better. | The aura is the body's outline. Past it, every act costs the mind the work of finding where it is, and sensing what's there needs something to carry the knowledge back (step 5). |
 | E | A pull request? | Commit, no PR; work on `main` from now on. | Done: `main` has the organic physics. |
+| F | Change the engine's language? | Yes: port it to Rust, before anything else. | Step R. The machine, the world, the assembler and the tools go to Rust: native for the tests, the bench and the CLI, and WebAssembly for the tester. The physics doesn't change on the way (SPEC D41). |
+| G | Soil or rock under a Stone Wall? | Both can be there. A mage grabs rock if there is some, and compresses soil first if there isn't; that's spell logic. | The physics lets earth's packing decide what it is (step 2). How a spell uses it is the author's. |
 
 **And the follow-ups:**
 
@@ -74,6 +77,75 @@ can't hold up rock. What it found, and hands on:*
   worth of earth now takes far more mana per M of earth, or a far stronger hold per M of mana: that's step 2's force.
 - **Tests:** condensing keeps momentum and mass exactly; a cell of earth weighs what earth does; both ledgers balance.
 
+## R. The engine in Rust *(large; before step 2)*
+
+*Your call of 9 October (F): port the engine first, so steps 2–4 are built once, in the engine that keeps them.*
+
+**What moves, and what stays.**
+
+- **To Rust**, a Cargo workspace in `engine/`: everything that isn't the tester's screen.
+  - The instruction set, the assembler, the disassembler and the docs of each instruction. One table, read by the
+    assembler and the machine alike, so the two can't drift apart.
+  - The machine and the world: all of `src/vm`.
+  - The scenes, the bench, the text render and the profile.
+  - `mas`, `mvm` and `bench`, as native programs.
+  - The tests.
+- **Stays TypeScript:** the tester (Svelte and CodeMirror) and `scripts/listings.ts`. The tester runs the engine compiled
+  to WebAssembly, so it stays a web page, and the engine can still run inside Quire later: that was why it was TypeScript
+  (SPEC §10).
+- **Doesn't change:** the `.masm` libraries, spells and bench.
+
+**The rule of the port: the same machine, not a better one.**
+
+- Same physics, same numbers, the same order of operations, the same events and faults.
+- No fixes to the physics, no tuning, no new features, no speed-ups that change a result. What's found wrong on the way is
+  written down here for later, not fixed during the port.
+- The TypeScript engine is the reference until the port is done, and neither engine changes physics meanwhile.
+
+**How we know it's the same.**
+
+- **Assembling:** every spell, library and bench file assembles to the same bytes, labels and source lines. Exactly.
+- **Traces:** the TypeScript engine writes down the whole world every tick, for each scene: particles, air, matter, bonds,
+  bodies, casters, casts, weaves, events, and both ledgers. The Rust engine has to match it.
+  - Adding and multiplying are the same IEEE arithmetic in both, so those match to the last bit.
+  - Sine, cosine, exp, log, hypot and powers can differ in their last bit between JavaScript and Rust, and a difference that
+    small grows over many ticks. So a trace has to match exactly for the first ticks, and closely while the two stay
+    together. Where they part, the tests decide.
+- **The tests:** all 101 are ported one by one, with the same names, the same checks and the same numbers, and the mana and
+  momentum ledgers are still checked every tick. A check that passes in one engine and not the other because a number sits
+  on an edge is looked into and brought to you, never quietly loosened.
+- **The bench** prints the same table, within what those last-bit differences explain.
+
+**How it's laid out in Rust.**
+
+- Particles live in one list and are named by their id, not by reference: weaves, bonds and the tester hold ids. The same
+  goes for bodies, casters, weaves and the program an order runs from.
+- Everything the TypeScript walks through in insertion order (its `Map` and `Set`) keeps that order in Rust. The order
+  changes how floating-point sums round, and so the results.
+- An immediate in the bytecode stays a 32-bit float, as `Math.fround` makes it now.
+- No `unsafe`, and no threads yet: the port is single-threaded, like the engine it copies.
+
+**The steps.** Each one is committed on `main` when its checks pass.
+
+1. **Toolchain and skeleton.** The `engine/` workspace: `mana` (the library), `mana-cli` (the programs) and `mana-wasm` (the
+   tester's binding). npm scripts that call cargo, and a WebAssembly build. It needs three packages you install:
+   `sudo pacman -S rust-wasm wasm-bindgen wasm-pack`.
+2. **The instruction set.** isa, the assembler, the disassembler, the docs. The assembler's tests pass, and every `.masm`
+   file assembles to the same bytes.
+3. **The world without minds.** parts, physics, world, the air, the fluid, the Energy ledger. The physics and Energy tests
+   that need no caster pass, and traces of falling, pouring, merging and the air match.
+4. **The machine.** The caster, the weave and the machine: minds, bodies, orders, both flaws, both ledgers. The machine's,
+   the spells' and the Energy tests pass, and traces of the four spells match.
+5. **The tools.** The scenes, the text render, the profile, `mas`, `mvm` and `bench`. The bench's tests pass, and its
+   table matches.
+6. **The tester on WebAssembly.** `session.svelte.ts` drives the machine through the binding. The world view reads the
+   world as arrays, and each panel reads what it shows from the machine. Everything works as it did: casting, playing,
+   stepping by instruction and by tick, breakpoints, each particle's order step by step, picking particles, the Energy
+   panel, 3D slices, saving files.
+7. **Retire the TypeScript engine.** It stays in git history. Then measure the speed: the tests, the four spells in 2D and
+   3D, and the bench, against what TypeScript took. Bring SPEC (§10, D41), README and CLAUDE.md up to date. What the
+   speed turns out to be decides how stiff step 2's matter can be: real, or a softer stand-in named in §0.
+
 ## 2. One matter *(large)*
 
 All matter obeys one mechanics, held by mana or not: the ground, loose earth, water, rock a wall is made of. The cell
@@ -91,7 +163,8 @@ rules (`settleMatter`, "earth holds together") and the rigid "carried" matter go
 - **Mana holds matter by force**, not rigidly (*influence*): free mana pulls the matter in its cell along with it, as hard
   as the mana there can. Matter pulled harder than that tears away and follows its own nature. Holding something heavy
   strains its mana; lifting it is pushing it.
-- **Rock is earth's own cohesion**, not bonds a weave makes. A wall raised by hand, positioned and molded holds because
+- **Rock is earth's own cohesion**, not bonds a weave makes. Earth packed denser holds harder: loose soil, packed soil
+  and rock are one material at different packings, and a world can hold any of them (G). A wall raised by hand, positioned and molded holds because
   earth holds (your answer 1). How to raise it stays spell logic.
 - **Matter blocks matter, held or not.** A fireball stops against a Stone Wall's rock. Free mana can't pass through solid
   matter, and in a cell with a little matter (a water film) the two push on each other: the film is pushed, the mana is
@@ -164,7 +237,7 @@ rules (`settleMatter`, "earth holds together") and the rigid "carried" matter go
   - a body beside a fire takes harm;
   - Energy balances every tick.
 
-## 5. The mind's reach *(medium)*
+## 5. The mind's reach *(medium; after R)*
 
 - **The aura is the body's outline.** What touches it, the caster senses and acts on at once, at no extra cost: a fireball
   poured into the hand is easy to hold and aim.
@@ -187,7 +260,7 @@ rules (`settleMatter`, "earth holds together") and the rigid "carried" matter go
   - a probe sent out and brought back tells its caster what it touched, and it can't before it's back;
   - the same cast, run twice, goes the same way.
 
-## 6. Bodies pay for gathering and pouring *(small; after 1)*
+## 6. Bodies pay for gathering and pouring *(small; after R)*
 
 - Drawing mana in thins the air, and pouring it into a point presses it together: the exact work of each strains the mind,
   as pushes do. It's small by nature, a few kJ a cast, because every race's body is made for it (your answer 3).
@@ -211,5 +284,11 @@ rules (`settleMatter`, "earth holds together") and the rigid "carried" matter go
   kept.
 - **Coupling** mana particles, matter points and the gas grid, equally and oppositely, is where momentum and Energy will
   leak first. The ledgers catch it the same day.
-- **Building it twice.** If the new engine comes soon, 2–4 could be specified here and built there. Otherwise, build here:
-  the tests and the SPEC go with it.
+- **Building it twice.** Settled by step R: the engine moves to Rust first, and 2–4 are built there.
+- **The port parts from its reference.** Bit-for-bit agreement can't last past the first ticks where sine, cosine, exp or
+  log round differently. From there the tests carry the weight, and a test that sits on an edge has to be looked into, not
+  loosened.
+- **The tester reads a lot of the machine.** Its panels look at casts, weaves, particles, traces and ledgers directly.
+  Giving them all that through WebAssembly is the largest piece of step R that has no reference to match.
+- **WebAssembly runs on one thread in the browser.** Native runs (tests, bench, `mvm`) can use every core later; the
+  tester gets that only with more build work.

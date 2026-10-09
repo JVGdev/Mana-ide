@@ -167,6 +167,7 @@ what's left.
 | D38 | **Free mana is a gas, and the air holds it up.** Each part of free mana has its own mass (`manaMass`, D40), and everything weighs its mass times g. The air weighs too, and at rest it's thicker low down. A parcel of mana pushes aside its own M's worth of air, and the air holds it up by what that weighs (Archimedes): fire, the lightest, rises; earth mana sinks a little; matter is what's heavy. Where there's no air, everything falls alike. |
 | D39 | **Friction and flame.** A pushed body slides until the ground's friction stops it (μg, its weight pressing on the ground). Flame spreads as a gas does, from more to less, evening out with its neighbours. |
 | D40 | **Mass is mana, by part.** Each part of mana weighs its own amount a M, free or condensed: fire 0.3 g, air 0.45 g, water 0.55 g, earth 0.7 g (the order is the author's; the numbers are tuning). Raw mana weighs half a gram a M, so a cell of air at 40 M is as heavy as real air. Matter is heavy because it's packed: a full cell of earth holds 35,700 M (25 kg, as dense as packed soil), and of water 28,400 M. Condensing and unmaking keep mass and momentum exactly. Matter takes room by its density, and a cell is full when its matter fills it. 1 M of free mana holds 5 kg of matter (`bind`). Gases press by the ideal gas law, by part. |
+| D41 | **The engine is Rust.** The machine, the world, the assembler and the tools are written in Rust: native for the tests, the bench and the CLI, and compiled to WebAssembly for the tester (and for Quire, later). The move changes nothing in the world: the same physics, numbers and order of operations, matched against the TypeScript engine tick by tick until the port is done (PLAN step R). |
 | D27 | **Knowing costs.** An order is ingrained one particle at a time, at a beat for every instruction it could run, and every beat it thinks burns its particle's mana. A short order is cheap to ingrain and cheap to keep; an order that senses more costs more. |
 
 ---
@@ -1758,7 +1759,8 @@ the `.masm` files in `spells/` and `lib/` directly.
 
 ## 10. How it's built
 
-TypeScript throughout, like Quire, so it can run inside Quire later.
+TypeScript throughout, like Quire, so it can run inside Quire later. *Moving to Rust, compiled to WebAssembly where it runs
+in a browser or in Quire (D41, PLAN step R). This section is rewritten when the port is done.*
 
 ```
 src/
