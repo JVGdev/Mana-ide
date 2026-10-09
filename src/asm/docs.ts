@@ -98,8 +98,6 @@ export const PORT_DOCS: Record<string, string> = {
   DEPTH: "The world's depth in cells: 1 in 2D.",
   LOAD: "The body's load now.",
   CAPACITY: "The body's capacity.",
-  ORIGIN: "In an order: where the weave's centre is now (3).",
-  MAKER: "In an order: where the weave's caster is now (3).",
   REACH: 'How far from the body the caster can push mana, in metres.',
   VEL: 'In an order: how this particle moves, in the weave\'s frame (3).',
 }

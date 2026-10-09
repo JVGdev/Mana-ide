@@ -54,6 +54,7 @@ export function stepAir(world: World) {
     const s2 = v[i * 3] ** 2 + v[i * 3 + 1] ** 2 + v[i * 3 + 2] ** 2
     if (s2 === 0 || s2 > STOP * STOP) continue
     const m = total(air[i])
+    world.warm('the air', 0.5 * m * s2)
     for (let k = 0; k < 3; k++) {
       walls[k] -= m * v[i * 3 + k]
       v[i * 3 + k] = 0
@@ -219,7 +220,11 @@ function viscosity(world: World, open: Uint8Array, next: Int32Array, prev: Int32
   const v = world.airVel
   const k = PHYSICS.airViscosity
   const walls = world.impulse.walls
+  let heat = 0
+  // A share k of a speed taken away takes 1 − (1 − k)² of the energy in it.
+  const lost = 1 - (1 - k) * (1 - k)
   const still = (a: number, M: number) => {
+    heat += 0.5 * M * (v[a * 3] ** 2 + v[a * 3 + 1] ** 2 + v[a * 3 + 2] ** 2) * lost
     for (let i = 0; i < 3; i++) {
       const j = k * M * v[a * 3 + i]
       v[a * 3 + i] -= j / M
@@ -246,11 +251,15 @@ function viscosity(world: World, open: Uint8Array, next: Int32Array, prev: Int32
         continue
       }
       const mu = (Ma * Mb) / (Ma + Mb)
+      let rel2 = 0
       for (let c = 0; c < 3; c++) {
-        const j = k * mu * (v[a * 3 + c] - v[b * 3 + c])
+        const rel = v[a * 3 + c] - v[b * 3 + c]
+        rel2 += rel * rel
+        const j = k * mu * rel
         v[a * 3 + c] -= j / Ma
         v[b * 3 + c] += j / Mb
       }
+      heat += 0.5 * mu * rel2 * lost
     }
     // The faces below, behind and to the side, which the loop above doesn't reach from this cell.
     for (let ax = 0; ax < axes; ax++) {
@@ -258,4 +267,5 @@ function viscosity(world: World, open: Uint8Array, next: Int32Array, prev: Int32
       if (b < 0 || total(world.air[b]) <= 0) still(a, Ma)
     }
   }
+  world.warm('the air', heat)
 }

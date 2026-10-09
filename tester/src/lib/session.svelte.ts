@@ -17,7 +17,7 @@ export function parseProblem(p: string): Problem {
 export const SCENE_NAMES = ['Field', ...Object.keys(SCENES)] as const
 export type SceneName = (typeof SCENE_NAMES)[number]
 export const PRESETS = { child, adept, master } as const
-export const PANELS = ['mind', 'body', 'weaves', 'order', 'profile', 'events', 'caster', 'bytes', 'reference'] as const
+export const PANELS = ['mind', 'body', 'weaves', 'order', 'energy', 'profile', 'events', 'caster', 'bytes', 'reference'] as const
 export type Panel = (typeof PANELS)[number]
 export type Preset = keyof typeof PRESETS | 'custom'
 
@@ -50,6 +50,8 @@ class Session {
   tps = $state(8)
   /** Open the file of the line the mind is on whenever it stops. */
   follow = $state(true)
+  /** Keep the Energy ledger (it costs time, most in 3D). */
+  keepEnergy = $state(true)
   /** The slice of a 3D world on screen. */
   sliceZ = $state(0)
   /** Bumped whenever the machine moves: everything that shows it reads this. */
@@ -79,6 +81,7 @@ class Session {
     s.caster.stats = clone($state.snapshot(this.stats)) as CasterStats
     s.caster.condition = { ...this.condition }
     s.sim.traceOrders = true
+    if (this.keepEnergy) s.sim.keepEnergy()
     this.sim = s.sim
     this.caster = s.caster
     this.orderSel = { weave: 0, particle: 0, step: 0 }
@@ -103,6 +106,13 @@ class Session {
     this.preset = same(adept) ? 'adept' : same(master) ? 'master' : same(child) ? 'child' : 'custom'
     this.stats = stats
     this.reset()
+  }
+
+  setKeepEnergy(on: boolean) {
+    this.keepEnergy = on
+    if (on && this.sim && !this.sim.trackEnergy) this.sim.keepEnergy()
+    if (!on && this.sim) this.sim.trackEnergy = false
+    this.version++
   }
 
   setPreset(p: Exclude<Preset, 'custom'>) {

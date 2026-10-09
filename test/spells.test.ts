@@ -163,7 +163,7 @@ describe('Fireball', () => {
     expect(new Set(traces.map((t) => t.id)).size).toBe(traces.length) // one for each particle that ran its order
     const t = traces[3]
     expect(t.steps[0].addr).toBe(cast.program.labels.get('Fireball.order'))
-    expect(Array.from(t.steps[0].n.slice(0, 3))).toEqual(t.off) // it starts knowing where it is from the centre
+    expect(Array.from(t.steps[0].n.slice(0, 3))).toEqual([0, 0, 0]) // it isn't told where it is: it only feels
     expect(t.outcome).toBe('done')
     expect(t.beats).toBeGreaterThan(5)
     expect(t.beats).toBeLessThanOrEqual(64)
@@ -203,16 +203,23 @@ describe('Gust', () => {
 })
 
 describe('Water Shield', () => {
-  it('makes water around the caster, and follows them', () => {
+  it('makes water around the caster, and follows them while they keep it up', () => {
     const s = waterShield(2)
+    s.caster.will.maintain = true
     const cast = s.sim.cast(s.caster, spell('WaterShield'))
-    finish(s, cast, 2)
-    const weave = s.sim.weaves.get(cast.result!)!
+    for (let t = 0; t < 200 && !s.sim.weaves.get(1)?.locks.input; t++) run(s, 1)
+    run(s, 2)
+    const weave = s.sim.weaves.get(1)!
     expect(weave.locks.input).toBe(true)
     expect(carried(s, WATER)).toBeGreaterThan(5)
+    const x = weave.origin[0]
     s.caster.body.pos[0] += 1
     run(s, 25)
-    expect(weave.origin[0]).toBeCloseTo(s.caster.body.pos[0], 1)
+    expect(weave.origin[0] - x).toBeCloseTo(1, 1) // its caster tells it how to move: its order can't see them
+    s.caster.will.maintain = false
+    run(s, 2)
+    expect(cast.state).toBe('halted')
+    expect(Array.from(weave.regs.slice(5, 8))).toEqual([0, 0, 0]) // let be, it holds still where it is
   })
 
   it('falls in a splash as its order burns its mana away', () => {
