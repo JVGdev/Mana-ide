@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { assemble } from '../src/asm/assembler.ts'
 import { resolver } from '../src/load.ts'
 import { adept, type CasterStats } from '../src/vm/caster.ts'
@@ -370,6 +370,11 @@ const pour = (rest: string, gather = 120) => `
 ${rest}`
 
 describe('mana as a fluid', () => {
+  // These look at single particles: none of them merge here (test/physics.test.ts has merging).
+  const range = PHYSICS.mergeRange
+  beforeEach(() => (PHYSICS.mergeRange = 0))
+  afterEach(() => (PHYSICS.mergeRange = range))
+
   it('pours into particles, held still in the hand, and spreads by its own pressure once let go', () => {
     const { sim } = setup(pour('        TICK\n        TICK\n        TICK\n        TICK\n        MANI  n3\n        HALT'))
     sim.step()

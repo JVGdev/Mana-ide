@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest'
 import { assemble } from '../src/asm/assembler.ts'
 import { resolver } from '../src/load.ts'
-import { stepFluid } from '../src/vm/fluid.ts'
+import { mergeAndSplit, stepFluid } from '../src/vm/fluid.ts'
 import { PHYSICS } from '../src/vm/physics.ts'
 import { Sim } from '../src/vm/sim.ts'
 import { EARTH, WATER, World, massOf, type Particle, type Vec } from '../src/vm/world.ts'
@@ -228,5 +228,127 @@ kick:   ${src}`,
     const moving = cost(0.3)
     expect(still).toBeGreaterThan(0)
     expect(moving).toBeGreaterThan(still * 5)
+  })
+})
+
+describe('merging and splitting', () => {
+  it('merges particles at rest beside each other, keeping their mana, matter and momentum', () => {
+    const w = ground()
+    const [a] = drop(w, [2, 3, 0.125], WATER, 1, 2)
+    const [b] = drop(w, [2.05, 3, 0.125], WATER, 1, 1)
+    a.pos = [2, 3, 0.125]
+    b.pos = [2.05, 3, 0.125]
+    a.vel = [0.001, 0, 0]
+    b.vel = [0.003, 0, 0]
+    w.impulse.push[0] += massOf(a) * 0.001 + massOf(b) * 0.003
+    const changes = mergeAndSplit(w)
+    expect(changes).toEqual([{ kind: 'merge', into: a, from: b, weave: 1 }])
+    expect(w.particles).toEqual([a])
+    expect(a.free[WATER]).toBeCloseTo(2 * PHYSICS.mote, 12)
+    expect(a.carried[WATER]).toBe(3)
+    expect(w.momentumError()).toBeLessThan(1e-12)
+    expect(a.pos[0]).toBeGreaterThan(2)
+    expect(a.pos[0]).toBeLessThan(2.05)
+  })
+
+  it("doesn't merge particles moving apart, or ones that would be too big", () => {
+    const w = ground()
+    const [a] = drop(w, [2, 3, 0.125], WATER)
+    const [b] = drop(w, [2.05, 3, 0.125], WATER)
+    a.pos = [2, 3, 0.125]
+    b.pos = [2.05, 3, 0.125]
+    b.vel = [0.02, 0, 0]
+    expect(mergeAndSplit(w).filter((c) => c.kind === 'merge')).toEqual([])
+    b.vel = [0, 0, 0]
+    a.free[WATER] = PHYSICS.maxMote
+    expect(mergeAndSplit(w).filter((c) => c.kind === 'merge')).toEqual([])
+  })
+
+  it('splits a big particle that has spread thin, and both halves keep its weave and order', () => {
+    const w = ground()
+    const [p] = drop(w, [2, 4, 0.125], WATER, 1)
+    p.free[WATER] = 1
+    p.order = { program: { bytes: new Uint8Array(), labels: new Map(), lines: new Map() } as never, addr: 7 }
+    const changes = mergeAndSplit(w)
+    expect(changes.map((c) => c.kind)).toEqual(['split'])
+    expect(w.particles.length).toBe(2)
+    for (const q of w.particles) {
+      expect(q.free[WATER]).toBeCloseTo(0.5, 12)
+      expect(q.weave).toBe(1)
+      expect(q.order).toBe(p.order)
+    }
+    mergeAndSplit(w)
+    expect(w.particles.length).toBe(4) // alone, they split again, down to motes
+  })
+
+  it('leaves rock and what is in a hand whole', () => {
+    const w = ground()
+    const [a] = drop(w, [2, 3, 0.125], EARTH, 1, 2)
+    const [b] = drop(w, [2.05, 3, 0.125], EARTH, 1, 2)
+    a.pos = [2, 3, 0.125]
+    b.pos = [2.05, 3, 0.125]
+    w.bonds.push({ a, b, rest: 0.05 })
+    expect(mergeAndSplit(w)).toEqual([])
+    w.bonds = []
+    expect(mergeAndSplit(w, { still: () => true })).toEqual([])
+  })
+})
+
+describe('the second flaw', () => {
+  it("lets a big ordered particle take over someone else's mana that comes to rest against it", () => {
+    const w = ground()
+    const [a] = drop(w, [2, 3, 0.125], EARTH)
+    const [b] = drop(w, [2.05, 3, 0.125], EARTH)
+    a.pos = [2, 3, 0.125]
+    b.pos = [2.05, 3, 0.125]
+    a.free[EARTH] = 0.5
+    b.weave = 2
+    a.order = { program: { bytes: new Uint8Array(), labels: new Map(), lines: new Map() } as never, addr: 3 }
+    const [c] = mergeAndSplit(w)
+    expect(c).toMatchObject({ kind: 'merge', into: a, from: b, weave: 2 })
+    expect(a.weave).toBe(1)
+    expect(a.free[EARTH]).toBeCloseTo(0.75, 12) // weave 2's mana is weave 1's now, and runs its order
+  })
+
+  it("spreads an order through another caster's resting mana, and says so", () => {
+    const world = World.withGround(32, 24, 1, 8)
+    const sim = new Sim(world)
+    const lay = (name: string, order: boolean) => {
+      const caster = sim.addCaster(name, [name === 'A' ? 1 : 1.5, 2.9, 0.125])
+      caster.will = { aim: [3, 2.9, 0.125], amount: 100, force: 0, maintain: false }
+      const program = assemble(
+        `       .use  Elements
+        GATH  m0, #100
+        FILT  m1, m0, #EARTH
+        LDI   n0, #3
+        LDI   n1, #2.1
+        LDI   n2, #0.125
+        WEAV  n3, n0:2
+        LDI   n4, #0
+        LDI   n5, #0
+        LDI   n6, #0
+        LDI   n7, #${order ? 0.75 : 0.25}
+        EMIT  m1, n7, n3, n4:6
+        HOLD  n3, #2
+${order ? '        ORDR  n3, still\n        INGR  n3, #0\n        INGR  n3, #1\n        INGR  n3, #2\n' : ''}        MANI  n3
+        HALT
+still:  RET`,
+        `${name}.masm`,
+        resolver(),
+      )
+      sim.cast(caster, program)
+      sim.step()
+    }
+    // A's three motes settle on the ground and merge into one particle of 0.75 M, ordered. Then B's one mote lands beside it.
+    lay('A', true)
+    sim.run(30)
+    lay('B', false)
+    const b = [...sim.weaves.values()].find((wv) => wv.maker.name === 'B')!
+    const before = b.mana()
+    sim.run(60)
+    const taken = sim.events.filter((e) => e.kind === 'taken')
+    expect(taken.length).toBeGreaterThan(0)
+    expect(taken[0].detail).toMatch(/weave \d+'s mana, and gave it its order/)
+    expect(b.mana()).toBeLessThan(before)
   })
 })

@@ -230,6 +230,23 @@ export class World {
     return out
   }
 
+  /** A new particle like `p`, with a new id and nothing in it yet. */
+  spawn(p: Particle): Particle {
+    const q: Particle = {
+      ...p,
+      id: this.nextParticle++,
+      pos: [...p.pos],
+      vel: [...p.vel],
+      free: zero(),
+      carried: zero(),
+      grad: [...p.grad],
+      nvel: [...p.nvel],
+      acc: [0, 0, 0],
+    }
+    this.particles.push(q)
+    return q
+  }
+
   /** Mana let into the air of a cell, carrying momentum (px, py, pz) into it. */
   addAir(i: number, parts: Parts, momentum: Vec = [0, 0, 0]) {
     if (i < 0) return

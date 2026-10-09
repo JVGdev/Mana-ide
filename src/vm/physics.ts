@@ -81,6 +81,19 @@ export const PHYSICS = {
   bondIterations: 12,
   bondStrength: 2,
   bondBreak: 0.25,
+  /**
+   * Particles that have come to rest beside each other merge, to keep their number down: closer than `mergeRange`
+   * metres, moving within `mergeSpeed` m/tick of each other, and together no more than `maxMote` M. The new particle
+   * keeps the bigger one's weave and order (SPEC §11, The second flaw).
+   */
+  mergeRange: 0.075,
+  mergeSpeed: 0.005,
+  maxMote: 1,
+  /**
+   * A particle of at least two motes that has spread thin splits in two, side by side: thin, when more than `splitAlone`
+   * of the density it feels is its own. Both halves keep its weave and order.
+   */
+  splitAlone: 0.5,
   /** How much of what presses something onto the ground holds it from sliding (Coulomb friction): earth on earth. */
   friction: 0.6,
   /** Metres around a point that mana poured into it is spread over (within its cell), so that its pressure has somewhere to push. */

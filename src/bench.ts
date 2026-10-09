@@ -66,7 +66,10 @@ export type Result = {
   arrived: boolean
   /** Ticks from letting go to the end. */
   ticks: number
-  /** Share of its particles, and of its mana, still in the weave. */
+  /**
+   * Share of its mana that stayed with it, whether it's still in it or was spent by it (not strayed out of its field);
+   * and share still in it.
+   */
   together: number
   kept: number
   /** Root-mean-square distance of its particles from its centre, metres. */
@@ -122,10 +125,11 @@ export function runVariant(v: Variant, caster: CasterName, dims: 2 | 3, layout: 
     let weave: Weave | undefined
     let letGo = -1
     let beatsAtLetGo = 0
+    let strayedAtLetGo = 0
     const spentAtLetGo = { push: 0, kick: 0, burn: 0 }
     const measure = (w: Weave | undefined) => {
       r.ticks = sim.tick - letGo
-      r.together = w ? w.particles.length / r.particles : 0
+      r.together = w ? 1 - (sim.strayed - strayedAtLetGo) / r.mana : 0
       r.kept = w ? w.mana() / r.mana : 0
       r.spread = w ? spread(w) : 0
       r.push = sim.spent.push - spentAtLetGo.push
@@ -146,6 +150,7 @@ export function runVariant(v: Variant, caster: CasterName, dims: 2 | 3, layout: 
         r.particles = weave.particles.length
         r.mana = weave.mana()
         beatsAtLetGo = cast.beats
+        strayedAtLetGo = sim.strayed
         Object.assign(spentAtLetGo, sim.spent)
       }
       if (v.kind === 'hold') {

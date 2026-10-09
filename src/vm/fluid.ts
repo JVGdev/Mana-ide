@@ -321,6 +321,98 @@ function forces(world: World, ps: Particle[], pairs: Pairs, dt: number) {
   }
 }
 
+/** What merging and splitting did: which particle took in which, and which split off from which. */
+export type Change = { kind: 'merge'; into: Particle; from: Particle; weave: number } | { kind: 'split'; from: Particle; into: Particle }
+
+/**
+ * Particles at rest beside each other merge, and big ones that have spread thin split (SPEC §11). Nothing in a caster's
+ * hand, and no rock, does either. A merge keeps mana, matter and momentum: the new particle is at their centre of mass,
+ * moving at their shared momentum, and keeps the bigger one's weave and order, whoever the smaller belonged to. A split
+ * halves a particle into two, side by side across the way its mana thins, at the same speed.
+ */
+export function mergeAndSplit(world: World, hooks: FluidHooks = {}): Change[] {
+  const rock = new Set<Particle>()
+  for (const b of world.bonds) {
+    rock.add(b.a)
+    rock.add(b.b)
+  }
+  const ps = world.particles.filter((p) => !rock.has(p) && !hooks.still?.(p))
+  const changes: Change[] = []
+  if (!ps.length) return changes
+  const pairs = findPairs(world, ps)
+  const gone = new Set<Particle>()
+  const done = new Set<Particle>()
+  const near = PHYSICS.mergeRange
+  for (let e = 0; e < pairs.n; e++) {
+    if (pairs.r[e] > near) continue
+    let a = ps[pairs.a[e]]
+    let b = ps[pairs.b[e]]
+    if (done.has(a) || done.has(b)) continue
+    const fa = total(a.free)
+    const fb = total(b.free)
+    if (fa + fb > PHYSICS.maxMote + PHYSICS.epsilon) continue
+    if (Math.hypot(a.vel[0] - b.vel[0], a.vel[1] - b.vel[1], a.vel[2] - b.vel[2]) > PHYSICS.mergeSpeed) continue
+    // The bigger keeps its weave and order; the same size, the older.
+    if (fb > fa || (fb === fa && b.id < a.id)) [a, b] = [b, a]
+    const Ma = massOf(a)
+    const Mb = massOf(b)
+    const M = Ma + Mb
+    if (M <= 0) continue
+    const to: Vec = [0, 0, 0]
+    for (let k = 0; k < 3; k++) {
+      to[k] = (Ma * a.pos[k] + Mb * b.pos[k]) / M
+      a.vel[k] = (Ma * a.vel[k] + Mb * b.vel[k]) / M
+    }
+    if (world.cellOf(to) >= 0) a.pos = to
+    for (let k = 0; k < 4; k++) {
+      a.free[k] += b.free[k]
+      a.carried[k] += b.carried[k]
+      b.free[k] = 0
+      b.carried[k] = 0
+    }
+    a.dvLeft = Math.min(a.dvLeft, b.dvLeft)
+    a.pushedAt = Math.max(a.pushedAt, b.pushedAt)
+    changes.push({ kind: 'merge', into: a, from: b, weave: b.weave })
+    gone.add(b)
+    done.add(a)
+    done.add(b)
+  }
+  if (gone.size) world.particles = world.particles.filter((p) => !gone.has(p))
+  // Split what has spread thin: more of what it feels is itself than is its neighbours.
+  feel(world, ps.filter((p) => !gone.has(p)))
+  const K = kernels(world.d === 1 ? 2 : 3)
+  const depth = world.d === 1 ? world.cell : 1
+  for (const p of ps) {
+    if (gone.has(p) || done.has(p)) continue
+    const m = total(p.free)
+    if (m < 2 * PHYSICS.mote - PHYSICS.epsilon || p.rho <= 0) continue
+    const own = (m * K.poly6 * PHYSICS.smoothing ** 6) / depth
+    if (own / p.rho <= PHYSICS.splitAlone && m <= 2 * PHYSICS.maxMote) continue
+    const q = world.spawn(p)
+    for (let k = 0; k < 4; k++) {
+      q.free[k] = p.free[k] / 2
+      p.free[k] -= q.free[k]
+      q.carried[k] = p.carried[k] / 2
+      p.carried[k] -= q.carried[k]
+    }
+    // Side by side, across the way it thins (or, alone, any way: by its id), a third of the smoothing length apart.
+    const g = Math.hypot(...p.grad)
+    let u: Vec = g > 1e-12 ? [-p.grad[1] / g, p.grad[0] / g, 0] : [Math.cos(p.id), Math.sin(p.id), 0]
+    if (Math.hypot(...u) < 1e-9) u = [1, 0, 0]
+    const d = PHYSICS.smoothing / 6
+    const there: Vec = [p.pos[0] + u[0] * d, p.pos[1] + u[1] * d, p.pos[2] + u[2] * d]
+    const here: Vec = [p.pos[0] - u[0] * d, p.pos[1] - u[1] * d, p.pos[2] - u[2] * d]
+    // Into the cells beside it too, as long as nothing solid is there.
+    const open = (at: Vec) => world.cellOf(at) >= 0 && !world.solidAt(world.cellOf(at))
+    if (open(there) && open(here)) {
+      q.pos = there
+      p.pos = here
+    } else q.pos = open(there) ? there : open(here) ? here : q.pos
+    changes.push({ kind: 'split', from: p, into: q })
+  }
+  return changes
+}
+
 type Blocked = (p: Particle, from: number, to: number, down: boolean) => boolean
 
 /**

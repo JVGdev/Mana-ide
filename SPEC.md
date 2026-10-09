@@ -220,8 +220,9 @@ out of the machine without being written anywhere.
 4. **Overcharge:** if `flow + held mana + weaves still in hand > capacity`, the excess is counted as harm.
 5. **Weaves hold:** every weave takes hold of the matter its free mana can bind (and lets go of what it no longer can).
 6. **Orders run:** every ingrained particle of a weave set loose runs its order, and pays for it (§5).
-7. **The world moves:** the mana (pressure, the air, what it runs into), particles that strayed past their weave's field,
-   loose mana settling, pushed bodies, falling and flowing matter, air mana evening out. A weave in hand stays still (D26).
+7. **The world moves:** the mana (weight, pressure, holding together, rock, the air, the ground, what it runs into),
+   particles at rest together merging and thin ones splitting, particles that strayed past their weave's field, loose mana
+   settling, pushed bodies, falling and flowing matter, air mana evening out. A weave in hand stays still (D26).
 
 Holding comes before the orders, so a Stone Wall has its earth in hand before its first rise.
 
@@ -1471,8 +1472,14 @@ particles is equal and opposite, so momentum is conserved. Mana is conserved bec
 and loses its order; `GATH` draws from the grid. A particle moving through the air drags on the air mana around it and is
 dragged by it, both ways. That drag is wind.
 
-When particles come to rest beside each other, they merge, to keep their number down. A particle that spreads too thin splits.
-Both halves keep its order. *(Not built yet: particles neither merge nor split.)*
+When particles come to rest beside each other, they merge, to keep their number down: closer than `mergeRange`, moving
+within `mergeSpeed` of each other, and together no more than `maxMote`. The new particle sits at their centre of mass with
+their summed mana, matter and momentum, and keeps the bigger one's weave and order (the same size, the older one's). A
+particle of two motes or more that has spread thin (more of the density it feels is its own than its neighbours') splits in
+two, side by side. Both halves keep its weave and order. Nothing in a caster's hand merges or splits, and neither does rock.
+
+So a fireball held together by its order merges as it flies: its particles share a velocity, and the 72 it was poured as
+become about 45. A merged particle runs its order once where two ran it before, and burns half as much to think.
 
 ### What each part brings
 
@@ -1575,8 +1582,12 @@ particles down, and nobody asked whose particles they were. A big ordered partic
 else's mana takes it over: loose mana, the mana of another weave, another caster's fireball. With enough mana packed into
 one place, an order spreads through whatever it merges with, like a chemical reaction running through a substance.
 
-Like the first flaw, it isn't an instruction, nothing in the libraries uses it, and the tester only shows what it does. *(Not
-built yet: it needs particles to merge.)*
+It's held back by the same rule that made it: two particles merge only if together they're no more than `maxMote`, so an
+ordered particle of 0.75 M can take in one mote and no more, until it splits. A particle of only one mote, ordered, ties with
+the mote beside it, and the older one wins. Every takeover is logged as `taken`: which weave took in whose mana, and whether
+it gave it its order.
+
+Like the first flaw, it isn't an instruction, nothing in the libraries uses it, and the tester only shows what it does.
 
 ### Built
 
