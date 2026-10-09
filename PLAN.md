@@ -1,5 +1,8 @@
 # Plan: the rest of mana physics
 
+*Before anything here: the main objective (SPEC §0) comes first. Every feature of a spell comes from Ikozu's physics, and
+§0 lists where the machine doesn't meet it yet. That list is the next work.*
+
 *Status: all steps are built (PRs #1–#8). Decisions B–F were taken as recommended; for A you chose b, orders only feel
 (SPEC D31).*
 
