@@ -54,31 +54,29 @@ pub fn render(sim: &Sim, z: Option<i64>) -> String {
             );
         }
     }
-    // Mana: the matter weaves hold, cell by cell, then the mana itself.
-    let mut held: IndexMap<usize, [f64; 8]> = IndexMap::new();
+    // Mana: the matter weaves hold (matter in a cell their mana is in), then the mana itself.
+    let mut held: IndexMap<usize, Parts> = IndexMap::new();
     for p in &w.particles {
         let i = w.cell_of(&p.pos);
         if i < 0 || w.coords(i as usize)[2] != slice {
             continue;
         }
-        let e = held.entry(i as usize).or_insert([0.0; 8]);
+        let e = held.entry(i as usize).or_insert([0.0; 4]);
         for k in 0..4 {
-            e[k] += p.carried[k];
-            e[4 + k] += if p.weave != 0 { p.free[k] } else { 0.0 };
+            e[k] += if p.weave != 0 { p.free[k] } else { 0.0 };
         }
         if p.weave == 0 {
             let [x, y, _] = w.coords(i as usize);
             put(x, y, '.');
         }
     }
-    for (&i, e) in &held {
+    for (&i, free) in &held {
         let [x, y, _] = w.coords(i);
-        let carried: Parts = [e[0], e[1], e[2], e[3]];
-        let free: Parts = [e[4], e[5], e[6], e[7]];
-        if fill_of(&carried) >= 0.05 {
-            put(x, y, if dominant(&carried) == WATER { 'W' } else { 'H' });
-        } else if total(&free) > 0.01 {
-            put(x, y, ['*', 'o', '=', '+'][dominant(&free)]);
+        let m = &w.matter[i];
+        if total(free) > 0.0 && fill_of(m) >= 0.05 {
+            put(x, y, if dominant(m) == WATER { 'W' } else { 'H' });
+        } else if total(free) > 0.01 {
+            put(x, y, ['*', 'o', '=', '+'][dominant(free)]);
         }
     }
     for (bi, b) in w.bodies.iter().enumerate() {

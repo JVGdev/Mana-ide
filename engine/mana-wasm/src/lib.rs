@@ -359,12 +359,11 @@ impl Machine {
             .values()
             .map(|wv| {
                 let mut free = [0.0; 4];
-                let mut carried = [0.0; 4];
+                let carried = sim.held_by(wv.id);
                 let mut ingrained = 0;
                 for p in wv.parts(w) {
                     for k in 0..4 {
                         free[k] += p.free[k];
-                        carried[k] += p.carried[k];
                     }
                     if p.order.is_some() {
                         ingrained += 1;
@@ -410,7 +409,7 @@ impl Machine {
         let e = self.scene.sim.energy_now();
         let h = &e.held;
         json!({
-            "held": { "motion": h.motion, "height": h.height, "gas": h.gas, "packing": h.packing, "cohesion": h.cohesion, "air": h.air, "bodies": h.bodies },
+            "held": { "motion": h.motion, "height": h.height, "gas": h.gas, "strain": h.strain, "cohesion": h.cohesion, "air": h.air, "bodies": h.bodies },
             "total": e.total, "heat": e.heat, "start": e.start, "outside": e.outside, "minds": e.minds, "bodies": e.bodies,
             "error": e.error.iter().map(|(k, v)| json!([k, v])).collect::<Vec<_>>(), "errorTotal": e.error_total,
             "heatBy": self.scene.sim.world.heat.iter().map(|(k, v)| json!([k, v])).collect::<Vec<_>>(),
@@ -510,34 +509,55 @@ impl Machine {
         out
     }
 
-    /// Every particle, `PARTICLE` numbers each: id, position, velocity, free mana, matter held, weave, whether it carries
-    /// an order, the tick it was last pushed, how dense the matter held around it is, and its mass.
+    /// Every particle, 15 numbers each: id, position, velocity, free mana, weave, whether it carries an order, the tick
+    /// it was last pushed, and its mass.
     pub fn particles(&self) -> Vec<f64> {
         let w = &self.scene.sim.world;
-        let mut out = Vec::with_capacity(w.particles.len() * 20);
+        let mut out = Vec::with_capacity(w.particles.len() * particle_stride());
         for p in &w.particles {
             out.push(p.id as f64);
             out.extend(p.pos);
             out.extend(p.vel);
             out.extend(p.free);
-            out.extend(p.carried);
             out.push(p.weave as f64);
             out.push(if p.order.is_some() { 1.0 } else { 0.0 });
             out.push(p.pushed_at);
-            out.push(p.rho_m);
             out.push(mass_of(p));
         }
         out
     }
 
-    /// Every bond of rock: where its two particles are, six numbers each.
-    pub fn bonds(&self) -> Vec<f64> {
+    /// The matter in slice z, as points: position, how much of it is earth (of earth and water), whether it sleeps, and
+    /// its mass: 6 numbers each.
+    pub fn points(&self, z: i32) -> Vec<f64> {
         let w = &self.scene.sim.world;
-        let mut out = Vec::with_capacity(w.bonds.len() * 6);
-        for b in &w.bonds {
-            if let (Some(a), Some(c)) = (w.particle(b.a), w.particle(b.b)) {
-                out.extend(a.pos);
-                out.extend(c.pos);
+        let mut out = Vec::new();
+        for p in &w.points {
+            if w.d > 1 && (p.pos[2] / w.cell).floor() as i32 != z {
+                continue;
+            }
+            out.extend(p.pos);
+            out.push(p.earthiness());
+            out.push(if p.asleep { 1.0 } else { 0.0 });
+            out.push(p.mass);
+        }
+        out
+    }
+
+    /// The matter weaves hold in slice z, cell by cell, row by row: the share of the cell it takes.
+    pub fn slice_held(&self, z: i32) -> Vec<f64> {
+        let sim = &self.scene.sim;
+        let w = &sim.world;
+        let held = sim.held_in_cells();
+        let mut out = vec![0.0; w.w * w.h];
+        for y in 0..w.h as i64 {
+            for x in 0..w.w as i64 {
+                let i = w.index(x, y, z as i64);
+                if i >= 0
+                    && let Some(m) = held.get(&(i as usize))
+                {
+                    out[y as usize * w.w + x as usize] = fill_of(m);
+                }
             }
         }
         out
@@ -560,5 +580,5 @@ impl Machine {
 /// Numbers each particle takes in `Machine::particles`.
 #[wasm_bindgen]
 pub fn particle_stride() -> usize {
-    20
+    15
 }

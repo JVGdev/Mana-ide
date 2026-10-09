@@ -196,7 +196,7 @@ export type WeaveView = {
 }
 export type SimEvent = { tick: number; kind: string; caster: string | null; weave: number | null; detail: string | null }
 export type Ledger = { air: number; matter: number; loose: number; weaves: number; carried: number; casters: number; free: number; condensed: number; total: number }
-export type Stored = { motion: number; height: number; gas: number; packing: number; cohesion: number; air: number; bodies: number }
+export type Stored = { motion: number; height: number; gas: number; strain: number; cohesion: number; air: number; bodies: number }
 export type EnergyView = {
   held: Stored
   total: number
@@ -252,23 +252,17 @@ export class Particle {
   get free(): Parts {
     return [this.a[this.o + 7], this.a[this.o + 8], this.a[this.o + 9], this.a[this.o + 10]]
   }
-  get carried(): Parts {
-    return [this.a[this.o + 11], this.a[this.o + 12], this.a[this.o + 13], this.a[this.o + 14]]
-  }
   get weave() {
-    return this.a[this.o + 15]
+    return this.a[this.o + 11]
   }
   get ordered() {
-    return this.a[this.o + 16] !== 0
+    return this.a[this.o + 12] !== 0
   }
   get pushedAt() {
-    return this.a[this.o + 17]
-  }
-  get rhoM() {
-    return this.a[this.o + 18]
+    return this.a[this.o + 13]
   }
   get mass() {
-    return this.a[this.o + 19]
+    return this.a[this.o + 14]
   }
 }
 
@@ -386,9 +380,14 @@ export class Machine {
     for (let o = 0; o < a.length; o += STRIDE) out.push(new Particle(a, o))
     return out
   }
-  /** Six numbers a bond: where its two particles are. */
-  bonds() {
-    return this.m.bonds()
+  /** Matter in slice z, six numbers a point: where it is, how much of it is earth (0 water, 1 earth), whether it
+   * sleeps, and its mass. */
+  points(z: number) {
+    return this.m.points(z)
+  }
+  /** The share of each cell of slice z that matter weaves hold takes, row by row. */
+  sliceHeld(z: number) {
+    return this.m.slice_held(z)
   }
   bodies(): Body[] {
     return JSON.parse(this.m.bodies())

@@ -1,6 +1,6 @@
 //! The machine running in the world: casters casting, weaves running their orders, the world moving. One tick at a time.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -10,10 +10,11 @@ use super::air::step_air;
 use super::caster::{Caster, CasterStats, ManaRegister, adept};
 use super::energy::{Ledger, Stored, heat_of, stored, sum};
 use super::fluid::{Change, FluidHooks, find_pairs, merge_and_split, step_fluid};
+use super::matter::{Grip, step_matter};
 use super::parts::{Parts, add, take, total, zero};
 use super::physics::physics;
 use super::weave::{FeltKey, Weave, centre_of, stamp_of, turn_to_frame, turn_to_world};
-use super::world::{Bond, EARTH, Ingrained, Vec3, World, WorldMana, fill_of, mass_of, mass_of_parts, packed};
+use super::world::{EARTH, Ingrained, Vec3, WATER, World, WorldMana, fill_of, mass_of, mass_of_parts, packed};
 use crate::asm::isa::{Mn, port_by_code};
 use crate::asm::{Code, FetchError, Instr};
 use crate::js;
@@ -304,9 +305,10 @@ pub struct Sim {
     pub trace_orders: bool,
     /// Last tick's orders, by weave id, one trace per particle that ran one (in the order they ran).
     pub traces: IndexMap<u32, Vec<OrderTrace>>,
-    /// Matter held by mana, per world cell, as of the start of this tick's orders.
-    carried: Vec<f64>,
-    carried_by: HashMap<u32, HashMap<usize, f64>>,
+    /// What each weave's mana grips, cell by cell, as last measured (measure_grips).
+    grips: Vec<Grip>,
+    /// The share of a cell's room taken by matter a weave holds there, by (weave, cell): its own, which doesn't block it.
+    own: HashMap<(u32, usize), f64>,
     /// Beats the instruction being run costs beyond its own: ingraining a long order.
     extra: f64,
     /// Weaves that have come apart. Their casters can still name them: there's nothing in them to sense or push, and
@@ -326,7 +328,6 @@ pub struct Sim {
 
 impl Sim {
     pub fn new(world: World) -> Sim {
-        let size = world.size;
         Sim {
             world,
             casters: Vec::new(),
@@ -337,8 +338,8 @@ impl Sim {
             mid_tick: false,
             trace_orders: false,
             traces: IndexMap::new(),
-            carried: vec![0.0; size],
-            carried_by: HashMap::new(),
+            grips: Vec::new(),
+            own: HashMap::new(),
             extra: 0.0,
             gone: IndexMap::new(),
             spent: SpentMana::default(),
@@ -545,17 +546,11 @@ impl Sim {
         for c in 0..self.casters.len() {
             self.breathe(c);
         }
-        // 5. Weaves take hold of what matter their mana can bind, and let go of what it can't.
-        let ids: Vec<u32> = self.weaves.keys().copied().collect();
-        for id in &ids {
-            self.hold(*id);
-        }
-        // 6. Particles of weaves set loose run their orders.
+        // 5. Particles of weaves set loose run their orders.
         if self.trace_orders {
             self.traces = IndexMap::new();
         }
         self.relay();
-        self.measure_carried();
         let ids: Vec<u32> = self.weaves.keys().copied().collect();
         for id in ids {
             if self.weaves.get(&id).is_some_and(|w| !w.in_hand) {
@@ -564,19 +559,23 @@ impl Sim {
         }
         self.ledger_end("outside", "casters and orders", &mut e, begin);
 
-        // 7. The world moves: the mana, the air, bodies, matter.
-        self.measure_carried();
+        // 6. The world moves. Matter first, and the mana holding it: they come to one speed (as far as the grip lets
+        // them), so that the mana then moves with what it holds. Then the mana, the air, bodies.
+        self.measure_grips();
+        let begin = self.ledger_begin();
+        step_matter(&mut self.world, &self.grips);
+        self.ledger_end("exact", "matter", &mut e, begin);
+
+        self.measure_grips();
         let begin = self.ledger_begin();
         {
             let in_hand: HashMap<u32, usize> =
                 self.weaves.values().filter(|w| w.in_hand).map(|w| (w.id, self.casters[w.maker].body)).collect();
-            let carried = &self.carried;
-            let by = &self.carried_by;
+            let own = &self.own;
             let hooks = FluidHooks {
                 holder: Some(Box::new(|p| if p.weave != 0 { in_hand.get(&p.weave).copied() } else { None })),
-                others_carried: Some(Box::new(|p, cell| {
-                    carried[cell] - by.get(&p.weave).and_then(|m| m.get(&cell)).copied().unwrap_or(0.0)
-                })),
+                own_matter: Some(Box::new(|p, cell| own.get(&(p.weave, cell)).copied().unwrap_or(0.0))),
+                grips: &self.grips,
             };
             step_fluid(&mut self.world, &hooks);
         }
@@ -593,7 +592,8 @@ impl Sim {
                 self.weaves.values().filter(|w| w.in_hand).map(|w| (w.id, self.casters[w.maker].body)).collect();
             let hooks = FluidHooks {
                 holder: Some(Box::new(|p| if p.weave != 0 { in_hand.get(&p.weave).copied() } else { None })),
-                others_carried: None,
+                own_matter: None,
+                grips: &[],
             };
             merge_and_split(&mut self.world, &hooks)
         };
@@ -608,13 +608,8 @@ impl Sim {
             }
         }
         self.settle_loose();
-        self.unbind();
-        self.bond();
         self.world.move_bodies();
-        self.measure_carried();
-        let carried = std::mem::take(&mut self.carried);
-        self.world.settle_matter(&carried);
-        self.carried = carried;
+        self.world.settle_gas();
         self.ledger_end("loses", "settling", &mut e, begin);
         self.world.tick += 1;
     }
@@ -666,9 +661,11 @@ impl Sim {
         for wv in self.weaves.values() {
             for p in wv.parts(&self.world) {
                 weaves += total(&p.free);
-                carried += total(&p.carried);
             }
+            carried += total(&self.held_by(wv.id));
         }
+        // What's held is matter too: counted once, as held.
+        let matter = matter - carried;
         let casters = self.casters.iter().fold(0.0, |s, c| s + c.held());
         ManaLedger {
             air,
@@ -783,7 +780,6 @@ impl Sim {
                 if let Some(i) = self.world.slot(pid) {
                     let free = take(&mut self.world.particles[i].free, f64::INFINITY);
                     add(&mut self.casters[caster].flow, &free);
-                    self.drop_matter(i);
                 }
             }
             self.remove_empty();
@@ -951,7 +947,7 @@ impl Sim {
                 let mut v = 0.0;
                 if i >= 0 && self.reaches(caster, &at) && k.fract() == 0.0 && (0.0..4.0).contains(&k) {
                     let (i, k) = (i as usize, k as usize);
-                    v = if op.mn == Mn::Airm { self.world.air[i][k] } else { self.world.matter[i][k] + self.carried_part(i, k) };
+                    v = if op.mn == Mn::Airm { self.world.air[i][k] } else { self.world.matter[i][k] };
                 }
                 set(f, a[0] as usize, v)?;
             }
@@ -1374,19 +1370,29 @@ impl Sim {
         ps
     }
 
-    /// A push: a mind transforms mana into Energy (D32) to change particle `pi`'s velocity by `dv`, pushing it off
-    /// something that takes the push back, equally and oppositely: a caster's body, through their reach; the air a
-    /// particle is in; or the ground it's against. It costs the kinetic energy it adds to both, at PHYSICS.push_energy for
-    /// each M, no more than `power` has left this tick and the payer can give; what's asked beyond that, it doesn't get.
-    /// Slowing down costs nothing: what it takes out of the motion is heat. The mana poured goes loose into the air there,
-    /// still mana. Returns the Energy transformed.
+    /// A push: a mind transforms mana into Energy (D32) to change particle `pi`'s velocity by `dv`, and the matter it
+    /// holds with it, pushing them off something that takes the push back, equally and oppositely: a caster's body,
+    /// through their reach; the air a particle is in; or the ground it's against. It costs the kinetic energy it adds to
+    /// all of them, at PHYSICS.push_energy for each M, no more than `power` has left this tick and the payer can give;
+    /// what's asked beyond that, it doesn't get. Slowing down costs nothing: what it takes out of the motion is heat. The
+    /// mana poured goes loose into the air there, still mana. Returns the Energy transformed.
     fn push(&mut self, pi: usize, dv: Vec3, off: Against, payer: Payer, power: &mut f64, from: From) -> f64 {
         let ph = physics();
         let size2 = dv[0] * dv[0] + dv[1] * dv[1] + dv[2] * dv[2];
         if size2 < 1e-24 {
             return 0.0;
         }
+        // What moves: the particle, and the matter it holds, each point by the share of it the particle's grip bears. The
+        // mana pulls its matter no harder than its grip: over the tick, the matter takes at most that much impulse, and
+        // moves by that much less (`s`), and the mana runs ahead of it.
+        let held = self.holds(pi);
         let m = mass_of(&self.world.particles[pi]);
+        let held_mass: f64 = held.iter().map(|h| h.1).sum();
+        let p = &self.world.particles[pi];
+        let grip = (p.free[0] + p.free[1] + p.free[2] + p.free[3]) * ph.bind * ph.gravity;
+        let dv_size = size2.sqrt();
+        let s = if held_mass * dv_size > grip { grip / (held_mass * dv_size) } else { 1.0 };
+        let moved = m + held_mass * s;
         // What it's pushed off: its mass, and how it moves, along each axis (a body stands: the ground holds it up, so up
         // and down the push goes into the ground).
         let mut big_m = f64::INFINITY;
@@ -1406,14 +1412,18 @@ impl Sim {
             }
             Against::Ground => {}
         }
-        let share = |k: usize| if matches!(off, Against::Body(_)) && k == 1 { 0.0 } else { m / big_m };
-        // The energy a share k of the push adds, with impulse J = k·m·dv: k·lin + k²·quad.
+        let recoil = |k: usize| if matches!(off, Against::Body(_)) && k == 1 { 0.0 } else { moved * moved / big_m };
+        // The energy a share k of the push adds, the particle sped by k·dv and its matter by k·s·dv, and what it's pushed
+        // off by their impulse back: k·lin + k²·quad.
         let mut lin = 0.0;
         let mut quad = 0.0;
         let pvel = self.world.particles[pi].vel;
         for k in 0..3 {
             lin += m * dv[k] * (pvel[k] - v[k]);
-            quad += 0.5 * m * dv[k] * dv[k] * (1.0 + share(k));
+            for &(i, eff) in &held {
+                lin += eff * s * dv[k] * (self.world.points[i].vel[k] - v[k]);
+            }
+            quad += 0.5 * (m + held_mass * s * s) * dv[k] * dv[k] + 0.5 * recoil(k) * dv[k] * dv[k];
         }
         let mut k = 1.0;
         let mut energy = lin + quad;
@@ -1452,9 +1462,20 @@ impl Sim {
             self.world.warm("braking", -energy);
         }
         // The push, and its reaction. (The air there now holds the mana poured, too.)
-        let mass = mass_of(&self.world.particles[pi]);
+        let mass = mass_of(&self.world.particles[pi]) + held_mass * s;
         if let Against::Air(cell) = off {
             big_m = self.world.air_mass(cell);
+        }
+        for &(i, eff) in &held {
+            let pt = &mut self.world.points[i];
+            for a in 0..3 {
+                pt.vel[a] += dv[a] * k * s * eff / pt.mass;
+            }
+            pt.asleep = false;
+            pt.still = 0;
+        }
+        if !held.is_empty() {
+            self.world.points_moved();
         }
         for i in 0..3 {
             let j = mass * dv[i] * k;
@@ -1540,90 +1561,181 @@ impl Sim {
 
     // Weaves
 
-    /// Matter held by mana, cell by cell: all of it, and each weave's own.
-    fn measure_carried(&mut self) {
-        self.carried.fill(0.0);
-        self.carried_by.clear();
-        for p in &self.world.particles {
-            let i = self.world.cell_of(&p.pos);
-            let m = fill_of(&p.carried);
-            if i < 0 || m <= 0.0 {
-                continue;
-            }
-            self.carried[i as usize] += m;
-            *self.carried_by.entry(p.weave).or_default().entry(i as usize).or_insert(0.0) += m;
-        }
-    }
-
-    fn carried_part(&self, i: usize, k: usize) -> f64 {
-        let mut v = 0.0;
-        for p in &self.world.particles {
-            if self.world.cell_of(&p.pos) == i as isize {
-                v += p.carried[k];
-            }
-        }
-        v
-    }
-
-    /// A weave's free mana holds what matter it can of its own parts in each cell, shared among its particles there by
-    /// how much of that part each has. What it can no longer hold, it lets go of.
-    fn hold(&mut self, id: u32) {
+    /// What each weave's mana grips, cell by cell: its particles in each cell, and the hand that holds them, if it's in
+    /// hand. And, for the fluid, the share of each cell its own held matter takes.
+    fn measure_grips(&mut self) {
         let ph = physics();
-        let w = &self.world;
-        let mut by_cell: IndexMap<usize, Vec<usize>> = IndexMap::new();
-        let ids = self.weaves[&id].particles.clone();
-        for &pid in &ids {
-            let Some(pi) = w.slot(pid) else { continue };
-            let i = w.cell_of(&w.particles[pi].pos);
-            if i < 0 {
+        self.grips.clear();
+        self.own.clear();
+        let mut at: IndexMap<(u32, usize), usize> = IndexMap::new();
+        for (i, p) in self.world.particles.iter().enumerate() {
+            let c = self.world.cell_of(&p.pos);
+            if p.weave == 0 || c < 0 {
                 continue;
             }
-            by_cell.entry(i as usize).or_default().push(pi);
+            let key = (p.weave, c as usize);
+            let g = match at.get(&key) {
+                Some(&g) => g,
+                None => {
+                    let hand = self.weaves.get(&p.weave).filter(|w| w.in_hand).map(|w| self.casters[w.maker].body);
+                    self.grips.push(Grip { cell: c as usize, weave: p.weave, particles: Vec::new(), hand });
+                    at.insert(key, self.grips.len() - 1);
+                    self.grips.len() - 1
+                }
+            };
+            self.grips[g].particles.push(i);
         }
-        let before: Vec<(usize, f64)> =
-            ids.iter().filter_map(|&pid| w.slot(pid)).map(|pi| (pi, mass_of(&w.particles[pi]))).collect();
-        let w = &mut self.world;
-        for (&i, ps) in &by_cell {
+        for g in &self.grips {
+            let mut cap = [0.0; 4];
+            for &i in &g.particles {
+                for k in 0..4 {
+                    cap[k] += self.world.particles[i].free[k] * ph.bind;
+                }
+            }
+            let m = &self.world.matter[g.cell];
+            let mut held = zero();
             for k in 0..4 {
-                let mut free = 0.0;
-                let mut have = 0.0;
-                for &pi in ps {
-                    free += w.particles[pi].free[k];
-                    have += w.particles[pi].carried[k];
-                }
-                let can = (free * ph.bind) / ph.mana_mass[k]; // M of matter: `bind` kilograms for each M
-                if have < can && free > 0.0 {
-                    let got = js::min(can - have, w.matter[i][k]);
-                    if got <= 0.0 {
-                        continue;
-                    }
-                    w.matter[i][k] -= got;
-                    for &pi in ps {
-                        let p = &mut w.particles[pi];
-                        p.carried[k] += (got * p.free[k]) / free;
-                    }
-                } else if have > can && have > 0.0 {
-                    let out = have - can;
-                    w.matter[i][k] += out;
-                    for &pi in ps {
-                        let p = &mut w.particles[pi];
-                        p.carried[k] -= (out * p.carried[k]) / have;
+                held[k] = js::min(cap[k], m[k] * ph.mana_mass[k]) / ph.mana_mass[k];
+            }
+            *self.own.entry((g.weave, g.cell)).or_insert(0.0) += held[EARTH] / packed(EARTH) + held[WATER] / packed(WATER);
+        }
+    }
+
+    /// The matter all weaves hold up, cell by cell, by part (M).
+    pub fn held_in_cells(&self) -> IndexMap<usize, Parts> {
+        let mut out: IndexMap<usize, Parts> = IndexMap::new();
+        let ph = physics();
+        let mut cap: IndexMap<(u32, usize), Parts> = IndexMap::new();
+        for p in &self.world.particles {
+            let c = self.world.cell_of(&p.pos);
+            if p.weave == 0 || c < 0 {
+                continue;
+            }
+            let e = cap.entry((p.weave, c as usize)).or_insert(zero());
+            for k in 0..4 {
+                e[k] += p.free[k] * ph.bind;
+            }
+        }
+        for ((_, c), cap) in cap {
+            let m = &self.world.matter[c];
+            let e = out.entry(c).or_insert(zero());
+            for k in 0..4 {
+                e[k] += js::min(cap[k], m[k] * ph.mana_mass[k]) / ph.mana_mass[k];
+            }
+        }
+        out
+    }
+
+    /// The matter a weave holds up, by part (M): in each cell its mana is in, as much of the matter of its own parts there
+    /// as its grip bears (`bind` kilograms a M).
+    pub fn held_by(&self, weave: u32) -> Parts {
+        let ph = physics();
+        let Some(wv) = self.weave(weave) else { return zero() };
+        let mut cap: IndexMap<usize, Parts> = IndexMap::new();
+        for p in wv.parts(&self.world) {
+            let c = self.world.cell_of(&p.pos);
+            if c < 0 {
+                continue;
+            }
+            let e = cap.entry(c as usize).or_insert(zero());
+            for k in 0..4 {
+                e[k] += p.free[k] * ph.bind;
+            }
+        }
+        let mut out = zero();
+        for (c, cap) in cap {
+            let m = &self.world.matter[c];
+            for k in 0..4 {
+                out[k] += js::min(cap[k], m[k] * ph.mana_mass[k]) / ph.mana_mass[k];
+            }
+        }
+        out
+    }
+
+    /// The flaw (SPEC D16): condensing less than nothing runs backwards, and up to `amount` M of the matter particle `pi`
+    /// holds comes apart into its free mana, bringing its momentum. What evening out their speeds takes is heat.
+    fn unmake(&mut self, pi: usize, amount: f64) {
+        let held = self.holds(pi);
+        let available: f64 =
+            held.iter().map(|&(i, eff)| eff / self.world.points[i].mass * total(&self.world.points[i].parts)).sum();
+        if available <= 0.0 {
+            return;
+        }
+        let share = js::min(amount, available) / available;
+        let q = &self.world.particles[pi];
+        let mut mass = q.mass_now();
+        let mut momentum = [q.vel[0] * mass, q.vel[1] * mass, q.vel[2] * mass];
+        let mut before = 0.5 * mass * (q.vel[0] * q.vel[0] + q.vel[1] * q.vel[1] + q.vel[2] * q.vel[2]);
+        let mut freed = zero();
+        for &(i, eff) in &held {
+            let pt = &mut self.world.points[i];
+            let f = share * eff / pt.mass;
+            let out = [pt.parts[0] * f, pt.parts[1] * f, pt.parts[2] * f, pt.parts[3] * f];
+            for k in 0..4 {
+                pt.parts[k] -= out[k];
+            }
+            pt.volume *= 1.0 - f;
+            let m = mass_of_parts(&out);
+            pt.mass = mass_of_parts(&pt.parts);
+            for a in 0..3 {
+                momentum[a] += m * pt.vel[a];
+            }
+            before += 0.5 * m * (pt.vel[0] * pt.vel[0] + pt.vel[1] * pt.vel[1] + pt.vel[2] * pt.vel[2]);
+            mass += m;
+            add(&mut freed, &out);
+        }
+        let q = &mut self.world.particles[pi];
+        add(&mut q.free, &freed);
+        q.vel = [momentum[0] / mass, momentum[1] / mass, momentum[2] / mass];
+        let after = 0.5 * mass * (q.vel[0] * q.vel[0] + q.vel[1] * q.vel[1] + q.vel[2] * q.vel[2]);
+        self.world.warm("unmaking", before - after);
+        let eps = physics().epsilon;
+        self.world.retain_points(|p| total(&p.parts) > eps);
+        self.world.rasterize();
+    }
+
+    /// The matter particle `pi` holds: the points in its cell of its own parts, each with as much of its mass as the
+    /// particle's grip bears there (its weave's grip in the cell, shared by how much of it is this particle's).
+    fn holds(&mut self, pi: usize) -> Vec<(usize, f64)> {
+        let ph = physics();
+        let p = &self.world.particles[pi];
+        let c = self.world.cell_of(&p.pos);
+        if p.weave == 0 || c < 0 {
+            return vec![];
+        }
+        let mine: Parts = [p.free[0] * ph.bind, p.free[1] * ph.bind, p.free[2] * ph.bind, p.free[3] * ph.bind];
+        let mut all = zero();
+        if let Some(wv) = self.weave(p.weave) {
+            for q in wv.parts(&self.world) {
+                if self.world.cell_of(&q.pos) == c {
+                    for k in 0..4 {
+                        all[k] += q.free[k] * ph.bind;
                     }
                 }
             }
         }
-        // Matter taken up was at rest: the particle carries it at its own speed now, and slows for it. Matter let go of
-        // stops dead in the ground, and its momentum with it.
-        for (pi, m) in before {
-            let now = mass_of(&self.world.particles[pi]);
-            if now > m && now > 0.0 {
-                for k in 0..3 {
-                    self.world.particles[pi].vel[k] *= m / now;
-                }
-            } else if now < m {
-                self.mass_changed(pi, m);
+        let points = self.world.points_in(c as usize).to_vec();
+        let mut mk = zero();
+        for &i in &points {
+            for k in 0..4 {
+                mk[k] += self.world.points[i].parts[k] * ph.mana_mass[k];
             }
         }
+        let mut out = Vec::new();
+        for &i in &points {
+            let pt = &self.world.points[i];
+            let mut eff = 0.0;
+            for k in 0..4 {
+                if mk[k] > 0.0 && all[k] > 0.0 {
+                    let held = js::min(all[k], mk[k]) * mine[k] / all[k];
+                    eff += held * pt.parts[k] * ph.mana_mass[k] / mk[k];
+                }
+            }
+            if eff > 0.0 {
+                out.push((i, eff));
+            }
+        }
+        out
     }
 
     /// Every particle carrying an order runs it, on its own: what it writes into its copy of the weave's registers counts
@@ -1867,21 +1979,17 @@ impl Sim {
                     }
                     if amount > 0.0 && i >= 0 {
                         // As much as the room left in the cell takes, each part of it by its density.
-                        let room = js::max(0.0, 1.0 - self.world.fill(i as usize) - self.carried[i as usize]);
+                        let room = js::max(0.0, 1.0 - self.world.fill(i as usize));
                         let p = &mut self.world.particles[pi];
                         let each = if total(&p.free) > 0.0 { fill_of(&p.free) / total(&p.free) } else { 0.0 };
                         let made = take(&mut p.free, js::min(amount, if each > 0.0 { room / each } else { amount }));
-                        add(&mut p.carried, &made);
-                        self.carried[i as usize] += fill_of(&made);
+                        let (pos, vel) = (p.pos, p.vel);
+                        // It's matter now, where the mana was, moving as it did; the mana left holds it.
+                        self.world.make_matter(made, pos, vel);
                     } else if amount < 0.0 {
-                        let p = &mut self.world.particles[pi];
-                        let freed = take(&mut p.carried, -amount);
-                        add(&mut p.free, &freed);
-                        if i >= 0 {
-                            self.carried[i as usize] -= fill_of(&freed);
-                        }
+                        self.unmake(pi, -amount);
                     }
-                    // Matter weighs what the mana it was made of did (D40): its mass, and its momentum, don't change.
+                    // Matter weighs what the mana it was made of did (D40): mass, and momentum, are kept.
                 }
                 Mn::Dens => set(f, r0, p.felt)?,
                 Mn::Grad => {
@@ -1952,10 +2060,9 @@ impl Sim {
         self.log(EventKind::Dissolve, Some(name), Some(id), Some(detail));
     }
 
-    /// A particle leaves its weave. It drops the matter it held; its order stays with it.
+    /// A particle leaves its weave; its order stays with it. What it held, it lets go of: matter follows its own nature.
     fn loosen(&mut self, pi: usize) {
         self.world.particles[pi].weave = 0;
-        self.drop_matter(pi);
     }
 
     /// Loose mana that has come to the speed of the air around it settles into it.
@@ -1977,7 +2084,6 @@ impl Sim {
             let momentum = [p.vel[0] * m, p.vel[1] * m, p.vel[2] * m];
             let parts = take(&mut self.world.particles[pi].free, f64::INFINITY);
             self.world.add_air(c as isize, &parts, momentum);
-            self.drop_matter(pi);
         }
         self.remove_empty();
     }
@@ -1985,7 +2091,7 @@ impl Sim {
     /// Particles with no mana left are gone.
     fn remove_empty(&mut self) {
         let eps = physics().epsilon;
-        self.world.retain_particles(|p| total(&p.free) > eps || total(&p.carried) > eps);
+        self.world.retain_particles(|p| total(&p.free) > eps);
     }
 
     /// Some of a weave's particles go loose, and forget its order.
@@ -2002,78 +2108,6 @@ impl Sim {
         self.keep_own(id);
         self.weave_mut(id).last_left = why.into();
         self.version += 1;
-    }
-
-    /// A particle lets go of the matter it holds. It stops dead where it is: its momentum goes into the ground.
-    fn drop_matter(&mut self, pi: usize) {
-        let before = mass_of(&self.world.particles[pi]);
-        let cell = self.world.clamped_cell_of(&self.world.particles[pi].pos);
-        let matter = take(&mut self.world.particles[pi].carried, f64::INFINITY);
-        add(&mut self.world.matter[cell], &matter);
-        self.mass_changed(pi, before);
-    }
-
-    /// A particle has let go of matter, which stops dead in the ground where it is (the ground's matter doesn't move): the
-    /// ground takes the momentum it had.
-    fn mass_changed(&mut self, pi: usize, before: f64) {
-        let p = &self.world.particles[pi];
-        let d = mass_of(p) - before;
-        let vel = p.vel;
-        for k in 0..3 {
-            self.world.impulse.walls[k] += d * vel[k];
-        }
-    }
-
-    /// Earth held by mana becomes rock where it's packed and still (D30): each particle holding earth, in a cell as full
-    /// of earth as solid ground is, binds to its neighbours that do too (PHYSICS.bond_range), when they hardly move
-    /// against each other. A bond keeps the length it was made at. Whose mana it is doesn't matter.
-    fn bond(&mut self) {
-        let ph = physics();
-        let w = &self.world;
-        let earthy = |p: &super::world::Particle| p.carried[EARTH] > 0.5 * total(&p.carried) && p.carried[EARTH] > ph.epsilon;
-        let ps: Vec<usize> = (0..w.particles.len()).filter(|&i| earthy(&w.particles[i])).collect();
-        if ps.len() < 2 {
-            return;
-        }
-        // Earth held in each cell, by anyone.
-        let mut held: HashMap<isize, f64> = HashMap::new();
-        for p in &w.particles {
-            let i = w.cell_of(&p.pos);
-            if i >= 0 && p.carried[EARTH] > 0.0 {
-                *held.entry(i).or_insert(0.0) += p.carried[EARTH];
-            }
-        }
-        let tight = |pi: usize| {
-            let i = w.cell_of(&w.particles[pi].pos);
-            i >= 0 && (w.matter[i as usize][EARTH] + held.get(&i).copied().unwrap_or(0.0)) / packed(EARTH) >= ph.solid
-        };
-        let key = |a: u64, b: u64| if a < b { (a, b) } else { (b, a) };
-        let mut known: HashSet<(u64, u64)> = w.bonds.iter().map(|b| key(b.a, b.b)).collect();
-        let pairs = find_pairs(w, &ps);
-        let mut is_packed: HashMap<usize, bool> = HashMap::new();
-        let mut made: Vec<Bond> = Vec::new();
-        for e in 0..pairs.n {
-            let r = pairs.r[e];
-            if r >= ph.bond_range || r < 1e-6 {
-                continue;
-            }
-            let (ai, bi) = (ps[pairs.a[e]], ps[pairs.b[e]]);
-            let (a, b) = (&w.particles[ai], &w.particles[bi]);
-            let k = key(a.id, b.id);
-            if known.contains(&k) {
-                continue;
-            }
-            if js::hypot3(a.vel[0] - b.vel[0], a.vel[1] - b.vel[1], a.vel[2] - b.vel[2]) > ph.bond_speed {
-                continue;
-            }
-            let mut check = |pi: usize| *is_packed.entry(pi).or_insert_with(|| tight(pi));
-            if !check(ai) || !check(bi) {
-                continue;
-            }
-            made.push(Bond { a: a.id, b: b.id, rest: r });
-            known.insert(k);
-        }
-        self.world.bonds.extend(made);
     }
 
     /// After merging and splitting, each weave's particles are those that are its own. A weave's particle that took in
@@ -2107,24 +2141,6 @@ impl Sim {
             let gave = if t.ordered { ", and gave it its order" } else { "" };
             self.log(EventKind::Taken, Some(name), Some(t.into), Some(format!("took in {whose} mana{gave}")));
         }
-    }
-
-    /// Bonds hold only particles that are still in the world, and still hold earth.
-    fn unbind(&mut self) {
-        let eps = physics().epsilon;
-        let w = &self.world;
-        let keep: Vec<bool> = w
-            .bonds
-            .iter()
-            .map(|b| {
-                w.particle(b.a).is_some_and(|p| p.carried[EARTH] > eps) && w.particle(b.b).is_some_and(|p| p.carried[EARTH] > eps)
-            })
-            .collect();
-        let mut k = 0;
-        self.world.bonds.retain(|_| {
-            k += 1;
-            keep[k - 1]
-        });
     }
 }
 

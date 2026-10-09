@@ -4,6 +4,7 @@ pub mod air;
 pub mod caster;
 pub mod energy;
 pub mod fluid;
+pub mod matter;
 pub mod parts;
 pub mod physics;
 pub mod sim;

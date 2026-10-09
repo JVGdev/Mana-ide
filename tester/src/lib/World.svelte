@@ -26,7 +26,7 @@
     if (!m) return null
     const w = m.world
     const z = Math.min(w.d - 1, Math.max(0, session.sliceZ))
-    return { z, air: m.sliceAir(z), airVel: m.sliceAirVel(z), matter: m.sliceMatter(z), particles: m.particles() }
+    return { z, air: m.sliceAir(z), airVel: m.sliceAirVel(z), matter: m.sliceMatter(z), held: m.sliceHeld(z), points: m.points(z), particles: m.particles() }
   })
 
   /** A particle's cell in the slice (x + y·w), or -1 if it's in another slice or outside. */
@@ -40,24 +40,19 @@
     return y * w.w + x
   }
 
-  /** What weaves hold in each cell of the slice: their free mana and the matter they carry. */
+  /** What weaves have in each cell of the slice: their free mana, and how many particles of it. */
   function weaveCells(particles: Particle[], z: number) {
-    const out = new Map<number, { free: Parts; carried: Parts; weaves: Set<number>; particles: number; mass: number; rhoM: number }>()
+    const out = new Map<number, { free: Parts; weaves: Set<number>; particles: number; mass: number }>()
     for (const p of particles) {
       if (!p.weave) continue
       const i = cellOf(p, z)
       if (i < 0) continue
-      const e = out.get(i) ?? { free: [0, 0, 0, 0], carried: [0, 0, 0, 0], weaves: new Set(), particles: 0, mass: 0, rhoM: 0 }
+      const e = out.get(i) ?? { free: [0, 0, 0, 0], weaves: new Set(), particles: 0, mass: 0 }
       const free = p.free
-      const carried = p.carried
-      for (let k = 0; k < 4; k++) {
-        e.free[k] += free[k]
-        e.carried[k] += carried[k]
-      }
+      for (let k = 0; k < 4; k++) e.free[k] += free[k]
       e.weaves.add(p.weave)
       e.particles++
       e.mass += p.mass
-      e.rhoM = Math.max(e.rhoM, p.rhoM)
       out.set(i, e)
     }
     return out
@@ -109,16 +104,15 @@
         g.fillRect(X(x), Y(y), px, px)
       }
 
-    // Weaves: the matter they hold, cell by cell.
-    const cells = weaveCells(s.particles, z)
-    for (const [i, c] of cells) {
+    // Weaves: the matter they hold, cell by cell, outlined.
+    g.lineWidth = 1
+    for (let i = 0; i < s.held.length; i++) {
+      const held = s.held[i]
+      if (held < 0.005) continue
       const x = i % w.w
       const y = Math.floor(i / w.w)
-      const held = fillOfParts(c.carried)
-      if (held > 0.005) {
-        g.fillStyle = rgba(MATTER[dominant(c.carried)], 0.35 + 0.65 * Math.min(1, held))
-        g.fillRect(X(x), Y(y), px, px)
-      }
+      g.strokeStyle = `rgba(230, 200, 150, ${0.3 + 0.6 * Math.min(1, held)})`
+      g.strokeRect(X(x) + 0.5, Y(y) + 0.5, px - 1, px - 1)
     }
 
     // Wind: the air, where it moves.
@@ -140,18 +134,12 @@
         g.stroke()
       }
 
-    // Rock: the bonds between particles holding earth.
-    g.strokeStyle = 'rgba(176, 150, 112, 0.35)'
-    g.lineWidth = 1
-    g.beginPath()
-    const bonds = m.bonds()
-    for (let o = 0; o < bonds.length; o += 6) {
-      const [ax, ay, az, bx, by, bz] = bonds.subarray(o, o + 6)
-      if (w.d > 1 && (Math.floor(az / w.cell) !== z || Math.floor(bz / w.cell) !== z)) continue
-      g.moveTo((ax / w.cell) * px, (w.h - ay / w.cell) * px)
-      g.lineTo((bx / w.cell) * px, (w.h - by / w.cell) * px)
+    // Matter, as its points: earth brown, water blue; asleep, dim.
+    for (let o = 0; o < s.points.length; o += 6) {
+      const [x, y, , earth, asleep] = s.points.subarray(o, o + 5)
+      g.fillStyle = earth >= 0.5 ? `rgba(196, 150, 96, ${asleep ? 0.18 : 0.6})` : `rgba(110, 170, 240, ${asleep ? 0.25 : 0.75})`
+      g.fillRect((x / w.cell) * px - 1, (w.h - y / w.cell) * px - 1, 2, 2)
     }
-    g.stroke()
 
     // Mana: every particle. In a weave it glows; loose, it's dim; pushed this tick, it's bright.
     g.globalCompositeOperation = 'lighter'
@@ -216,13 +204,6 @@
     g.stroke()
   }
 
-  /** The share of a cell some held matter takes. */
-  function fillOfParts(m: Parts): number {
-    let f = 0
-    for (let k = 0; k < 4; k++) f += m[k] / ((PHYSICS.density[k] * PHYSICS.cell ** 3) / PHYSICS.manaMass[k])
-    return f
-  }
-
   $effect(draw)
 
   $effect(() => {
@@ -267,10 +248,8 @@
     const bits = [`cell ${hover.x}, ${hover.y}${w.d > 1 ? `, ${s.z}` : ''}`, `air ${fmt(air)}`]
     if (total(matter) > 0.01) bits.push(`matter ${fmt(matter)}`)
     const wc = weaveCells(s.particles, s.z).get(i)
-    if (wc) {
-      bits.push(`weave ${[...wc.weaves].join(', ')}: ${wc.particles} particles, mana ${fmt(wc.free)}, holds ${fmt(wc.carried)}, ${wc.mass.toFixed(1)} kg`)
-      if (wc.rhoM > 0) bits.push(`matter packed ${wc.rhoM.toFixed(0)} kg/m³`)
-    }
+    if (wc) bits.push(`weave ${[...wc.weaves].join(', ')}: ${wc.particles} particles, mana ${fmt(wc.free)}, ${(wc.mass * 1000).toFixed(1)} g`)
+    if (s.held[i] > 0.005) bits.push(`held ${(s.held[i] * 100).toFixed(0)}% of the cell`)
     const v = [s.airVel[i * 3], s.airVel[i * 3 + 1], s.airVel[i * 3 + 2]]
     if (Math.hypot(...v) > 0.0005) bits.push(`wind ${v.map((x) => x.toFixed(3)).join(', ')} m/t`)
     return bits.join('  ·  ')

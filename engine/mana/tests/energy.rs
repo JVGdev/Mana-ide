@@ -3,8 +3,9 @@
 
 use mana::vm::energy::{heat_of, stored, sum};
 use mana::vm::fluid::{FluidHooks, step_fluid};
+use mana::vm::matter::step_matter;
 use mana::vm::physics::physics;
-use mana::vm::world::{EARTH, World, mass_of};
+use mana::vm::world::{EARTH, World, ground_amount};
 
 /// Open ground 2 m deep, with no air.
 fn ground() -> World {
@@ -20,25 +21,31 @@ fn close(a: f64, b: f64, digits: i32) -> bool {
 }
 
 #[test]
-fn turns_a_fall_into_motion_and_the_landing_into_heat_to_the_last_joule() {
+fn turns_a_fall_into_motion_and_the_landing_into_heat() {
     let ph = physics();
     let mut w = ground();
-    let id = w.pour_still(&mut [0.0, 0.0, 0.0, ph.mote], [2.0, 3.0, 0.125], 1)[0];
-    w.particle_mut(id).unwrap().carried[EARTH] = 4.0;
-    let before = sum(&stored(&mut w, 0.0));
-    let m = mass_of(w.particle(id).unwrap());
-    for _ in 0..40 {
-        step_fluid(&mut w, &FluidHooks::default());
-        // While it falls, what it loses in height it gains in speed.
-        let now = sum(&stored(&mut w, 0.0)) + heat_of(&w);
-        assert!((now - before).abs() < 0.01 * m * ph.gravity); // a centimetre of fall, stepping
+    // A block of earth half a metre on a side, a metre up.
+    let from = w.points.len();
+    w.fill_box([10, 12, 0], [11, 13, 0], EARTH, ground_amount(EARTH));
+    for p in w.points[from..].iter_mut() {
+        p.asleep = false;
     }
-    let p = w.particle(id).unwrap();
-    assert_eq!(p.vel[1], 0.0); // landed
-    // It fell about a metre: its weight times that went into the ground as heat.
-    assert!(close(heat_of(&w), m * ph.gravity * (3.0 - p.pos[1]), 3));
-    let h = |k: &str| w.heat.get(k).copied().unwrap_or(0.0);
-    assert!(close(h("striking") + h("the ground"), heat_of(&w), 9));
+    let m: f64 = w.points[from..].iter().map(|p| p.mass).sum();
+    let y0: f64 = w.points[from..].iter().map(|p| p.pos[1]).sum::<f64>() / (w.points.len() - from) as f64;
+    let before = sum(&stored(&mut w, 0.0));
+    for _ in 0..60 {
+        step_matter(&mut w, &[]);
+        step_fluid(&mut w, &FluidHooks::default());
+        w.tick += 1;
+        // While it falls, what it loses in height it gains in speed, or gives off as heat as it strikes and gives way:
+        // to within a centimetre of fall.
+        let now = sum(&stored(&mut w, 0.0)) + heat_of(&w);
+        assert!((now - before).abs() < 0.01 * m * ph.gravity, "{}", now - before);
+    }
+    let y1: f64 = w.points[from..].iter().map(|p| p.pos[1]).sum::<f64>() / (w.points.len() - from) as f64;
+    assert!(w.points[from..].iter().all(|p| p.vel[1].abs() < 1e-3)); // landed
+    // It fell about a metre: its weight times that went into heat (and a little into the ground's strain).
+    assert!(heat_of(&w) > 0.95 * m * ph.gravity * (y0 - y1), "{} {}", heat_of(&w), m * ph.gravity * (y0 - y1));
 }
 
 #[test]
@@ -72,7 +79,12 @@ mod spells {
         assert!(e.outside > 0.0); // the caster put energy in
         assert!(e.heat > 0.0);
         // What the numbers get wrong is small beside what moved through.
-        assert!(e.error_total.abs() < close_enough * (e.heat + e.outside.abs()));
+        assert!(
+            e.error_total.abs() < close_enough * (e.heat + e.outside.abs()),
+            "{} of {}",
+            e.error_total,
+            e.heat + e.outside.abs()
+        );
     }
 
     #[test]
@@ -90,10 +102,8 @@ mod spells {
         balances("WaterShield", 80, 0.05);
     }
 
-    // A wall's rock is bonds pushed back to their length every step: standing, it fights the forces on it, and what the
-    // bonds give back and take out again shows here (PLAN step 2 makes rock a material).
     #[test]
     fn balances_through_a_stone_wall() {
-        balances("StoneWall", 160, 0.4);
+        balances("StoneWall", 160, 0.05);
     }
 }

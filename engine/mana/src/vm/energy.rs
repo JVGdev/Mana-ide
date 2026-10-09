@@ -14,13 +14,13 @@ use crate::js;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Stored {
-    /// ½mv² of every particle, the air and every body.
+    /// ½mv² of every particle, the air, every body and all matter.
     pub motion: f64,
-    /// Weight lifted: of particles, the air, and the matter in the ground.
+    /// Weight lifted: of particles, the air and matter.
     pub height: f64,
-    /// Mana's gas pressed together, matter packed past full, and what coheres pulled apart.
+    /// Mana's gas pressed together, matter stretched, and what coheres pulled apart.
     pub gas: f64,
-    pub packing: f64,
+    pub strain: f64,
     pub cohesion: f64,
     /// The air pressed together.
     pub air: f64,
@@ -74,7 +74,7 @@ pub fn stored(world: &mut World, in_bodies: f64) -> Stored {
         if !world.solid_at(i as isize) && usual > 0.0 {
             air += c2 * (if mm > 0.0 { mm * js::log(mm / usual) + usual - mm } else { usual });
         }
-        let mt = &world.matter[i];
+        let mt = &world.gas[i];
         let mut w = 0.0;
         for k in 0..4 {
             w += mt[k] * ph.mana_mass[k];
@@ -83,16 +83,16 @@ pub fn stored(world: &mut World, in_bodies: f64) -> Stored {
             height += g * w * y;
         }
     }
-    let fluid = stored_in_fluid(world, if usual > 0.0 { usual / js::pow(world.cell, 3.0) } else { 1.0 });
-    Stored {
-        motion,
-        height,
-        gas: fluid.gas,
-        packing: fluid.packing,
-        cohesion: fluid.cohesion,
-        air,
-        bodies: g * raw * level * in_bodies,
+    // Matter: its motion, its height, and what its stretching stores.
+    let dims = if world.d == 1 { 2 } else { 3 };
+    let mut strain = 0.0;
+    for p in &world.points {
+        motion += 0.5 * p.mass * (p.vel[0] * p.vel[0] + p.vel[1] * p.vel[1] + p.vel[2] * p.vel[2]);
+        height += g * p.mass * p.pos[1];
+        strain += super::matter::stored(p, dims);
     }
+    let fluid = stored_in_fluid(world, if usual > 0.0 { usual / js::pow(world.cell, 3.0) } else { 1.0 });
+    Stored { motion, height, gas: fluid.gas, strain, cohesion: fluid.cohesion, air, bodies: g * raw * level * in_bodies }
 }
 
 /// The height where the air at rest is as thick as the air is on average, metres.
@@ -129,7 +129,7 @@ pub fn usual_air(world: &World) -> f64 {
 }
 
 pub fn sum(s: &Stored) -> f64 {
-    s.motion + s.height + s.gas + s.packing + s.cohesion + s.air + s.bodies
+    s.motion + s.height + s.gas + s.strain + s.cohesion + s.air + s.bodies
 }
 
 pub fn heat_of(world: &World) -> f64 {

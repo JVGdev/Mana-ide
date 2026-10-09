@@ -6,7 +6,7 @@
     motion: 'motion',
     height: 'height',
     gas: 'mana pressed',
-    packing: 'matter packed',
+    strain: 'matter stretched',
     cohesion: 'held together',
     air: 'air pressed',
     bodies: 'mana in bodies',

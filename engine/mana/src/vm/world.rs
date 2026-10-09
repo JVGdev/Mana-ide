@@ -1,4 +1,5 @@
-//! The world: a grid of cells, each with free air mana and condensed matter. A 2D world is one cell deep.
+//! The world: a grid of cells, each with free air mana, and matter: material points over the grid (matter.rs), and the
+//! gases (flame and air matter) in the cells. A 2D world is one cell deep.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -6,6 +7,7 @@ use std::sync::Arc;
 use indexmap::IndexMap;
 
 use super::air::scale_height;
+use super::matter::{Point, settled};
 use super::parts::{Parts, add, dominant, share, take, total, zero};
 use super::physics::physics;
 use crate::asm::Code;
@@ -40,8 +42,6 @@ pub struct Particle {
     pub pos: Vec3,
     pub vel: Vec3,
     pub free: Parts,
-    /// Matter it holds bound, or condensed itself. Bound matter moves with its mana and is held up by it.
-    pub carried: Parts,
     pub weave: u32,
     pub order: Option<Ingrained>,
     /// Its own copy of its weave's registers (w0–w7), and when each was last written: the newest write wins, as copies
@@ -62,8 +62,6 @@ pub struct Particle {
     pub felt: f64,
     pub grad: Vec3,
     pub nvel: Vec3,
-    /// How dense the matter held around it is: its mass per m³.
-    pub rho_m: f64,
     /// The force on it this step.
     pub acc: Vec3,
     /// Its mass, as of this step (mass_of).
@@ -72,19 +70,17 @@ pub struct Particle {
     pub lifted: f64,
 }
 
-/// Two particles of rock held together (PHYSICS.bond_range): a spring `rest` metres long. A broken one has a negative
-/// length until it's taken away.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Bond {
-    pub a: u64,
-    pub b: u64,
-    pub rest: f64,
+impl Particle {
+    /// Its mass as of now (`mass` is as of the fluid's last step).
+    pub fn mass_now(&self) -> f64 {
+        mass_of(self)
+    }
 }
 
-/// A particle's mass: its free mana, and the matter it holds, each part by its weight a M (PHYSICS.mana_mass): mass is
-/// mana, free or condensed (D40). Pushing it, the air dragging it, and its weight all go by this.
+/// A particle's mass: its free mana, each part by its weight a M (PHYSICS.mana_mass): mass is mana (D40). The matter it
+/// holds is matter, with its own mass (matter.rs).
 pub fn mass_of(p: &Particle) -> f64 {
-    mass_of_parts(&p.free) + mass_of_parts(&p.carried)
+    mass_of_parts(&p.free)
 }
 
 /// The mass of some mana, free or condensed, by part (PHYSICS.mana_mass).
@@ -110,7 +106,7 @@ pub fn ground_amount(k: usize) -> f64 {
 }
 
 /// Momentum given to the world from outside it: weight, and the ground and walls, which hold up and stop what's against
-/// them, take what's pushed off them, and take the motion of matter let go of, which stops dead in the ground. Pushes and
+/// them, and take what's pushed off them; and sleeping matter, which holds still what rests on it. Pushes and
 /// kicks are inside it: what's pushed, and what it's pushed off (a caster's body, the air, the ground), take equal and
 /// opposite shares. `outside` is what's given by hand, from beyond the world: a test setting something moving.
 #[derive(Clone, Copy, Debug, Default)]
@@ -134,8 +130,13 @@ pub struct World {
     pub size: usize,
     /// Free mana floating in each cell.
     pub air: Vec<Parts>,
-    /// Condensed mana in each cell that no weave holds.
+    /// Where matter is, cell by cell: the points in it and its gases. Worked out from them (`rasterize`); change the points
+    /// or the gases, not this.
     pub matter: Vec<Parts>,
+    /// Matter: material points (matter.rs).
+    pub points: Vec<Point>,
+    /// The gases condensed mana makes (flame and air matter), in each cell. *(They get a pressure in PLAN step 3.)*
+    pub gas: Vec<Parts>,
     /// How the air in each cell moves: x, y, z, cell by cell.
     pub air_vel: Vec<f64>,
     /// The particles, in the order they came into the world. Add and take them away only through the world's own
@@ -144,15 +145,20 @@ pub struct World {
     pub bodies: Vec<Body>,
     pub tick: i64,
     pub impulse: Impulses,
-    /// Rock: pairs of particles bound together.
-    pub bonds: Vec<Bond>,
     /// Energy that motion has turned into heat, by how: kg·(m/tick)², the kilogram being 1 M of free mana (one is 900 J).
     /// Counted where it happens, exactly: two things that even out their speeds lose what the evening out takes (D29).
     pub heat: IndexMap<String, f64>,
     next_body: u32,
     next_particle: u64,
+    next_point: u64,
     /// Where each particle is in `particles`, by id.
     slots: HashMap<u64, usize>,
+    /// The sleeping points in each cell, and whether that's out of date.
+    asleep_cells: Vec<Vec<usize>>,
+    asleep_stale: bool,
+    /// Every point in each cell, and whether that's out of date.
+    point_cells: Vec<Vec<usize>>,
+    point_cells_stale: bool,
 }
 
 impl World {
@@ -166,16 +172,22 @@ impl World {
             size,
             air: vec![zero(); size],
             matter: vec![zero(); size],
+            points: Vec::new(),
+            gas: vec![zero(); size],
             air_vel: vec![0.0; size * 3],
             particles: Vec::new(),
             bodies: Vec::new(),
             tick: 0,
             impulse: Impulses::default(),
-            bonds: Vec::new(),
             heat: IndexMap::new(),
             next_body: 1,
             next_particle: 1,
+            next_point: 1,
             slots: HashMap::new(),
+            asleep_cells: Vec::new(),
+            asleep_stale: true,
+            point_cells: Vec::new(),
+            point_cells_stale: true,
         }
     }
 
@@ -225,7 +237,7 @@ impl World {
         mass_of_parts(&self.air[i])
     }
 
-    /// Unbound earth and water: what blocks and what counts as a touch.
+    /// Earth and water, held or not: what blocks and what counts as a touch.
     pub fn solid_at(&self, i: isize) -> bool {
         if i < 0 {
             return true;
@@ -234,11 +246,7 @@ impl World {
         m[EARTH] / packed(EARTH) + m[WATER] / packed(WATER) >= physics().solid
     }
 
-    fn earth_at(&self, i: isize) -> bool {
-        i >= 0 && self.matter[i as usize][EARTH] / packed(EARTH) >= physics().solid
-    }
-
-    /// The share of a cell's room its unbound matter takes.
+    /// The share of a cell's room its matter takes.
     pub fn fill(&self, i: usize) -> f64 {
         fill_of(&self.matter[i])
     }
@@ -246,24 +254,29 @@ impl World {
     // Building worlds
 
     /// Fills every cell below `top` (in cells) with matter, and the open air above with air mana, as thick as it settles
-    /// under its own weight: PHYSICS.air_mana a cell at the ground, thinning as it goes up.
+    /// under its own weight: PHYSICS.air_mana a cell at the ground, thinning as it goes up. The ground is at rest, pressed
+    /// by its own weight as it would have settled, and asleep.
     pub fn with_ground(w: usize, h: usize, d: usize, top: usize, part: usize) -> World {
         let mut world = World::new(w, h, d);
         let hh = scale_height();
         let air_mana = physics().air_mana;
         for i in 0..world.size {
-            let [_, y, _] = world.coords(i);
+            let [x, y, z] = world.coords(i);
             if y < top as i64 {
-                world.matter[i][part] = ground_amount(part);
+                let mut amount = zero();
+                amount[part] = ground_amount(part);
+                world.lay(x, y, z, amount, Some(top as f64 * world.cell));
             } else {
                 let v = (air_mana / 4.0) * js::exp(-((y as f64 + 0.5 - top as f64) * world.cell) / hh);
                 world.air[i] = [v; 4];
             }
         }
+        world.rasterize();
         world
     }
 
     /// Fills a box of cells (inclusive) with matter, where the air mana there was. For building a world, before it runs.
+    /// More than `ground_amount` a cell is matter packed denser than its parts' own density: earth packed into rock.
     pub fn fill_box(&mut self, from: [i64; 3], to: [i64; 3], part: usize, amount: f64) {
         for z in from[2]..=to[2] {
             for y in from[1]..=to[1] {
@@ -272,11 +285,129 @@ impl World {
                     if i < 0 {
                         continue;
                     }
-                    self.matter[i as usize][part] += amount;
+                    let mut parts = zero();
+                    parts[part] = amount;
+                    self.lay(x, y, z, parts, None);
                     self.air[i as usize] = zero();
                 }
             }
         }
+        self.rasterize();
+    }
+
+    /// Lays matter into cell (x, y, z) as it's built: material points filling it, asleep, or gas. With a surface at
+    /// `top` metres, the points are pressed by the weight above them, as the ground would have settled.
+    fn lay(&mut self, x: i64, y: i64, z: i64, parts: Parts, top: Option<f64>) {
+        let ph = physics();
+        if dominant(&parts) == FIRE || dominant(&parts) == AIR {
+            let i = self.index(x, y, z) as usize;
+            add(&mut self.gas[i], &parts);
+            return;
+        }
+        let n = ph.matter_points;
+        let dims = if self.d == 1 { 2 } else { 3 };
+        let count = if dims == 2 { n * n } else { n * n * n };
+        let each = [parts[0] / count as f64, parts[1] / count as f64, parts[2] / count as f64, parts[3] / count as f64];
+        let volume = js::pow(self.cell, 3.0) / count as f64;
+        let nz = if dims == 2 { 1 } else { n };
+        for k in 0..nz {
+            for j in 0..n {
+                for i in 0..n {
+                    let at = |c: i64, o: usize| (c as f64 + (o as f64 + 0.5) / n as f64) * self.cell;
+                    let pos = [at(x, i), at(y, j), if dims == 2 { (z as f64 + 0.5) * self.cell } else { at(z, k) }];
+                    let id = self.next_point;
+                    self.next_point += 1;
+                    let mut p = Point::new(id, pos, each, volume);
+                    if let Some(top) = top {
+                        settled(&mut p, top - pos[1], dims);
+                    }
+                    p.asleep = true;
+                    self.points.push(p);
+                }
+            }
+        }
+        self.points_moved();
+    }
+
+    /// Matter condensed out of mana at a point, moving as the mana did: earth and water become a material point, flame
+    /// and air matter a gas in the cell. It takes the room its parts take at their own density. Mass and momentum are
+    /// the mana's.
+    pub fn make_matter(&mut self, parts: Parts, at: Vec3, vel: Vec3) {
+        if total(&parts) <= 0.0 {
+            return;
+        }
+        let c = self.clamped_cell_of(&at);
+        add(&mut self.matter[c], &parts);
+        if dominant(&parts) == FIRE || dominant(&parts) == AIR {
+            add(&mut self.gas[c], &parts);
+            // A gas in a cell is at rest: the ground takes its motion. *(Gases move in PLAN step 3.)*
+            let m = mass_of_parts(&parts);
+            for a in 0..3 {
+                self.impulse.walls[a] -= m * vel[a];
+            }
+            self.warm("condensing", 0.5 * m * (vel[0] * vel[0] + vel[1] * vel[1] + vel[2] * vel[2]));
+            return;
+        }
+        let id = self.next_point;
+        self.next_point += 1;
+        let mut p = Point::new(id, at, parts, super::matter::room_of(&parts));
+        p.vel = vel;
+        self.points.push(p);
+        self.points_moved();
+    }
+
+    /// Works out where matter is, cell by cell (`matter`), from the points and the gases.
+    pub fn rasterize(&mut self) {
+        self.matter.clone_from(&self.gas);
+        for p in &self.points {
+            let c = self.clamped_cell_of(&p.pos);
+            add(&mut self.matter[c], &p.parts);
+        }
+    }
+
+    /// Which points sleep, or where they are, has changed: the indexes of points by cell are out of date.
+    pub fn points_moved(&mut self) {
+        self.asleep_stale = true;
+        self.point_cells_stale = true;
+    }
+
+    /// The points in a cell, by index into `points`.
+    pub fn points_in(&mut self, cell: usize) -> &[usize] {
+        if self.point_cells_stale {
+            self.point_cells = vec![Vec::new(); self.size];
+            for (i, p) in self.points.iter().enumerate() {
+                let c = self.clamped_cell_of(&p.pos);
+                self.point_cells[c].push(i);
+            }
+            self.point_cells_stale = false;
+        }
+        self.point_cells.get(cell).map(|v| v.as_slice()).unwrap_or(&[])
+    }
+
+    /// Brings the index of sleeping points by cell up to date.
+    pub fn index_asleep(&mut self) {
+        if !self.asleep_stale {
+            return;
+        }
+        self.asleep_cells = vec![Vec::new(); self.size];
+        for (i, p) in self.points.iter().enumerate() {
+            if p.asleep {
+                let c = self.clamped_cell_of(&p.pos);
+                self.asleep_cells[c].push(i);
+            }
+        }
+        self.asleep_stale = false;
+    }
+
+    /// The sleeping points in a cell (after `index_asleep`).
+    pub fn asleep_in(&self, cell: usize) -> &[usize] {
+        self.asleep_cells.get(cell).map(|v| v.as_slice()).unwrap_or(&[])
+    }
+
+    /// Keeps only the points `keep` says to.
+    pub fn retain_points(&mut self, keep: impl FnMut(&Point) -> bool) {
+        self.points.retain(keep);
+        self.points_moved();
     }
 
     /// A body's mass is in M, like mana's: a person is about 60. Returns its index in `bodies`.
@@ -360,7 +491,6 @@ impl World {
                 pos,
                 vel,
                 free: [parts[0] / n, parts[1] / n, parts[2] / n, parts[3] / n],
-                carried: zero(),
                 weave,
                 order: None,
                 regs: vec![0.0; ph.weave_registers],
@@ -372,7 +502,6 @@ impl World {
                 felt: 0.0,
                 grad: [0.0; 3],
                 nvel: [0.0; 3],
-                rho_m: 0.0,
                 acc: [0.0; 3],
                 mass: 0.0,
                 lifted: 0.0,
@@ -396,7 +525,6 @@ impl World {
         let mut q = self.particles[i].clone();
         q.id = id;
         q.free = zero();
-        q.carried = zero();
         q.acc = [0.0; 3];
         // What held the old one up was the old one's.
         q.lifted = 0.0;
@@ -477,9 +605,12 @@ impl World {
         self.warm("friction", heat);
     }
 
-    /// Matter follows its nature: earth falls and piles, water falls and spreads, air and flame rise.
-    /// `carried` is the share of each cell's room the matter weaves hold there takes: it takes room too.
-    pub fn settle_matter(&mut self, carried: &[f64]) {
+    /// The gases follow their nature, cell by cell: air matter and flame rise, and flame spreads, thinning into warmth.
+    /// The room the points take, they can't go into. *(Earth and water are points, matter.rs; the gases get a pressure in
+    /// PLAN step 3.)*
+    pub fn settle_gas(&mut self) {
+        // The room matter that isn't gas takes, cell by cell.
+        let carried: Vec<f64> = (0..self.size).map(|i| js::max(0.0, fill_of(&self.gas[i]) - fill_of(&self.gas[i]))).collect();
         let ph = physics();
         let mut moved = vec![false; self.size];
         // How much of a cell's room each M of a cell's matter takes.
@@ -488,7 +619,7 @@ impl World {
         let sides: Vec<(i64, i64)> =
             if self.d > 1 { vec![(flip, 0), (-flip, 0), (0, flip), (0, -flip)] } else { vec![(flip, 0), (-flip, 0)] };
 
-        let room = |w: &World, j: usize| 1.0 - fill_of(&w.matter[j]) - carried[j];
+        let room = |w: &World, j: usize| 1.0 - fill_of(&w.gas[j]) - carried[j];
         let try_move = |w: &mut World, moved: &mut Vec<bool>, i: usize, j: isize, amount: f64| -> f64 {
             if j < 0 {
                 return 0.0;
@@ -498,9 +629,9 @@ impl World {
             if r <= ph.epsilon {
                 return 0.0;
             }
-            let e = each(&w.matter[i]);
-            let moving = take(&mut w.matter[i], js::min(amount, r / e));
-            add(&mut w.matter[j], &moving);
+            let e = each(&w.gas[i]);
+            let moving = take(&mut w.gas[i], js::min(amount, r / e));
+            add(&mut w.gas[j], &moving);
             moved[j] = true;
             total(&moving)
         };
@@ -509,20 +640,13 @@ impl World {
             for z in 0..self.d as i64 {
                 for x in 0..self.w as i64 {
                     let i = self.index(x, y, z) as usize;
-                    if moved[i] || total(&self.matter[i]) <= ph.epsilon {
+                    if moved[i] || total(&self.gas[i]) <= ph.epsilon {
                         continue;
                     }
-                    let kind = dominant(&self.matter[i]);
-                    // Earth holds together: a solid cell with solid earth beside it stays, like ground over a trench.
-                    if kind == EARTH
-                        && self.solid_at(i as isize)
-                        && sides.iter().any(|&(sx, sz)| self.earth_at(self.index(x + sx, y, z + sz)))
-                    {
-                        continue;
-                    }
+                    let kind = dominant(&self.gas[i]);
                     let falls = kind == EARTH || kind == WATER;
                     let dy = if falls { -1 } else { 1 };
-                    let here = |w: &World| total(&w.matter[i]);
+                    let here = |w: &World| total(&w.gas[i]);
                     let amount = here(self);
                     let below = self.index(x, y + dy, z);
                     try_move(self, &mut moved, i, below, amount);
@@ -541,10 +665,10 @@ impl World {
                     if kind == WATER || kind == AIR {
                         for &(sx, sz) in &sides {
                             let j = self.index(x + sx, y, z + sz);
-                            let fj = if j >= 0 { fill_of(&self.matter[j as usize]) + carried[j as usize] } else { 1.0 };
-                            let fi = fill_of(&self.matter[i]);
+                            let fj = if j >= 0 { fill_of(&self.gas[j as usize]) + carried[j as usize] } else { 1.0 };
+                            let fi = fill_of(&self.gas[i]);
                             if fj < fi {
-                                let amount = (fi - fj) / 2.0 / each(&self.matter[i]);
+                                let amount = (fi - fj) / 2.0 / each(&self.gas[i]);
                                 try_move(self, &mut moved, i, j, amount);
                             }
                         }
@@ -557,23 +681,24 @@ impl World {
                                 continue;
                             }
                             let j = j as usize;
-                            let diff = self.matter[i][FIRE] - self.matter[j][FIRE];
+                            let diff = self.gas[i][FIRE] - self.gas[j][FIRE];
                             if diff <= 0.0 {
                                 continue;
                             }
-                            let m = &self.matter[i];
+                            let m = &self.gas[i];
                             let f = js::min(
                                 room(self, j) / each(m),
                                 ((ph.flame_spread * diff) / (sides.len() as f64 + 1.0)) * (total(m) / m[FIRE]),
                             );
-                            let taken = take(&mut self.matter[i], f);
-                            add(&mut self.matter[j], &taken);
+                            let taken = take(&mut self.gas[i], f);
+                            add(&mut self.gas[j], &taken);
                             moved[j] = true;
                         }
                     }
                 }
             }
         }
+        self.rasterize();
     }
 
     /// All the mana in the world that isn't in a caster, by where it is. Particles in weaves are counted by the machine.
@@ -582,12 +707,13 @@ impl World {
         let mut matter = 0.0;
         for i in 0..self.size {
             air += total(&self.air[i]);
-            matter += total(&self.matter[i]);
+            matter += total(&self.gas[i]);
         }
+        matter += super::matter::mana_in(&self.points);
         let mut loose = 0.0;
         for p in &self.particles {
             if p.weave == 0 {
-                loose += total(&p.free) + total(&p.carried);
+                loose += total(&p.free);
             }
         }
         WorldMana { air, matter, loose }
@@ -613,6 +739,11 @@ impl World {
         for b in &self.bodies {
             for k in 0..3 {
                 m[k] += b.mass * b.vel[k];
+            }
+        }
+        for p in &self.points {
+            for k in 0..3 {
+                m[k] += p.mass * p.vel[k];
             }
         }
         for j in [self.impulse.gravity, self.impulse.walls, self.impulse.outside] {

@@ -17,7 +17,7 @@ use std::collections::{HashMap, HashSet};
 use super::air::RAW_MASS;
 use super::parts::total;
 use super::physics::physics;
-use super::world::{Particle, Vec3, World, fill_of, mass_of, mass_of_parts};
+use super::world::{EARTH, Particle, Vec3, WATER, World, mass_of, mass_of_parts, packed};
 use crate::js;
 
 /// What the fluid needs to know from the machine.
@@ -27,9 +27,11 @@ pub struct FluidHooks<'a> {
     /// where it was laid until it's set loose. It presses on what moves around it, and is pressed by it; the hand holds
     /// it still, and the body feels what that takes.
     pub holder: Option<Box<dyn Fn(&Particle) -> Option<usize> + 'a>>,
-    /// Matter held by mana in a cell, as the tick began, that isn't this particle's weave's own: it takes room, like
-    /// matter that isn't held. A weave's own matter never blocks it: it moves together.
-    pub others_carried: Option<Box<dyn Fn(&Particle, usize) -> f64 + 'a>>,
+    /// The share of a cell's room taken by matter this particle's weave holds there: a weave's own matter never blocks
+    /// it, since they move together. Other matter blocks it, held or not.
+    pub own_matter: Option<Box<dyn Fn(&Particle, usize) -> f64 + 'a>>,
+    /// What weaves' mana grips, cell by cell (matter.rs): it holds its matter as it moves, and its matter holds it.
+    pub grips: &'a [super::matter::Grip],
 }
 
 impl FluidHooks<'_> {
@@ -121,11 +123,6 @@ fn free_mass(p: &Particle) -> f64 {
     total(&p.free)
 }
 
-/// The mass of the matter it holds.
-fn matter_mass(p: &Particle) -> f64 {
-    mass_of_parts(&p.carried)
-}
-
 /// How hard a particle's free mana presses for each M a m³ of it: each part's stiffness (the square of how fast it
 /// spreads) times its weight a M, blended by how much of each part it holds. The ideal gas law: p = this × ρ.
 fn gas(p: &Particle) -> f64 {
@@ -139,30 +136,16 @@ fn gas(p: &Particle) -> f64 {
     (p.free[0] * k[0] * w[0] + p.free[1] * k[1] * w[1] + p.free[2] * k[2] * w[2] + p.free[3] * k[3] * w[3]) / m
 }
 
-/// A blend of a property of free mana and one of matter, by how much of the particle's mass each part is.
-fn blend_all(p: &Particle, free: &[f64; 4], matter: &[f64; 4]) -> f64 {
+/// A blend of a property of free mana by part, by how much of the particle's mass each part is.
+fn blend(p: &Particle, by_part: &[f64; 4]) -> f64 {
     let w = physics().mana_mass;
     let mut s = 0.0;
     let mut m = 0.0;
     for k in 0..4 {
-        s += (p.free[k] * free[k] + p.carried[k] * matter[k]) * w[k];
-        m += (p.free[k] + p.carried[k]) * w[k];
+        s += p.free[k] * by_part[k] * w[k];
+        m += p.free[k] * w[k];
     }
     if m > 0.0 { s / m } else { 0.0 }
-}
-
-/// How dense a particle's matter would be, packed full: its mass over the room it would take, by each part's density.
-fn full_density(p: &Particle) -> f64 {
-    let mass = matter_mass(p);
-    if mass <= 0.0 {
-        return 0.0;
-    }
-    let ph = physics();
-    let mut volume = 0.0;
-    for k in 0..4 {
-        volume += (p.carried[k] * ph.mana_mass[k]) / ph.density[k];
-    }
-    if volume > 0.0 { mass / volume } else { 0.0 }
 }
 
 /// Neighbours this step: pairs of indices into the particles, closer than the smoothing length, and how far apart.
@@ -256,7 +239,6 @@ pub fn feel(world: &mut World, ps: &[usize], pairs: &Pairs) {
     let depth = if world.d == 1 { world.cell } else { 1.0 };
     let n = ps.len();
     let mut fm = vec![0.0; n];
-    let mut mm = vec![0.0; n];
     let mut weight = vec![0.0; n];
     // Density is summed with the spiky kernel, whose slope is what pressure pushes along: so the pressure forces are
     // exactly the pull of the gas's stored energy (Σ m k ln ρ), and the Energy ledger can count it.
@@ -269,9 +251,7 @@ pub fn feel(world: &mut World, ps: &[usize], pairs: &Pairs) {
     for i in 0..n {
         let p = &mut parts[ps[i]];
         fm[i] = free_mass(p);
-        mm[i] = matter_mass(p);
         p.rho = fm[i] * own;
-        p.rho_m = mm[i] * own;
         p.felt = fm[i] * own_felt;
         p.grad = [0.0; 3];
         p.nvel = [0.0; 3];
@@ -287,8 +267,6 @@ pub fn feel(world: &mut World, ps: &[usize], pairs: &Pairs) {
         let mb = fm[j];
         a.rho += mb * w;
         b.rho += ma * w;
-        a.rho_m += mm[j] * w;
-        b.rho_m += mm[i] * w;
         let q = h * h - r * r;
         let wf = kk.flat * q;
         a.felt += mb * wf;
@@ -308,7 +286,6 @@ pub fn feel(world: &mut World, ps: &[usize], pairs: &Pairs) {
         let p = &mut parts[ps[i]];
         let w = weight[i];
         p.rho /= depth;
-        p.rho_m /= depth;
         p.felt /= depth;
         for k in 0..3 {
             p.grad[k] /= depth;
@@ -323,35 +300,16 @@ pub fn feel_all(world: &mut World, ps: &[usize]) {
     feel(world, ps, &pairs);
 }
 
-/// One tick of the fluid: weight, pressure, holding together, rock, the air, and what the particles run into.
+/// One tick of the fluid: weight, pressure, holding together, the air, the ground, and what the particles run into.
 pub fn step_fluid(world: &mut World, hooks: &FluidHooks) {
     let ph = physics();
     let (ps, held) = split(world, hooks);
     if ps.is_empty() {
         return;
     }
-    // Where each moving particle is, by id: bonds name theirs by id.
-    let moving: HashMap<u64, usize> = ps.iter().map(|&i| (world.particles[i].id, i)).collect();
     // What's in a hand and near enough to what moves to press on it, or be pressed: after the moving ones.
     let near = if held.is_empty() { vec![] } else { within(world, &ps, &held) };
     let all: Vec<usize> = ps.iter().chain(near.iter()).copied().collect();
-    // Lowest first: the ground's support passes up through the rock within each pass.
-    let low = |b: &super::world::Bond| js::min(world.particles[moving[&b.a]].pos[1], world.particles[moving[&b.b]].pos[1]);
-    let mut bonds: Vec<usize> = (0..world.bonds.len())
-        .filter(|&k| moving.contains_key(&world.bonds[k].a) && moving.contains_key(&world.bonds[k].b))
-        .collect();
-    bonds.sort_by(|&x, &y| {
-        let d = low(&world.bonds[x]) - low(&world.bonds[y]);
-        // A comparator's answer, as JavaScript's sort reads it: below zero, above zero, or neither.
-        if d < 0.0 {
-            std::cmp::Ordering::Less
-        } else if d > 0.0 {
-            std::cmp::Ordering::Greater
-        } else {
-            std::cmp::Ordering::Equal
-        }
-    });
-    let bond_ends: Vec<(usize, usize)> = bonds.iter().map(|&k| (moving[&world.bonds[k].a], moving[&world.bonds[k].b])).collect();
     let dt = 1.0 / ph.substeps as f64;
     for _ in 0..ph.substeps {
         for &i in &all {
@@ -361,22 +319,13 @@ pub fn step_fluid(world: &mut World, hooks: &FluidHooks) {
         let pairs = find_pairs(world, &all);
         feel(world, &all, &pairs);
         forces(world, &all, &pairs, dt, ps.len());
-        hold(world, &ps, &bonds, &bond_ends, dt, hooks);
+        super::matter::cling(world, hooks.grips, dt);
+        ground(world, &ps, dt, hooks);
         drag(world, &all, dt);
         grip(world, &near, hooks);
         move_particles(world, &ps, dt, hooks);
     }
     feel_all(world, &all);
-    // Bonds stretched or squeezed too far have broken: the rock cracks there.
-    let broken: HashSet<usize> = bonds.iter().copied().filter(|&k| world.bonds[k].rest < 0.0).collect();
-    if !broken.is_empty() {
-        let mut k = 0;
-        world.bonds.retain(|_| {
-            let keep = !broken.contains(&k);
-            k += 1;
-            keep
-        });
-    }
 }
 
 /// How much of a parcel of mana (a particle's free mana) the air around it holds up, 0–1: all of it where its cell has
@@ -491,12 +440,10 @@ fn forces(world: &mut World, ps: &[usize], pairs: &Pairs, dt: f64, free: usize) 
     let depth = if world.d == 1 { world.cell } else { 1.0 };
     let g = ph.gravity;
     let n = ps.len();
-    // What each particle brings, worked out once: its free and matter mass, how its free mana presses, how hard it
-    // coheres, how thick it is, and how dense its matter would be packed full.
+    // What each particle brings, worked out once: its mass, how its free mana presses, how hard it coheres, and how
+    // thick it is.
     let mut fm = vec![0.0; n];
-    let mut mm = vec![0.0; n];
     let mut press = vec![0.0; n];
-    let mut over = vec![0.0; n];
     let mut coh = vec![0.0; n];
     let mut visc = vec![0.0; n];
     let mut rho = vec![0.0; n];
@@ -511,7 +458,7 @@ fn forces(world: &mut World, ps: &[usize], pairs: &Pairs, dt: f64, free: usize) 
         };
         let p = &mut world.particles[ps[i]];
         fm[i] = free_mass(p);
-        // Weight: its mass, free mana and matter, times g; less what the air holds up (buoyancy), which the ground under
+        // Weight: its mass times g; less what the air holds up (buoyancy), which the ground under
         // the air takes. What's in a hand, the hand bears.
         if i < free {
             p.acc = [0.0, -g * p.mass + lift, 0.0];
@@ -521,16 +468,12 @@ fn forces(world: &mut World, ps: &[usize], pairs: &Pairs, dt: f64, free: usize) 
         } else {
             p.acc = [0.0; 3];
         }
-        mm[i] = matter_mass(p);
         // Free mana presses like a gas: pressure = k·ρ, so its term is k/ρ.
         press[i] = if fm[i] > 0.0 { gas(p) / (p.rho * depth) } else { 0.0 };
-        // Matter can't be packed past full: past it, it presses back.
-        over[i] =
-            if mm[i] > 0.0 { (ph.matter_stiffness * js::max(0.0, p.rho_m - full_density(p))) / (p.rho_m * p.rho_m) } else { 0.0 };
-        coh[i] = blend_all(p, &ph.cohesion, &ph.matter_cohesion);
-        visc[i] = blend_all(p, &ph.viscosity, &ph.viscosity);
-        // How dense it all is, in kg/m³: its free mana (counted in M, so by its weight a M) and its matter.
-        rho[i] = (if fm[i] > 0.0 { (p.rho * mass_of_parts(&p.free)) / fm[i] } else { 0.0 }) + p.rho_m;
+        coh[i] = blend(p, &ph.cohesion);
+        visc[i] = blend(p, &ph.viscosity);
+        // How dense it is, in kg/m³: its free mana is counted in M, so by its weight a M.
+        rho[i] = if fm[i] > 0.0 { (p.rho * mass_of_parts(&p.free)) / fm[i] } else { 0.0 };
     }
     let h6 = js::pow(h, 6.0);
     let parts = &mut world.particles;
@@ -554,9 +497,6 @@ fn forces(world: &mut World, ps: &[usize], pairs: &Pairs, dt: f64, free: usize) 
         let mut s = 0.0;
         if fm[i] > 0.0 && fm[j] > 0.0 {
             s += -(press[i] + press[j]) * kk.spiky * hr * hr * fm[i] * fm[j];
-        }
-        if over[i] + over[j] > 0.0 && mm[i] > 0.0 && mm[j] > 0.0 {
-            s += (-(over[i] + over[j]) * kk.spiky * hr * hr * mm[i] * mm[j]) / depth;
         }
         if coh[i] > 0.0 && coh[j] > 0.0 {
             // Akinci's cohesion: most pull at half the smoothing length, pushing back when very close.
@@ -636,14 +576,7 @@ pub enum Change {
 /// halves a particle into two, side by side across the way its mana thins, at the same speed.
 pub fn merge_and_split(world: &mut World, hooks: &FluidHooks) -> Vec<Change> {
     let ph = physics();
-    let mut rock = HashSet::new();
-    for b in &world.bonds {
-        rock.insert(b.a);
-        rock.insert(b.b);
-    }
-    let ps: Vec<usize> = (0..world.particles.len())
-        .filter(|&i| !rock.contains(&world.particles[i].id) && hooks.holder(&world.particles[i]).is_none())
-        .collect();
+    let ps: Vec<usize> = (0..world.particles.len()).filter(|&i| hooks.holder(&world.particles[i]).is_none()).collect();
     let mut changes = Vec::new();
     if ps.is_empty() {
         return changes;
@@ -693,9 +626,7 @@ pub fn merge_and_split(world: &mut World, hooks: &FluidHooks) -> Vec<Change> {
         }
         for k in 0..4 {
             a.free[k] += b.free[k];
-            a.carried[k] += b.carried[k];
             b.free[k] = 0.0;
-            b.carried[k] = 0.0;
         }
         a.pushed_at = js::max(a.pushed_at, b.pushed_at);
         let (a_id, b_id, b_weave) = (a.id, b.id, b.weave);
@@ -735,8 +666,6 @@ pub fn merge_and_split(world: &mut World, hooks: &FluidHooks) -> Vec<Change> {
         for k in 0..4 {
             q.free[k] = p.free[k] / 2.0;
             p.free[k] -= q.free[k];
-            q.carried[k] = p.carried[k] / 2.0;
-            p.carried[k] -= q.carried[k];
         }
         // Side by side, across the way it thins (or, alone, any way: by its id), a third of the smoothing length apart.
         let g = js::hypot(&p.grad);
@@ -765,36 +694,27 @@ pub fn merge_and_split(world: &mut World, hooks: &FluidHooks) -> Vec<Change> {
     changes
 }
 
-/// Whether what's in a cell stops a particle moving into it from another. Free mana is stopped by solid matter. Mana
-/// holding matter is stopped where there's no room for what it holds (matter blocks matter), and, coming down, by any
-/// solid matter: loose earth holds up what lands on it. Room is a share of the cell, each part's matter taking its own
-/// by its density.
-fn blocked(world: &World, hooks: &FluidHooks, p: &Particle, from: isize, to: isize, down: bool) -> bool {
+/// Whether what's in a cell stops a particle moving into it from another: solid matter does (matter blocks mana), held
+/// or not, except what its own weave holds.
+fn blocked(world: &World, hooks: &FluidHooks, p: &Particle, from: isize, to: isize, _down: bool) -> bool {
     if to < 0 {
         return true;
     }
     if to == from {
         return false;
     }
-    if total(&p.carried) <= physics().epsilon {
-        return world.solid_at(to);
-    }
-    if down && world.solid_at(to) {
-        return true;
-    }
-    let others = hooks.others_carried.as_ref().map(|f| f(p, to as usize)).unwrap_or(0.0);
-    1.0 - world.fill(to as usize) - others < fill_of(&p.carried)
+    // Earth and water stop it, held or not, unless it's its own weave's: those move together.
+    let m = &world.matter[to as usize];
+    let solid = m[EARTH] / packed(EARTH) + m[WATER] / packed(WATER);
+    let own = hooks.own_matter.as_ref().map(|f| f(p, to as usize)).unwrap_or(0.0);
+    solid - own >= physics().solid
 }
 
 /// How close above the ground a particle rests on it, metres.
 const CONTACT: f64 = 0.02;
 
-/// What holds particles where they are. Rock keeps its shape: every bond is pushed back to its length, by equal and
-/// opposite changes in its two particles' speeds (and a little more to close what it's off by). The ground holds up what
-/// rests on it, and its friction holds it from sliding. A few passes over all of them, so that the ground's support
-/// reaches up through the rock. A bond that would have to pull or push harder than it can breaks (marked by a negative
-/// length), and so does one bent too far, or one whose particles no longer hold matter.
-fn hold(world: &mut World, ps: &[usize], bonds: &[usize], ends: &[(usize, usize)], dt: f64, hooks: &FluidHooks) {
+/// The ground holds up what rests on it, and its friction holds it from sliding.
+fn ground(world: &mut World, ps: &[usize], dt: f64, hooks: &FluidHooks) {
     let ph = physics();
     let mut grounded: Vec<usize> = Vec::new();
     for &i in ps {
@@ -805,87 +725,34 @@ fn hold(world: &mut World, ps: &[usize], bonds: &[usize], ends: &[(usize, usize)
             grounded.push(i);
         }
     }
-    if grounded.is_empty() && bonds.is_empty() {
-        return;
-    }
-    let fix = 0.2 / dt;
-    let strength = ph.bond_strength * dt * ph.bond_iterations as f64;
-    let iterations = if bonds.is_empty() { 1 } else { ph.bond_iterations };
-    let mut ground = 0.0;
-    let mut rock = 0.0;
+    let mut heat = 0.0;
     let tick = world.tick as f64;
-    for _ in 0..iterations {
-        for &i in &grounded {
-            let p = &mut world.particles[i];
-            if p.vel[1] >= 0.0 {
-                continue;
-            }
-            p.touched_at = tick;
-            // The ground takes what presses down, and its friction what slides, up to its share of that.
-            let m = p.mass;
-            // Holding up what rests on it, the ground only takes back the speed its weight gave it this step: no heat in
-            // that.
-            let resting = js::min(-p.vel[1], weight_of(p) * dt / js::max(m, ph.epsilon));
-            let before = ke(p) - 0.5 * m * resting * resting;
-            let press = -p.vel[1];
-            world.impulse.walls[1] += m * press;
-            p.vel[1] = 0.0;
-            let slide = js::hypot2(p.vel[0], p.vel[2]);
-            if slide <= 0.0 {
-                ground += before - ke(p);
-                continue;
-            }
+    for &i in &grounded {
+        let p = &mut world.particles[i];
+        if p.vel[1] >= 0.0 {
+            continue;
+        }
+        p.touched_at = tick;
+        // The ground takes what presses down, and its friction what slides, up to its share of that.
+        let m = p.mass;
+        // Holding up what rests on it, the ground only takes back the speed its weight gave it this step: no heat in
+        // that.
+        let resting = js::min(-p.vel[1], weight_of(p) * dt / js::max(m, ph.epsilon));
+        let before = ke(p) - 0.5 * m * resting * resting;
+        let press = -p.vel[1];
+        world.impulse.walls[1] += m * press;
+        p.vel[1] = 0.0;
+        let slide = js::hypot2(p.vel[0], p.vel[2]);
+        if slide > 0.0 {
             let stop = js::min(1.0, (ph.friction * press) / slide);
             for k in [0, 2] {
                 world.impulse.walls[k] -= m * p.vel[k] * stop;
                 p.vel[k] -= p.vel[k] * stop;
             }
-            ground += before - ke(p);
         }
-        for (n, &k) in bonds.iter().enumerate() {
-            if world.bonds[k].rest < 0.0 {
-                continue;
-            }
-            let rest = world.bonds[k].rest;
-            let (ai, bi) = ends[n];
-            let (a, b) = two(&mut world.particles, ai, bi);
-            let dx = a.pos[0] - b.pos[0];
-            let dy = a.pos[1] - b.pos[1];
-            let dz = a.pos[2] - b.pos[2];
-            let r = (dx * dx + dy * dy + dz * dz).sqrt();
-            if r < 1e-9 {
-                continue;
-            }
-            let off = r - rest;
-            if off.abs() > ph.bond_break * rest || total(&a.carried) <= ph.epsilon || total(&b.carried) <= ph.epsilon {
-                world.bonds[k].rest = -1.0;
-                continue;
-            }
-            let ma = a.mass;
-            let mb = b.mass;
-            let mu = (ma * mb) / (ma + mb);
-            let nx = dx / r;
-            let ny = dy / r;
-            let nz = dz / r;
-            let closing = (a.vel[0] - b.vel[0]) * nx + (a.vel[1] - b.vel[1]) * ny + (a.vel[2] - b.vel[2]) * nz;
-            let j = -mu * (closing + fix * off);
-            if j.abs() > strength * mu {
-                world.bonds[k].rest = -1.0;
-                continue;
-            }
-            let before = ke(a) + ke(b);
-            a.vel[0] += (j * nx) / ma;
-            a.vel[1] += (j * ny) / ma;
-            a.vel[2] += (j * nz) / ma;
-            b.vel[0] -= (j * nx) / mb;
-            b.vel[1] -= (j * ny) / mb;
-            b.vel[2] -= (j * nz) / mb;
-            rock += before - ke(a) - ke(b);
-        }
+        heat += before - ke(p);
     }
-    world.warm("the ground", ground);
-    // Rock keeping its shape loses what it bends with; pushing a bond back to its length can also give a little back.
-    world.warm("rock", rock);
+    world.warm("the ground", heat);
 }
 
 /// A particle and the air it's in pull each other's speeds together: what one loses, the other gains.
@@ -986,13 +853,12 @@ fn move_particles(world: &mut World, ps: &[usize], dt: f64, hooks: &FluidHooks) 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct FluidStore {
     pub gas: f64,
-    pub packing: f64,
     pub cohesion: f64,
 }
 
 /// Energy the fluid stores in where its particles are, for the Energy ledger: in its gas pressed together (each particle
 /// m·k·ln(ρ/ρ̄), which is what its pressure pushes out of: nothing at the density of the air, `air`, so mana that settles
-/// into the air takes none with it), in matter packed past full, and in particles that cohere pulled apart. What's in a
+/// into the air takes none with it), and in particles that cohere pulled apart. What's in a
 /// hand counts too: it presses on what's around it.
 pub fn stored_in_fluid(world: &mut World, air: f64) -> FluidStore {
     let ph = physics();
@@ -1013,18 +879,13 @@ pub fn stored_in_fluid(world: &mut World, air: f64) -> FluidStore {
         if fm > 0.0 && p.rho > 0.0 {
             out.gas += fm * gas(p) * js::log(p.rho / air);
         }
-        let mm = matter_mass(p);
-        let full = full_density(p);
-        if mm > 0.0 && p.rho_m > full {
-            out.packing += mm * ph.matter_stiffness * (js::log(p.rho_m / full) + full / p.rho_m - 1.0);
-        }
     }
     let h = ph.smoothing;
     for e in 0..pairs.n {
         let a = &world.particles[pairs.a[e]];
         let b = &world.particles[pairs.b[e]];
-        let ca = blend_all(a, &ph.cohesion, &ph.matter_cohesion);
-        let cb = blend_all(b, &ph.cohesion, &ph.matter_cohesion);
+        let ca = blend(a, &ph.cohesion);
+        let cb = blend(b, &ph.cohesion);
         if !(ca > 0.0 && cb > 0.0) {
             continue;
         }

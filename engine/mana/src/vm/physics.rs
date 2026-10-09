@@ -20,10 +20,10 @@ pub struct Physics {
     pub density: [f64; 4],
     /// Free mana in each cell of open air at the ground, when a world is made: 20 g, as heavy as real air (1.3 kg/m³).
     pub air_mana: f64,
-    /// How much matter 1 M of free mana can hold bound (influence), in kilograms. Bound matter moves with its mana and is
-    /// held up by it.
+    /// How much matter 1 M of free mana can hold up (influence), in kilograms: mana pulls the matter of its own parts in
+    /// its cell toward its own speed, at most as hard as that much matter weighs. Pulled harder, the matter slips.
     pub bind: f64,
-    /// How full of unbound earth and water a cell has to be, as a share of its room, to count as solid: to block and touch.
+    /// How full of earth and water a cell has to be, as a share of its room, to count as solid: to block and touch.
     pub solid: f64,
     /// Metres around the body that GATH draws from.
     pub gather_radius: f64,
@@ -59,25 +59,35 @@ pub struct Physics {
     /// of it pushes aside its own M's worth of air, which weighs half a gram a M, so fire rises through the air and earth
     /// sinks. Matter is heavy because it's packed: many M to a cell.
     pub mana_mass: [f64; 4],
-    /// How hard matter pushes back when it's packed denser than it can be (its `density`): pressure = this × (ρ − ρ₀), in
-    /// (m/tick)². Water and earth can't be squeezed: a column of them holds up what's on it.
-    pub matter_stiffness: f64,
-    /// How strongly each part pulls on its neighbours, for each kilogram of them: free mana by part, water some, earth
-    /// strongly; and matter, by part: water's pull is its surface tension. *(A stand-in for each material's own
-    /// cohesion, PLAN step 2.)*
+    /// How strongly each part of free mana pulls on its neighbours, for each kilogram of them: water some, earth strongly.
     pub cohesion: [f64; 4],
-    pub matter_cohesion: [f64; 4],
-    /// Earth held by mana is rock: where it's packed as full as solid ground (`solid`) and still, moving against its
-    /// neighbours slower than `bond_speed` m/tick, each particle of it is bound to its neighbours within `bond_range`
-    /// metres, like the grains of a stone. A bond keeps its length: each step, `bond_iterations` passes push every pair of
-    /// bound particles back to it, equally and oppositely. A bond breaks when it has to pull or push harder than
-    /// `bond_strength` (m/tick² for each kilogram it holds), when it's bent past `bond_break` of its length anyway, or when
-    /// either particle stops holding earth.
-    pub bond_range: f64,
-    pub bond_speed: f64,
-    pub bond_iterations: usize,
-    pub bond_strength: f64,
-    pub bond_break: f64,
+
+    // Matter (SPEC §11, One matter): material points over the grid. Stresses are in kg/(m·tick²), a Pa over 900.
+    /// Material points a cell holds along each axis, when matter is laid out.
+    pub matter_points: usize,
+    /// How fast sound crosses matter, m/tick: 150 m/s. *A stand-in* (SPEC §0): rock carries it at kilometres a second,
+    /// which would take thirty times more steps. Its stiffness follows: its density times this squared. Softer, and rock
+    /// bends like rubber: a column of it buckles under its own weight past √(c²) × a few metres (at 50 m/s, 3 m).
+    pub matter_sound: f64,
+    /// The most of a cell a wave in matter may cross in one step.
+    pub matter_cfl: f64,
+    /// Earth's Poisson's ratio: how much it bulges sideways as it's squeezed.
+    pub earth_poisson: f64,
+    /// Earth's angle of friction, radians: loose earth piles at about this slope.
+    pub earth_friction: f64,
+    /// How hard earth holds together as soil (Mohr–Coulomb's cohesion): 8 kPa, so a cut 2–3 m high stands.
+    pub earth_cohesion: f64,
+    /// The pressure that crushes soil denser: 150 kPa. Pressed past it, earth packs, and packed, it holds harder.
+    pub earth_crush: f64,
+    /// How much harder earth holds, and crushes, packed denser: × e^(this × how much denser).
+    pub packing_hardening: f64,
+    /// How much tension water holds before it parts: 200 Pa, so it sticks to itself.
+    pub water_tension: f64,
+    /// Matter slower than this (m/tick) for `rest_ticks` ticks, and held by nothing, sleeps; and sleeping matter that
+    /// would move faster than `wake_speed` wakes.
+    pub sleep_speed: f64,
+    pub wake_speed: f64,
+    pub rest_ticks: u32,
     /// Particles that have come to rest beside each other merge, to keep their number down: closer than `merge_range`
     /// metres, moving within `merge_speed` m/tick of each other, and together no more than `max_mote` M. The new particle
     /// keeps the bigger one's weave and order (SPEC §11, The second flaw).
@@ -140,14 +150,19 @@ pub const PHYSICS: Physics = Physics {
     tick: 1.0 / 30.0,
     gravity: 9.81 / 900.0,
     mana_mass: [0.0003, 0.00055, 0.00045, 0.0007],
-    matter_stiffness: 0.3,
     cohesion: [0.0, 0.037, 0.0, 0.15],
-    matter_cohesion: [0.0, 0.0001, 0.0, 0.0001],
-    bond_range: 0.2,
-    bond_speed: 0.005,
-    bond_iterations: 12,
-    bond_strength: 2.0,
-    bond_break: 0.25,
+    matter_points: 2,
+    matter_sound: 150.0 / 30.0,
+    matter_cfl: 0.4,
+    earth_poisson: 0.3,
+    earth_friction: 35.0 * std::f64::consts::PI / 180.0,
+    earth_cohesion: 8000.0 / 900.0,
+    earth_crush: 150_000.0 / 900.0,
+    packing_hardening: 12.0,
+    water_tension: 200.0 / 900.0,
+    sleep_speed: 0.001,
+    wake_speed: 0.002,
+    rest_ticks: 15,
     merge_range: 0.075,
     merge_speed: 0.005,
     max_mote: 1.0,
