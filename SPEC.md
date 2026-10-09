@@ -1025,6 +1025,235 @@ machine knows what an explosion is.
 
 ---
 
+### Orders
+
+Ways for mana to move itself, from knowing almost nothing to feeling everything around it. The bench (§11) throws a
+fireball with each. `heading` is told one angle and flies along it; `steer` is told an angle and a speed and feels its own
+speed to keep to them; `feel` holds a weave together knowing only its neighbourhood. An order that works something out once
+(a sine and a cosine) keeps it in the weave's registers for every particle after.
+
+```
+; heading: flies along one angle, w1 (up from forward, in radians), speeding up 0.04 m/tick every tick for its first 8
+; ticks. It knows nothing else: not how fast it's going, not where the rest of its weave is. The sine and cosine are
+; worked out on its first tick and kept in w5 and w6 for every particle after: a weave can remember for its mana.
+heading: CMP  n4, #8
+        JGE   .done
+        CALL  angle
+        MUL   n7, #0.04
+        MUL   n8, #0.04
+        LDI   n6, #0
+        KICK  n6:8
+.done:  RET
+
+; angle: the sine and cosine of w1, into n7 and n8. Worked out once and kept in w5 and w6 (a cosine of 0 means not yet),
+; or given there by the caster, who can work it out once for the whole weave.
+angle:  GETW  n8, #6
+        CMP   n8, #0
+        JNE   .known
+        GETW  n7, #1
+        MOV   n8, n7
+        SIN   n7
+        COS   n8
+        PUTW  #5, n7
+        PUTW  #6, n8
+        RET
+.known: GETW  n7, #5
+        RET
+
+; steer: flies along w1 at w3 m/tick. It feels its own speed (IN VEL) and kicks itself toward the speed it wants, so it
+; also cancels whatever else moves it: the spread of its own pressure, the drag of the air.
+steer:  CALL  angle
+        GETW  n9, #3
+        MUL   n7, n9
+        MUL   n8, n9              ; the velocity it wants: (0, n7, n8)
+        IN    n9:11, VEL
+        LDI   n6, #0
+        SUB   n6, n9
+        SUB   n7, n10
+        SUB   n8, n11             ; what it lacks
+        MOV   n9, n6
+        ABS   n9
+        MOV   n10, n7
+        ABS   n10
+        ADD   n9, n10
+        MOV   n10, n8
+        ABS   n10
+        ADD   n9, n10
+        CMP   n9, #0.01
+        JLT   .done               ; near enough: think no more
+        KICK  n6:8
+.done:  RET
+
+; feel: holds a weave together knowing only what its particle feels, not where the weave's centre is. Where the mana
+; around it is thinner than w3 (M/m³), it's at the edge. If it's drifting away from its neighbours there, it kicks
+; itself back toward the thicker mana, harder the steeper it thins: the kick is ∇ρ/ρ, scaled, with no square root.
+feel:   DENS  n5
+        GETW  n9, #3
+        CMP   n5, n9
+        JGE   .done               ; thick enough: it's inside
+        GRAD  n6:8                ; toward thicker mana
+        IN    n11:13, VEL
+        NVEL  n0:2
+        SUB   n11, n0
+        SUB   n12, n1
+        SUB   n13, n2             ; its speed against its neighbours'
+        MUL   n11, n6
+        MUL   n12, n7
+        MUL   n13, n8
+        ADD   n11, n12
+        ADD   n11, n13
+        CMP   n11, #0
+        JGT   .done               ; already coming back in
+        LDI   n12, #0.01
+        DIV   n12, n5
+        MUL   n6, n12
+        MUL   n7, n12
+        MUL   n8, n12
+        KICK  n6:8
+.done:  RET
+
+; feelBurst: burst (Transformations) for an order that only feels: each particle flies 0.2 m/tick out toward where the
+; mana thins, for 3 ticks from w4, then the weave lets go.
+feelBurst: GETW n5, #4
+        MOV   n6, n4
+        SUB   n6, n5
+        CMP   n6, #3
+        JGE   .gone
+        GRAD  n6:8
+        MOV   n9, n6
+        MUL   n9, n6
+        MOV   n10, n7
+        MUL   n10, n7
+        ADD   n9, n10
+        MOV   n10, n8
+        MUL   n10, n8
+        ADD   n9, n10
+        CMP   n9, #0
+        JEQ   .done               ; in the very middle: nowhere is out
+        SQRT  n9
+        LDI   n10, #-0.2
+        DIV   n10, n9
+        MUL   n6, n10
+        MUL   n7, n10
+        MUL   n8, n10
+        KICK  n6:8
+.done:  RET
+.gone:  DISS
+        RET
+```
+
+### Holding
+
+Ways for a caster to hold a weave together by hand: every particle, every other one, or a quick look and then only the
+surface. Each pushes a straying particle back in, and pays only for the speed that adds.
+
+```
+; inward: particle n6 of weave n4, if it's past n14 metres from the centre and not already coming back, is pushed back
+; in: faster the further it's strayed. Inside, it costs a look and a compare. n18:20 is the weave's velocity.
+inward: PPOS  n8:10, n4, n6
+        MOV   n11, n8
+        MUL   n11, n8
+        MOV   n12, n9
+        MUL   n12, n9
+        ADD   n11, n12
+        MOV   n12, n10
+        MUL   n12, n10
+        ADD   n11, n12            ; r²
+        MOV   n12, n14
+        MUL   n12, n14
+        CMP   n11, n12
+        JLE   .done               ; inside
+        SQRT  n11
+        LDI   n12, #1
+        DIV   n12, n11
+        MUL   n8, n12
+        MUL   n9, n12
+        MUL   n10, n12            ; out, one metre long
+        PVEL  n1:3, n4, n6
+        SUB   n1, n18
+        SUB   n2, n19
+        SUB   n3, n20
+        MUL   n1, n8
+        MUL   n2, n9
+        MUL   n3, n10
+        ADD   n1, n2
+        ADD   n1, n3              ; how fast it's moving out
+        SUB   n11, n14
+        MUL   n11, #-0.2          ; how fast it should: back in
+        SUB   n11, n1
+        CMP   n11, #0
+        JGE   .done               ; coming back fast enough
+        MUL   n8, n11
+        MUL   n9, n11
+        MUL   n10, n11
+        SHOV  m0, n4, n6, n8:10
+.done:  RET
+
+; hold: one pass over every particle.
+hold:   WVEL  n18:20, n4
+        PCNT  n5, n4
+        LDI   n6, #0
+.next:  CMP   n6, n5
+        JGE   .done
+        CALL  inward
+        ADD   n6, #1
+        JMP   .next
+.done:  RET
+
+; holdOther: one pass over every other particle: the even ones, then next time the odd ones (n21 says which). Their
+; neighbours pass the push on.
+holdOther: WVEL n18:20, n4
+        PCNT  n5, n4
+        MOV   n6, n21
+.next:  CMP   n6, n5
+        JGE   .done
+        CALL  inward
+        ADD   n6, #2
+        JMP   .next
+.done:  LDI   n6, #1
+        SUB   n6, n21
+        MOV   n21, n6
+        RET
+
+; holdSurface: a quick look at where every particle is, noting in memory the ones in the outer part of the ball (past
+; 0.6 of the radius), then four passes over only those. The inside is held by its skin. Up to 200 are noted.
+holdSurface: PCNT n5, n4
+        LDI   n6, #0
+        LDI   n7, #0              ; how many noted
+        MOV   n21, n14
+        MUL   n21, #0.6
+        MUL   n21, n21            ; (0.6 R)²
+.look:  CMP   n6, n5
+        JGE   .push
+        PPOS  n8:10, n4, n6
+        MUL   n8, n8
+        MUL   n9, n9
+        MUL   n10, n10
+        ADD   n8, n9
+        ADD   n8, n10
+        CMP   n8, n21
+        JLE   .in
+        CMP   n7, #200
+        JGE   .in
+        ST    n6, [n7]
+        ADD   n7, #1
+.in:    ADD   n6, #1
+        JMP   .look
+.push:  LDI   n21, #4             ; passes left
+.pass:  WVEL  n18:20, n4
+        LDI   n5, #0
+.each:  CMP   n5, n7
+        JGE   .round
+        LD    n6, [n5]
+        CALL  inward
+        ADD   n5, #1
+        JMP   .each
+.round: SUB   n21, #1
+        CMP   n21, #0
+        JGT   .pass
+        RET
+```
+
 ## 7. The four spells
 
 Each spell is written in assembly, with the old Core's lore names in the comments. After it comes the same spell in the
@@ -1382,15 +1611,19 @@ TypeScript throughout, like Quire, so it can run inside Quire later.
 ```
 src/
   asm/       isa.ts (the instruction table), assembler.ts, disassembler.ts
-  vm/        physics.ts (the numbers), parts.ts, world.ts, caster.ts, weave.ts, sim.ts (the machine and the tick)
-  cli/       mas.ts, mvm.ts
-  scenes.ts  test worlds for the four spells, in 2D and 3D
+  vm/        physics.ts (the numbers), parts.ts, world.ts, caster.ts, weave.ts, sim.ts (the machine and the tick),
+             fluid.ts (mana's particles), air.ts (the air), energy.ts (the Energy ledger)
+  cli/       mas.ts, mvm.ts, bench.ts
+  scenes.ts  test worlds for the four spells and the bench, in 2D and 3D
+  bench.ts   the bench: every way of holding and throwing, measured
   render.ts  a slice of the world as text
   profile.ts where a cast's beats went
 tester/      the spell tester: Svelte 5, Vite, CodeMirror 6
-lib/         Elements, Basics, Shapes, Reactions, Transformations, in .masm
+lib/         Elements, Basics, Shapes, Reactions, Transformations, Orders, Holding, in .masm
 spells/      StoneWall, Fireball, Gust, WaterShield, in .masm
-test/        the assembler, the machine, the four spells
+bench/       the bench's spells
+scripts/     listings.ts: SPEC's code listings, from the .masm files
+test/        the assembler, the machine, the physics, the Energy ledger, the four spells, the bench
 ```
 
 ```
@@ -1400,6 +1633,8 @@ npm run tester                             the spell tester, at http://localhost
 npx tsx src/cli/mas.ts spells/Fireball.masm  the listing: addresses, bytes, instructions
 npx tsx src/cli/mvm.ts spells/StoneWall.masm cast it in its test world, in the terminal
 npx tsx src/cli/mvm.ts spells/Gust.masm --ticks 40 --maintain 30
+npm run bench                              every way of holding and throwing, side by side
+npm run listings                           SPEC's code listings, brought up to date
 ```
 
 ### Phases
@@ -1415,6 +1650,13 @@ npx tsx src/cli/mvm.ts spells/Gust.masm --ticks 40 --maintain 30
    the body, weaves, stepping through any particle's order, the profile, the ledger, the caster and their will, and the world
    in 2D or a 3D slice.
 3. **Mana physics** (§11). *Built:* mana is particles with pressure, moved by pushes and orders that pay in mana.
+   Then, by `PLAN.md`:
+   - **The bench**, which replaced the sandbox: every way of holding and throwing, on the machine. *Built.*
+   - **Weight, rock and energy-priced pushes** (D28–D30). *Built.*
+   - **Merging and splitting**, and with them the second flaw. *Built.*
+   - **Air that flows.** *Built.*
+   - **The Energy ledger.** *Built.*
+   - **What an order knows** (question 6): waiting on the bench's answer, and your call.
 4. **The language**, compiling to what phase 1 runs by hand.
 5. Casters, spells and libraries read from Quire.
 6. **Other notations** (later): runes, circuits and scores.
@@ -1558,7 +1800,8 @@ A weave is the particles in its caster's **field**. The caster keeps the field l
 so far from their body. A particle outside the field leaves the weave. Its order stays with it: it is still that mana.
 
 Pressure pushes a held construct apart all the time. The caster keeps it together by pushing its particles back in,
-spending beats and mana on each one. Which ones they push is the skill:
+spending beats on each one. A push that only slows a straying particle costs no mana (D29); one that sends it back faster
+than it strayed costs a little. So what holding costs is thought, and which particles the caster thinks about is the skill:
 
 | How | What it costs |
 |---|---|
@@ -1567,6 +1810,8 @@ spending beats and mana on each one. Which ones they push is the skill:
 | Only the surface | Grows with the area, not the volume. The inside is held by its skin. |
 | Only the ones moving out | Sensing first costs beats, and saves pushes. |
 | A hard push every few ticks | The construct breathes, and leaks a little between pushes. |
+
+The bench measures these (`lib/Holding.masm`, §6).
 
 A bigger mind holds a bigger construct, because it pushes more per tick. A practised spell (the Law of Conditioning) holds
 more cheaply. A sphere is the cheapest shape to hold, because it has the least surface for what it holds.
@@ -1629,6 +1874,12 @@ Like the first flaw, it isn't an instruction, nothing in the libraries uses it, 
 3. The instructions in §5: sensing and pushing particles (`PCNT`, `PPOS`, `PVEL`, `SHOV`, `WPOS`, `WVEL`), ingraining
    (`INGR`), the field (`HOLD`), and in orders `KICK`, `DENS`, `GRAD`, `NVEL` and `VEL`. `MOVE` and `LOCK SHAPE` are gone.
 4. The libraries and the four spells, rewritten (§6, §7).
+5. The bench (below).
+6. Weight, matter's mass, the ground's support and friction, water that holds together and can't be squeezed, rock, and
+   pushes priced by the energy they add (D28–D30).
+7. Particles merging and splitting, and the second flaw.
+8. The air as a gas that flows (`src/vm/air.ts`).
+9. The Energy ledger (`src/vm/energy.ts`).
 
 Things the machine found that the sandbox couldn't:
 
@@ -1639,6 +1890,35 @@ Things the machine found that the sandbox couldn't:
   top got the order, rose, and tore away. An adept reaches 4 m now, and the test wall is raised 4 m away.
 - **A rising wall drops earth into its own path.** Climbing costs mana, less mana holds less earth, and dropped earth filled
   the trench below the rows still climbing and blocked them. A weave's own matter doesn't block it, as before; others' does.
+- **A wall that weighs can't hang over its own trench.** Lifted out of the ground, it has nothing under it: holding it up
+  costs nothing in mana (D29), but its order has to think every tick to do it, and burns. So it steps back onto the solid
+  ground in front of the trench and stands there, its order quiet. The trench becomes a ditch in front of it.
+- **Rock needs bracing.** Bound only to the neighbours straight beside them, a 3D wall's particles fold like a stack of
+  cards: nothing resists shear. Bound to their diagonal neighbours too (`bondRange` 0.2 m), it stands.
+- **Rock has to be held from the ground up.** Bonds that keep their length are solved a pass at a time; solved in any order,
+  the ground's support climbs a 2 m wall too slowly, and it sags. Solved lowest first, with the ground in the same passes,
+  it stands in one.
+- **Air that's too soft piles up.** With mana's own gas stiffness, the air's speed of sound was 1 m/s, and wind piled up
+  against a pillar instead of going over it. The air has its own, faster (`airSound`).
+- **Stepping waves the wrong way makes them grow.** Moving the air with its old speeds while the pressure pushed it made
+  every disturbance grow into a storm. Pushed first, then moved, they die away.
+- **Holding is thinking, not mana.** With pushes priced by energy, pushing a straying particle back in mostly slows it:
+  holding a ball by hand costs almost no mana, and what limits a caster is how fast they think, as the sandbox found.
+- **Merging is an optimisation nobody wrote.** A fireball held by its order merges as it flies (72 particles to about 45),
+  and a merged particle thinks once where two did: the ball burns about 40% less.
+
+### How the spells do now
+
+The targets, and where the four spells stand against them (2D, an adept), with ticks of 1/30 s:
+
+| Spell | Target | Now |
+|---|---|---|
+| Fireball | Leaves the hand within a second, reaches a pillar 9 m away with most of its mana | Let go after 0.4 s, hits after 0.9 s more, 95% of its mana together |
+| Stone Wall | Rises in seconds, stands on its own for half a minute or more | Rises and stands in 4 s, holds half its earth for 38 s, then crumbles |
+| Water Shield | Holds its water around its caster for several seconds | Makes 11.5 M of water, holds half of it for 7 s |
+| Gust | Knocks someone back | Pushes a 60 kg body back 1.4 m |
+
+The numbers in `physics.ts` were left where they are: every spell meets its target.
 
 ### The bench
 
@@ -1658,24 +1938,29 @@ Its spells are in `bench/`, and the orders and the ways of holding they use are 
 | ThrowHeading | its order | told one angle, it speeds itself along it, and nothing holds it |
 | ThrowSteer, ThrowSteerPull | its order | told an angle and a speed, it kicks itself toward that velocity; and pulls in too |
 
-What it found first (2D, before cohesion, weight and moving air):
+What it found, on the machine with weight, rock, flowing air and merging (2D and 3D, 300 runs):
 
-- **An order told only an angle doesn't get there.** It flies, but nothing holds it, so it spreads until it touches the
-  ground, and bursts there. Knowing an angle is enough to move; holding takes more.
-- **An order that feels its own speed holds the ball as it flies.** `steer` kicks each particle toward the velocity it's
-  told, which also cancels the ball's own spreading. It's the fastest to the pillar (19 ticks against 31 for a throw by
-  hand), because reach doesn't limit it, and it pays for its speed from the ball: 60% of it arrives.
-- **An order that only feels works if it's told how thin the edge is.** Told nothing, it can't tell a ball that's still
-  filling out from one coming apart, and holds it crushed at the size it was poured, burning through it. Told one number,
-  it does as well as an order that knows the centre (70% of an adept's ball arrives, against 78%).
+- **An order told only an angle moves the ball, and loses it.** `heading` flies, but nothing holds the ball: it spreads
+  into the ground and bursts there. None of 20 throws reached the pillar.
+- **An order that feels its own speed is the fastest throw.** `steer` kicks each particle toward the velocity it's told,
+  which also cancels the ball's spreading. It reaches the pillar in 19 ticks against 26–28 for an adept's hand, because
+  reach doesn't limit it, and pays for the speed out of the ball: all of it arrives, with about 80% of its mana.
+- **Feeling does as well as knowing, thrown.** Held by `feel` (its neighbourhood, and how thin the edge is, told by the
+  caster), 93–97% of a thrown ball arrives, as with `pull`, which knows the centre. Held still, `feel` keeps 93% of a 2D
+  ball, but only about 40% of a 3D one: its edge test is too coarse for a 3D ball's neighbours. So knowing the centre is a
+  convenience, not a power (question 6).
+- **Length is time.** An adept ingrains a 19-instruction order into a fireball in 7 ticks, a 43 in 13, a 77 in 21.
 - **Long orders fray.** Steering and pulling in the same order, and working out its direction (a sine and a cosine) on
   its first tick, comes to more than 64 beats: the weave frays the tick it's let go. The caster works the direction out
   instead, once, and the order is told it (w5, w6). Orders that work something out once also keep it in the weave's
   registers for every particle after.
-- **An adept can't hold a ball by hand and throw it too.** They don't get round fast enough, the ball spreads, and most of
-  it leaves their field. A master can.
-- **Every other particle did better than every particle**, for an adept holding still: 87% kept against 51%, for the same
-  beats. The neighbours pass the push on.
+- **Holding is thinking.** Pushing a straying particle back in mostly slows it, which costs nothing (D29): holding a ball
+  by hand spends almost no mana. An adept can't hold a ball by hand and throw it too: they don't get round fast enough,
+  and most of it strays. A master can.
+- **Every other particle does better than every particle**, for an adept holding still: 98–99% kept against 91–92%, for the
+  same beats. The neighbours pass the push on.
+
+The report of these runs, with every number, is published as a page: *Mana Order Bench*.
 
 The sandbox's findings (2D, its own physics). The first group follows from the physics, and should hold whatever the
 numbers are tuned to:

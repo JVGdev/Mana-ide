@@ -195,12 +195,16 @@ export function feel(world: World, ps: Particle[] = world.particles, pairs = fin
   // Density is summed with the spiky kernel, whose slope is what pressure pushes along: so the pressure forces are
   // exactly the pull of the gas's stored energy (Σ m k ln ρ), and the Energy ledger can count it.
   const self = K.spikyW * h ** 3
+  // What a particle feels (DENS, GRAD, NVEL) is summed with the smoother poly6 kernel, which weighs its neighbours more
+  // than itself: so a big particle, merged from several, still feels whether the mana around it is thin.
+  const selfFelt = K.poly6 * h ** 6
   for (let i = 0; i < n; i++) {
     const p = ps[i]
     fm[i] = freeMass(p)
     mm[i] = matterMass(p)
     p.rho = fm[i] * self
     p.rhoM = mm[i] * self
+    p.felt = fm[i] * selfFelt
     p.grad = [0, 0, 0]
     p.nvel = [0, 0, 0]
   }
@@ -219,22 +223,27 @@ export function feel(world: World, ps: Particle[] = world.particles, pairs = fin
     b.rho += ma * w
     a.rhoM += mm[j] * w
     b.rhoM += mm[i] * w
-    const g = r > 1e-9 ? (K.spiky * hr * hr) / r : 0
+    const q = h * h - r * r
+    const wf = K.poly6 * q * q * q
+    a.felt += mb * wf
+    b.felt += ma * wf
+    const g = K.grad * q * q
     for (let k = 0; k < 3; k++) {
       const dk = D[e * 3 + k]
       a.grad[k] += mb * g * dk
       b.grad[k] -= ma * g * dk
-      a.nvel[k] += mb * w * b.vel[k]
-      b.nvel[k] += ma * w * a.vel[k]
+      a.nvel[k] += mb * wf * b.vel[k]
+      b.nvel[k] += ma * wf * a.vel[k]
     }
-    weight[i] += mb * w
-    weight[j] += ma * w
+    weight[i] += mb * wf
+    weight[j] += ma * wf
   }
   for (let i = 0; i < n; i++) {
     const p = ps[i]
     const w = weight[i]
     p.rho /= depth
     p.rhoM /= depth
+    p.felt /= depth
     for (let k = 0; k < 3; k++) {
       p.grad[k] /= depth
       p.nvel[k] = w > 0 ? p.nvel[k] / w : p.vel[k]
@@ -443,9 +452,9 @@ export function mergeAndSplit(world: World, hooks: FluidHooks = {}): Change[] {
   for (const p of ps) {
     if (gone.has(p) || done.has(p)) continue
     const m = total(p.free)
-    if (m < 2 * PHYSICS.mote - PHYSICS.epsilon || p.rho <= 0) continue
-    const own = (m * K.spikyW * PHYSICS.smoothing ** 3) / depth
-    if (own / p.rho <= PHYSICS.splitAlone && m <= 2 * PHYSICS.maxMote) continue
+    if (m < 2 * PHYSICS.mote - PHYSICS.epsilon || p.felt <= 0) continue
+    const own = (m * K.poly6 * PHYSICS.smoothing ** 6) / depth
+    if (own / p.felt <= PHYSICS.splitAlone && m <= 2 * PHYSICS.maxMote) continue
     const q = world.spawn(p)
     for (let k = 0; k < 4; k++) {
       q.free[k] = p.free[k] / 2

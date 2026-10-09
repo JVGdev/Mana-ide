@@ -1,5 +1,8 @@
 # Plan: the rest of mana physics
 
+*Status: steps 0, 1 and 3–7 are built (PRs #1–#7). Step 2 waits on your call: the bench's answer is published as the page
+"Mana Order Bench", and SPEC §11 The bench has it too. Decisions B–F were taken as recommended.*
+
 What's left after phase 3 of SPEC §10, in the order it should be built. Each step lands on its own: tests pass, both ledgers
 balance every tick, the tester shows the new thing, and SPEC says what was built and what it found.
 

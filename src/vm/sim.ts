@@ -1026,7 +1026,7 @@ export class Sim {
           continue
         }
         case 'DENS':
-          set(f, a[0], p.rho)
+          set(f, a[0], p.felt)
           next()
           continue
         case 'GRAD':
