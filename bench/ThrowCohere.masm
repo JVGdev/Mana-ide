@@ -1,0 +1,27 @@
+; Thrown by hand, held by its own order: it knows where it is from the centre and how its neighbours move, and comes back in at the speed it should.
+        .use  Bench, Shapes, Reactions, Transformations, Orders
+
+ThrowCohere:
+        CALL  pour
+        ORDR  n16, .order
+        CALL  release
+        CALL  aim
+        MOV   n4, n16
+        CALL  throw
+        LOCK  n16, INPUT
+        MOV   n0, n16
+        HALT
+
+.order: GETW  n5, #0              ; the phase: 0 flying, 1 bursting
+        CMP   n5, #0
+        JNE   .burst
+        CALL  touch
+        CMP   n5, #0
+        JNE   .hit
+        CALL  cohere
+        RET
+.hit:   PUTW  #0, n5              ; the whole weave bursts from the next tick
+        PUTW  #4, n4
+        RET
+.burst: CALL  burst
+        RET

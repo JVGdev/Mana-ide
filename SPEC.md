@@ -1368,7 +1368,7 @@ npx tsx src/cli/mvm.ts spells/Gust.masm --ticks 40 --maintain 30
 
 *The machine used to run on simple rules: mana stayed where it was emitted, `MOVE` moved a cell by however far it asked, and
 `LOCK SHAPE` held a shape for free. This section replaced them with real physics (D19–D27). It was tried first in a sandbox,
-then built into the machine: §3–§7 describe the machine as it is now. What isn't built yet says so.*
+then built into the machine: §3–§7 describe the machine as it is now, and the bench measures it. What isn't built yet says so.*
 
 ### Why real
 
@@ -1512,7 +1512,7 @@ built yet: it needs particles to merge.)*
 ### Built
 
 1. A 2D sandbox, outside the machine: a ball of particles with pressure, and a caster with beats and mana pushing it by each
-   strategy in *Holding* (`sandbox/`, below).
+   strategy in *Holding*. The bench (below) has taken its place.
 2. Particles in the world, beside the air grid, which now moves (`src/vm/fluid.ts`). The ledger counts them, and a second
    ledger counts momentum.
 3. The instructions in §5: sensing and pushing particles (`PCNT`, `PPOS`, `PVEL`, `SHOV`, `WPOS`, `WVEL`), ingraining
@@ -1529,16 +1529,44 @@ Things the machine found that the sandbox couldn't:
 - **A rising wall drops earth into its own path.** Climbing costs mana, less mana holds less earth, and dropped earth filled
   the trench below the rows still climbing and blocked them. A weave's own matter doesn't block it, as before; others' does.
 
-### The sandbox
+### The bench
 
-`npm run sandbox` opens it; `npm run sandbox:compare -- hold` (or `throw`) prints every strategy side by side, each run on
-five layouts of the same ball. The fluid is smoothed-particle hydrodynamics. The air is a grid of free mana that particles
-drag along and are dragged by. Every force inside the world is equal and opposite, and the sandbox checks both ledgers, mana
-and momentum (the particles' and the air's), every tick. The caster's routines pay the machine's prices: 8 beats to sense a
-particle, 4 to push it, and the arithmetic in between. Orders pay as above: 24 beats each to ingrain, and 0.0002 M of
-their own mana per beat they think.
+`npm run bench` holds a ball of fire still for 40 ticks, and throws one at a pillar 9 m away, in every way below, on the
+machine itself. It runs each one for an adept and a master, on five layouts each (the ball gathered from 100 to 140 M).
+Its spells are in `bench/`, and the orders and the ways of holding they use are libraries: `lib/Orders.masm` and
+`lib/Holding.masm`.
 
-What it found, with the numbers in `sandbox/sim.ts`. The first group follows from the physics, and should hold whatever the
+| Spell | Who holds it | How |
+|---|---|---|
+| HoldNothing | nobody | its own pressure takes it apart |
+| HoldEvery, HoldOther, HoldSurface | the hand | every particle; every other one; a look, then only the outer ones |
+| HoldPull, HoldCohere | its order | knowing where it is from the centre; and how its neighbours move |
+| HoldFeel | its order | only feeling: thinner than it's told the edge is, it pulls toward thicker mana |
+| ThrowHand, ThrowHandHeld | the hand | pushed up to speed; and held by hand while in reach |
+| ThrowPull, ThrowCohere, ThrowFeel | its order | thrown by hand, held by its order |
+| ThrowHeading | its order | told one angle, it speeds itself along it, and nothing holds it |
+| ThrowSteer, ThrowSteerPull | its order | told an angle and a speed, it kicks itself toward that velocity; and pulls in too |
+
+What it found first (2D, before cohesion, weight and moving air):
+
+- **An order told only an angle doesn't get there.** It flies, but nothing holds it, so it spreads until it touches the
+  ground, and bursts there. Knowing an angle is enough to move; holding takes more.
+- **An order that feels its own speed holds the ball as it flies.** `steer` kicks each particle toward the velocity it's
+  told, which also cancels the ball's own spreading. It's the fastest to the pillar (19 ticks against 31 for a throw by
+  hand), because reach doesn't limit it, and it pays for its speed from the ball: 60% of it arrives.
+- **An order that only feels works if it's told how thin the edge is.** Told nothing, it can't tell a ball that's still
+  filling out from one coming apart, and holds it crushed at the size it was poured, burning through it. Told one number,
+  it does as well as an order that knows the centre (70% of an adept's ball arrives, against 78%).
+- **Long orders fray.** Steering and pulling in the same order, and working out its direction (a sine and a cosine) on
+  its first tick, comes to more than 64 beats: the weave frays the tick it's let go. The caster works the direction out
+  instead, once, and the order is told it (w5, w6). Orders that work something out once also keep it in the weave's
+  registers for every particle after.
+- **An adept can't hold a ball by hand and throw it too.** They don't get round fast enough, the ball spreads, and most of
+  it leaves their field. A master can.
+- **Every other particle did better than every particle**, for an adept holding still: 87% kept against 51%, for the same
+  beats. The neighbours pass the push on.
+
+The sandbox's findings (2D, its own physics). The first group follows from the physics, and should hold whatever the
 numbers are tuned to:
 
 - **Unheld, a fireball comes apart.** 120 M laid out in 0.5 m keeps a quarter of its mana in the weave after 40 ticks, and
@@ -1571,9 +1599,8 @@ The second group depends on prices that are still guesses:
   particle feels it's at the edge, and they all burn themselves pushing: 17% reaches the wall, against 42% for an order
   that knows the centre.
 
-What the sandbox leaves out: it's 2D, with about 120 particles to a fireball. The air doesn't carry itself along or flow
-around the ball yet: a wake spreads where it was made. Mana parts don't differ yet (no cohesion for earth, no weight for
-water), and the caster pays no Energy.
+The sandbox was 2D, with about 120 particles to a fireball, and is gone: the bench runs the same comparisons on the
+machine.
 
 ---
 

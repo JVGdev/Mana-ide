@@ -1,0 +1,16 @@
+; Held by hand while it's maintained: every other particle, the even ones then the odd ones, pushed back in when it strays.
+        .use  Bench
+
+HoldOther:
+        CALL  pour
+        MANI  n16
+        MOV   n4, n16
+        LDI   n14, #0.5
+        LDI   n21, #0
+.keep:  CIRC  m0
+        CALL  holdOther
+        IN    n17, MAINTAIN
+        CMP   n17, #0
+        JNE   .keep
+        MOV   n0, n16
+        HALT

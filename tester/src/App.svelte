@@ -15,6 +15,7 @@
   import { session, SCENE_NAMES, PANELS, type SceneName } from './lib/session.svelte.ts'
   import { num, PART_COLORS, PART_NAMES } from './lib/format.ts'
   import { SCENES } from '../../src/scenes.ts'
+  import { PHYSICS } from '../../src/vm/physics.ts'
 
   let ready = $state(false)
   let note = $state('')
@@ -26,8 +27,11 @@
     ready = true
   })
 
+  /** The bench's library, beside its spells. */
+  const isLibrary = (path: string) => path.startsWith('lib/') || path === 'bench/Bench.masm'
   const spells = $derived(files.list.filter((f) => f.path.startsWith('spells/')))
-  const libraries = $derived(files.list.filter((f) => f.path.startsWith('lib/')))
+  const benchSpells = $derived(files.list.filter((f) => f.path.startsWith('bench/') && !isLibrary(f.path)))
+  const libraries = $derived(files.list.filter((f) => isLibrary(f.path)))
   const openFile = $derived(files.get(session.open))
   /** The libraries the spell uses, from its `.use` lines. */
   const uses = $derived.by(() => {
@@ -81,7 +85,12 @@
     session.spell = path
     session.open = path
     const name = baseName(path).replace(/\.masm$/, '')
-    if (name in SCENES) session.loadScene(name as SceneName)
+    // The bench's spells: a ball held in front of the caster, or thrown at the Fireball's pillar. Its orders that only
+    // feel are run where orders aren't told where their centre is.
+    const bench = path.startsWith('bench/')
+    PHYSICS.orderKnowsCentre = !(bench && name.endsWith('Feel'))
+    const scene = bench ? (name.startsWith('Hold') ? 'Hold' : 'Fireball') : name
+    if (scene in SCENES) session.loadScene(scene as SceneName)
     else session.reset()
     session.lint()
   }
@@ -159,7 +168,12 @@ ${name}:
 
     <div class="group">
       <select value={session.spell} onchange={(e) => chooseSpell(e.currentTarget.value)} aria-label="Spell">
-        {#each spells as f}<option value={f.path}>{baseName(f.path).replace('.masm', '')}{files.dirty(f.path) ? ' •' : ''}</option>{/each}
+        <optgroup label="Spells">
+          {#each spells as f}<option value={f.path}>{baseName(f.path).replace('.masm', '')}{files.dirty(f.path) ? ' •' : ''}</option>{/each}
+        </optgroup>
+        <optgroup label="Bench">
+          {#each benchSpells as f}<option value={f.path}>{baseName(f.path).replace('.masm', '')}{files.dirty(f.path) ? ' •' : ''}</option>{/each}
+        </optgroup>
       </select>
       <button onclick={newSpell} title="A new spell">New</button>
     </div>

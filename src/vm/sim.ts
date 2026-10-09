@@ -165,6 +165,8 @@ export class Sim {
    * emitted into one goes loose.
    */
   private gone = new Map<number, Weave>()
+  /** M spent so far: poured onto particles by casters (`push`) and by orders on themselves (`kick`), and burned thinking. */
+  spent = { push: 0, kick: 0, burn: 0 }
 
   constructor(readonly world: World) {
     this.carried = new Float64Array(world.size)
@@ -730,6 +732,7 @@ export class Sim {
     const c = this.world.clampedCellOf(p.pos)
     // Mana a particle pays with itself leaves carrying its share of the particle's momentum.
     this.world.addAir(c, paid, from === 'kick' ? (p.vel.map((v) => v * got) as Vec) : [0, 0, 0])
+    this.spent[from] += got
     const k = Math.min(1, got / want)
     const m = total(p.free)
     for (let i = 0; i < 3; i++) {
@@ -833,7 +836,9 @@ export class Sim {
       if (!p.order) continue
       const f = frame(PHYSICS.orderRegisters, 16, p.order.addr)
       const off = weave.toFrame(p.pos.map((v, i) => v - weave.origin[i]) as Vec)
-      f.n.set([off[0], off[1], off[2], total(p.free), age])
+      // What it's told: where it is from its weave's centre (unless orders only feel, PHYSICS.orderKnowsCentre), its mana, its age.
+      const told = PHYSICS.orderKnowsCentre ? off : [0, 0, 0]
+      f.n.set([told[0], told[1], told[2], total(p.free), age])
       const trace: OrderTrace | undefined = this.traceOrders
         ? { tick: this.tick, weave: weave.id, particle: k, off, w: w0, steps: [], n: f.n, outcome: 'done', beats: 0, burned: 0, kick: [0, 0, 0], cnds: 0 }
         : undefined
@@ -851,6 +856,7 @@ export class Sim {
       // Thinking burns the particle's own mana, beat by beat. It goes into the air, carrying its momentum.
       const burned = take(p.free, beats * PHYSICS.orderBurn)
       const b = total(burned)
+      this.spent.burn += b
       this.world.addAir(this.world.clampedCellOf(p.pos), burned, p.vel.map((v) => v * b) as Vec)
       if (trace) {
         trace.n = f.n.slice(0, PHYSICS.orderRegisters)
@@ -953,6 +959,7 @@ export class Sim {
           let values: number[]
           if (port === 'CELL') values = [w.cell]
           else if (port === 'DEPTH') values = [w.d]
+          else if ((port === 'ORIGIN' || port === 'MAKER') && !PHYSICS.orderKnowsCentre) throw new Fault('BAD_PORT', `an order only feels: it can't read ${port}`)
           else if (port === 'ORIGIN') values = [...weave.origin]
           else if (port === 'MAKER') values = [...weave.maker.body.pos]
           else if (port === 'VEL') values = weave.toFrame(p.vel)

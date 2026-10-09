@@ -1,0 +1,110 @@
+; Holding: ways for a caster to keep a weave together by hand, pushing its particles back in, as many as their mind gets
+; round to (SPEC §11, Holding). Each push is paid from m0. Which particles to push is the skill: the bench
+; (npm run bench) compares them.
+;
+; All take n4 the weave and n14 the radius to hold it to, and use n1:3, n5:12 and n18:21.
+
+; inward: particle n6 of weave n4, if it's past n14 metres from the centre and not already coming back, is pushed back
+; in: faster the further it's strayed. Inside, it costs a look and a compare. n18:20 is the weave's velocity.
+inward: PPOS  n8:10, n4, n6
+        MOV   n11, n8
+        MUL   n11, n8
+        MOV   n12, n9
+        MUL   n12, n9
+        ADD   n11, n12
+        MOV   n12, n10
+        MUL   n12, n10
+        ADD   n11, n12            ; r²
+        MOV   n12, n14
+        MUL   n12, n14
+        CMP   n11, n12
+        JLE   .done               ; inside
+        SQRT  n11
+        LDI   n12, #1
+        DIV   n12, n11
+        MUL   n8, n12
+        MUL   n9, n12
+        MUL   n10, n12            ; out, one metre long
+        PVEL  n1:3, n4, n6
+        SUB   n1, n18
+        SUB   n2, n19
+        SUB   n3, n20
+        MUL   n1, n8
+        MUL   n2, n9
+        MUL   n3, n10
+        ADD   n1, n2
+        ADD   n1, n3              ; how fast it's moving out
+        SUB   n11, n14
+        MUL   n11, #-0.2          ; how fast it should: back in
+        SUB   n11, n1
+        CMP   n11, #0
+        JGE   .done               ; coming back fast enough
+        MUL   n8, n11
+        MUL   n9, n11
+        MUL   n10, n11
+        SHOV  m0, n4, n6, n8:10
+.done:  RET
+
+; hold: one pass over every particle.
+hold:   WVEL  n18:20, n4
+        PCNT  n5, n4
+        LDI   n6, #0
+.next:  CMP   n6, n5
+        JGE   .done
+        CALL  inward
+        ADD   n6, #1
+        JMP   .next
+.done:  RET
+
+; holdOther: one pass over every other particle: the even ones, then next time the odd ones (n21 says which). Their
+; neighbours pass the push on.
+holdOther: WVEL n18:20, n4
+        PCNT  n5, n4
+        MOV   n6, n21
+.next:  CMP   n6, n5
+        JGE   .done
+        CALL  inward
+        ADD   n6, #2
+        JMP   .next
+.done:  LDI   n6, #1
+        SUB   n6, n21
+        MOV   n21, n6
+        RET
+
+; holdSurface: a quick look at where every particle is, noting in memory the ones in the outer part of the ball (past
+; 0.6 of the radius), then four passes over only those. The inside is held by its skin. Up to 200 are noted.
+holdSurface: PCNT n5, n4
+        LDI   n6, #0
+        LDI   n7, #0              ; how many noted
+        MOV   n21, n14
+        MUL   n21, #0.6
+        MUL   n21, n21            ; (0.6 R)²
+.look:  CMP   n6, n5
+        JGE   .push
+        PPOS  n8:10, n4, n6
+        MUL   n8, n8
+        MUL   n9, n9
+        MUL   n10, n10
+        ADD   n8, n9
+        ADD   n8, n10
+        CMP   n8, n21
+        JLE   .in
+        CMP   n7, #200
+        JGE   .in
+        ST    n6, [n7]
+        ADD   n7, #1
+.in:    ADD   n6, #1
+        JMP   .look
+.push:  LDI   n21, #4             ; passes left
+.pass:  WVEL  n18:20, n4
+        LDI   n5, #0
+.each:  CMP   n5, n7
+        JGE   .round
+        LD    n6, [n5]
+        CALL  inward
+        ADD   n5, #1
+        JMP   .each
+.round: SUB   n21, #1
+        CMP   n21, #0
+        JGT   .pass
+        RET

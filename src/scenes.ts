@@ -59,4 +59,11 @@ export function waterShield(dims: 2 | 3 = 2): Scene {
   return s
 }
 
-export const SCENES = { StoneWall: stoneWall, Fireball: fireball, Gust: gust, WaterShield: waterShield } as const
+/** A ball to hold in front of the caster for as long as they maintain it (the bench). */
+export function hold(dims: 2 | 3 = 2): Scene {
+  const s = field(dims)
+  s.caster.will = { aim: [6, 3, s.caster.body.pos[2]], amount: 120, force: 0, maintain: true }
+  return s
+}
+
+export const SCENES = { StoneWall: stoneWall, Fireball: fireball, Gust: gust, WaterShield: waterShield, Hold: hold } as const
