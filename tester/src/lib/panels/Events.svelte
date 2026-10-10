@@ -19,10 +19,11 @@
   <div class="ledger">
     <div><span>free</span><b>{num(view.ledger.free)}</b></div>
     <div><span>condensed</span><b>{num(view.ledger.condensed)}</b></div>
+    <div><span>beyond the edge</span><b>{num(view.ledger.beyond)}</b></div>
     <div><span>total</span><b>{num(view.ledger.total)}</b></div>
     <div class:bad={Math.abs(view.drift) > 1e-3}><span>made or lost</span><b>{num(view.drift, 6)}</b></div>
   </div>
-  <p class="note">The Law of Conservation: the total never changes.</p>
+  <p class="note">The Law of Conservation: the total never changes. What the air carries past the world's edge is still mana, beyond it.</p>
   {#if view.events.length}
     <table>
       <tbody>

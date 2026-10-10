@@ -34,8 +34,13 @@ pub fn render(sim: &Sim, z: Option<i64>) -> String {
                 continue;
             }
             let m = &w.matter[i as usize];
-            let t = fill_of(m); // the share of the cell it takes
+            let t = fill_of(m); // the share of the cell its earth and water take
             if t < 0.05 {
+                // Flame, where it's a good share of the air.
+                let gas = &w.gas[i as usize];
+                if gas[FIRE] > 0.05 * total(gas) {
+                    put(x, y, '^');
+                }
                 continue;
             }
             let k = dominant(m);

@@ -18,12 +18,10 @@ fn parts(k: usize, m: f64) -> Parts {
     p
 }
 
-/// Open ground 2 m deep, no air mana: nothing drags.
+/// Open ground 2 m deep, no air: nothing drags or holds up.
 fn ground() -> World {
     let mut w = World::with_ground(40, 24, 1, 8, EARTH);
-    for a in w.air.iter_mut() {
-        *a = [0.0; 4];
-    }
+    w.empty_air();
     w
 }
 
@@ -154,9 +152,7 @@ mod water {
             |p| p.gravity = 0.0,
             || {
                 let mut w = World::with_ground(40, 24, 1, 0, EARTH);
-                for a in w.air.iter_mut() {
-                    *a = [0.0; 4];
-                }
+                w.empty_air();
                 let from = w.points.len();
                 w.fill_box([8, 12, 0], [15, 12, 0], WATER, ground_amount(WATER));
                 for p in w.points[from..].iter_mut() {
@@ -194,9 +190,7 @@ mod water {
                 // The same stream, with 1 M of water mana in each of its cells, pushed along tick after tick as a caster
                 // pushes a weave: each particle, and the water it grips (sim.rs, push).
                 let mut w = World::with_ground(40, 24, 1, 0, EARTH);
-                for a in w.air.iter_mut() {
-                    *a = [0.0; 4];
-                }
+                w.empty_air();
                 let from = w.points.len();
                 w.fill_box([8, 12, 0], [15, 12, 0], WATER, ground_amount(WATER));
                 for p in w.points[from..].iter_mut() {
@@ -258,9 +252,7 @@ mod water {
     #[test]
     fn a_line_of_air_mana_pulled_at_one_end_comes_apart() {
         let mut w = World::with_ground(40, 24, 1, 0, EARTH);
-        for a in w.air.iter_mut() {
-            *a = [0.0; 4];
-        }
+        w.empty_air();
         tuned(
             |p| p.gravity = 0.0,
             || {
@@ -499,11 +491,13 @@ mod the_air {
         m
     }
 
+    /// The air steps, keeping its mana (counting what went past the world's edge).
     fn air_run(w: &mut World, ticks: usize, mut each: impl FnMut(&World)) {
-        let mana: f64 = w.air.iter().map(total).sum();
+        let mana = |w: &World| w.air.iter().map(total).sum::<f64>() + total(&w.beyond);
+        let before = mana(w);
         for _ in 0..ticks {
-            step_air(w);
-            let now: f64 = w.air.iter().map(total).sum();
+            step_air(w, &|_| None);
+            let (now, mana) = (mana(w), before);
             assert!(close(now, mana, 6));
             assert!(w.momentum_error() < 1e-6);
             each(w);
@@ -581,5 +575,165 @@ mod the_air {
         air_run(&mut w, 1, |_| {});
         assert!(total(&w.air[i]) < physics().air_mana * 2.0);
         assert!(around(&w) > before); // what it pushed out is around it
+    }
+}
+
+mod real_air {
+    use super::*;
+    use mana::vm::air::{room, sound_speed};
+    use mana::vm::world::FIRE;
+
+    /// The air and the mana in it step, `ticks` times, with mana and momentum kept (counting what went past the edge).
+    fn air_and_mana(w: &mut World, ticks: usize) {
+        let mana = |w: &World| mana::vm::world::World::mana(w);
+        let before = mana(w);
+        for _ in 0..ticks {
+            step_matter(w, &[]);
+            step_fluid(w, &FluidHooks::default());
+            step_air(w, &|_| None);
+            w.tick += 1;
+            let now = mana(w);
+            assert!(close(
+                now.air + now.matter + now.loose + now.beyond,
+                before.air + before.matter + before.loose + before.beyond,
+                6
+            ));
+            assert!(w.momentum_error() < 1e-6, "tick {}: momentum off by {:e}", w.tick, w.momentum_error());
+        }
+    }
+
+    #[test]
+    fn a_balloon_of_light_gas_rises_and_rock_does_not_care() {
+        let mut w = World::with_ground(48, 32, 1, 8, EARTH);
+        // A parcel of the air made of flame instead of air matter: as many M, so it presses the same, but lighter.
+        for y in 10..14 {
+            for x in 22..26 {
+                let i = w.index(x, y, 0) as usize;
+                let m = total(&w.gas[i]);
+                w.gas[i] = parts(FIRE, m);
+            }
+        }
+        let height = |w: &World| {
+            let (mut m, mut y) = (0.0, 0.0);
+            for i in 0..w.size {
+                m += w.gas[i][FIRE];
+                y += w.gas[i][FIRE] * w.coords(i)[1] as f64;
+            }
+            y / m * w.cell
+        };
+        let start = height(&w);
+        // And a block of rock, up in the air.
+        let from = w.points.len();
+        w.fill_box([8, 20, 0], [9, 21, 0], EARTH, 1.6 * ground_amount(EARTH));
+        for p in w.points[from..].iter_mut() {
+            p.asleep = false;
+        }
+        air_and_mana(&mut w, 10);
+        let fell: f64 = w.points[from..].iter().map(|p| p.vel[1]).sum::<f64>() / (w.points.len() - from) as f64;
+        // Rock falls as if there were no air: what the air holds up of it is a thousandth of its weight.
+        assert!(fell < -0.99 * 10.0 * g() && fell > -1.0001 * 10.0 * g(), "{fell}");
+        air_and_mana(&mut w, 20);
+        // The flame rises, slowed by the air's thickness (`air_viscosity`).
+        assert!(height(&w) > start + 0.08, "{} {}", start, height(&w));
+    }
+
+    #[test]
+    fn a_gust_of_mana_drives_a_wind_that_blows_on_after_its_mana_has_stopped() {
+        let mut w = World::with_ground(64, 24, 1, 8, EARTH);
+        // A breath of 100 M of air mana, thrown along: its momentum given from outside.
+        let ids = drop(&mut w, [2.0, 3.0, 0.125], 2, 400.0);
+        for &id in &ids {
+            let p = w.particle_mut(id).unwrap();
+            p.vel = [0.4, 0.0, 0.0];
+            let m = mass_of(p);
+            w.impulse.outside[0] += m * 0.4;
+        }
+        air_and_mana(&mut w, 10);
+        // Then the mana stops where it is: it settles into the air there, as loose mana does, its motion with it.
+        for pi in 0..w.particles.len() {
+            let p = &w.particles[pi];
+            let c = w.clamped_cell_of(&p.pos) as isize;
+            let m = mass_of(p);
+            let (parts, momentum) = (p.free, [p.vel[0] * m, p.vel[1] * m, p.vel[2] * m]);
+            w.add_air(c, &parts, momentum);
+        }
+        w.retain_particles(|_| false);
+        // Where the wind is, and how much of it.
+        let wind = |w: &World| {
+            let (mut p, mut px) = (0.0, 0.0);
+            for i in 0..w.size {
+                let q = w.air_mass(i) * w.air_vel[i * 3];
+                if q > 0.0 {
+                    p += q;
+                    px += q * (w.coords(i)[0] as f64 + 0.5) * w.cell;
+                }
+            }
+            (px / p, p)
+        };
+        air_and_mana(&mut w, 5);
+        let (at, p) = wind(&w);
+        air_and_mana(&mut w, 10);
+        let (later, still) = wind(&w);
+        // The air it set moving goes on along the way the mana went, with no mana left to drive it.
+        assert!(later > at + 0.2, "{at} {later}");
+        assert!(still > 0.5 * p, "{p} {still}");
+    }
+
+    #[test]
+    fn a_pressure_wave_crosses_the_world_at_the_speed_of_sound() {
+        // A channel 1.75 m high, roofed with rock, open at its ends, its air at rest; a puff of air let in near one end.
+        let mut w = World::with_ground(256, 8, 1, 0, EARTH);
+        w.fill_box([0, 7, 0], [255, 7, 0], EARTH, ground_amount(EARTH));
+        let c = sound_speed(room(&w).mean) * 30.0; // m/s
+        assert!(c > 270.0 && c < 290.0, "{c}"); // isothermal: √(R·T/M) for the world's air and the mana in it
+        let still: Vec<f64> = (0..256).map(|x| w.air_amount(w.index(x, 3, 0) as usize)).collect();
+        for y in 0..7 {
+            let i = w.index(4, y, 0) as usize;
+            w.gas[i] = w.gas[i].map(|m| m * 1.05);
+        }
+        let crest = |w: &World| {
+            let d = |x: usize| w.air_amount(w.index(x as i64, 3, 0) as usize) / still[x];
+            ((0..256usize).max_by(|&a, &b| d(a).partial_cmp(&d(b)).unwrap()).unwrap() as f64 + 0.5) * w.cell
+        };
+        for _ in 0..2 {
+            step_air(&mut w, &|_| None);
+        }
+        let x2 = crest(&w);
+        for _ in 0..4 {
+            step_air(&mut w, &|_| None);
+        }
+        let speed = (crest(&w) - x2) / 4.0 * 30.0;
+        assert!((speed - c).abs() < 0.03 * c, "{speed} against {c}");
+    }
+
+    #[test]
+    fn a_gale_blows_a_body_back_and_a_wind_its_feet_can_hold_against_moves_it_not_at_all() {
+        let blown = |u: f64| {
+            let mut w = World::with_ground(64, 24, 1, 8, EARTH);
+            let b = w.add_person("Target", [8.0, 2.9, 0.125]);
+            let x = w.bodies[b].pos[0];
+            for _ in 0..15 {
+                // A wind over the whole world, kept blowing (its momentum given from outside), but around the body,
+                // where the air flows as it will.
+                let bx = w.bodies[b].pos[0];
+                for i in 0..w.size {
+                    let c = w.coords(i);
+                    if w.solid_at(i as isize) || (((c[0] as f64 + 0.5) * w.cell - bx).abs() < 1.0 && c[1] < 20) {
+                        continue;
+                    }
+                    let m = w.air_mass(i);
+                    w.impulse.outside[0] += m * (u - w.air_vel[i * 3]);
+                    w.air_vel[i * 3] = u;
+                }
+                step_air(&mut w, &|_| None);
+                w.move_bodies();
+                assert!(w.momentum_error() < 1e-6);
+            }
+            w.bodies[b].pos[0] - x
+        };
+        // 15 and 30 m/s push less than its feet hold (μ·m·g); 45 m/s pushes more, and slides it along.
+        assert_eq!(blown(0.5), 0.0);
+        assert_eq!(blown(1.0), 0.0);
+        assert!(blown(1.5) > 0.2);
     }
 }

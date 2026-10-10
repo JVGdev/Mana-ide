@@ -1,15 +1,15 @@
 //! The Energy ledger (D20, SPEC §11): what the world holds as motion and as stored energy, so that where it goes can be
 //! counted. Mana is one ledger; Energy is the other, and each balances on its own.
 //!
-//! Units: kg·(m/tick)², the kilogram being the mass of 1 M of free mana. One is 900 J.
+//! Units: kg·(m/tick)². One is 900 J.
 
 use indexmap::IndexMap;
 
-use super::air::{AIR_GAS, RAW_MASS, scale_height};
-use super::fluid::{buoyed, parcels, stored_in_fluid};
+use super::air::{Room, room, scale_height};
+use super::fluid::stored_in_fluid;
 use super::parts::total;
-use super::physics::physics;
-use super::world::{World, mass_of, mass_of_parts};
+use super::physics::{gas_energy, physics};
+use super::world::{World, mass_of};
 use crate::js;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -22,7 +22,7 @@ pub struct Stored {
     pub gas: f64,
     pub strain: f64,
     pub cohesion: f64,
-    /// The air pressed together.
+    /// The air pressed together, or drawn thin.
     pub air: f64,
     /// Mana in casters' bodies, worth what the same mana is worth in the air at rest (air_level): so drawing it in, or
     /// letting it out, as thick as the air is, brings or takes no energy.
@@ -35,54 +35,29 @@ pub const JOULES: f64 = 900.0;
 pub fn stored(world: &mut World, in_bodies: f64) -> Stored {
     let ph = physics();
     let g = ph.gravity;
+    let room = room(world);
     let mut motion = 0.0;
     let mut height = 0.0;
-    // A particle's height is worth its weight, less what the air holds up of it. The air holds it up from the height
-    // where the air at rest is as thick as it is on average: there, a parcel of mana is worth what the same mana is worth
-    // as air (at rest, mana in the air is worth the same at any height, its weight and its pressure trading off), so mana
-    // settling out of a parcel into the air brings no energy with it.
-    let in_cell = parcels(world, 0..world.particles.len());
-    let raw = RAW_MASS();
-    let level = air_level(world);
+    // A particle's height is worth its weight. What holds it up is the air, and the air's Energy counts it: rising, the
+    // mana takes the room of air that comes down (its height), and the air it presses on is thinner up there (`air`).
     for p in &world.particles {
         let m = mass_of(p);
         motion += 0.5 * m * (js::pow(p.vel[0], 2.0) + js::pow(p.vel[1], 2.0) + js::pow(p.vel[2], 2.0));
-        let c = world.cell_of(&p.pos);
-        height += g
-            * (m * p.pos[1]
-                - total(&p.free) * raw * buoyed(world, c, in_cell.get(&c).copied().unwrap_or(0.0)) * (p.pos[1] - level));
+        height += g * m * p.pos[1];
     }
     for b in &world.bodies {
         motion += 0.5 * b.mass * (js::pow(b.vel[0], 2.0) + js::pow(b.vel[1], 2.0) + js::pow(b.vel[2], 2.0));
     }
-    let mut air = 0.0;
-    let c2 = AIR_GAS();
-    // Air stores energy pressed denser, or drawn thinner, than the rest of it is: c²(ln(ρ/ρ̄) + ρ̄/ρ − 1) for each M,
-    // which is nothing at the air's own density. So mana let into the air, or gathered from it, as dense as it is
-    // brings or takes no energy with it.
-    let usual = usual_air(world);
     for i in 0..world.size {
-        let mm = total(&world.air[i]);
-        let y = (world.coords(i)[1] as f64 + 0.5) * world.cell;
-        if mm > 0.0 {
+        let mass = world.air_mass(i);
+        if mass != 0.0 && !mass.is_nan() {
             let v = &world.air_vel;
-            let mass = mass_of_parts(&world.air[i]);
+            let y = (world.coords(i)[1] as f64 + 0.5) * world.cell;
             motion += 0.5 * mass * (js::pow(v[i * 3], 2.0) + js::pow(v[i * 3 + 1], 2.0) + js::pow(v[i * 3 + 2], 2.0));
             height += g * mass * y;
         }
-        // An empty cell open to the air holds c²ρ̄: what the air around it would give, rushing in.
-        if !world.solid_at(i as isize) && usual > 0.0 {
-            air += c2 * (if mm > 0.0 { mm * js::log(mm / usual) + usual - mm } else { usual });
-        }
-        let mt = &world.gas[i];
-        let mut w = 0.0;
-        for k in 0..4 {
-            w += mt[k] * ph.mana_mass[k];
-        }
-        if w != 0.0 && !w.is_nan() {
-            height += g * w * y;
-        }
     }
+    let air = pressed(world, &room);
     // Matter: its motion, its height, and what its stretching stores.
     let dims = if world.d == 1 { 2 } else { 3 };
     let mut strain = 0.0;
@@ -91,31 +66,73 @@ pub fn stored(world: &mut World, in_bodies: f64) -> Stored {
         height += g * p.mass * p.pos[1];
         strain += super::matter::stored(p, dims);
     }
+    let usual = usual_air(world);
     let fluid = stored_in_fluid(world, if usual > 0.0 { usual / js::pow(world.cell, 3.0) } else { 1.0 });
-    Stored { motion, height, gas: fluid.gas, strain, cohesion: fluid.cohesion, air, bodies: g * raw * level * in_bodies }
+    let level = air_level(world, &room);
+    Stored {
+        motion,
+        height,
+        gas: fluid.gas,
+        strain,
+        cohesion: fluid.cohesion,
+        air,
+        bodies: g * room.mean * level * in_bodies,
+    }
+}
+
+/// The Energy the air holds pressed together, or drawn thin, against how thick it is on average: R·T·(N·ln(n/n̄) + n̄·V
+/// − N) for each open cell holding N M in the room V its air has (n = N/V), counting the mana in particles there as gas
+/// too. It's nothing at the average thickness, so gas let into the air, or drawn out of it, as thick as the air is,
+/// brings or takes no Energy with it; and thicker below than above, as the air at rest is, it's what holds things up.
+pub fn pressed(world: &World, room: &Room) -> f64 {
+    let theta = gas_energy();
+    let volume = js::pow(world.cell, 3.0);
+    let mut amount = 0.0;
+    let mut space = 0.0;
+    for i in 0..world.size {
+        if room.open[i] {
+            amount += room.amount(world, i);
+            space += volume * room.air[i];
+        }
+    }
+    if space <= 0.0 || amount <= 0.0 {
+        return 0.0;
+    }
+    let usual = amount / space;
+    let mut air = 0.0;
+    for i in 0..world.size {
+        if !room.open[i] {
+            continue;
+        }
+        let v = volume * room.air[i];
+        let m = room.amount(world, i);
+        air += theta * (if m > 0.0 { m * js::log(m / v / usual) + usual * v - m } else { usual * v });
+    }
+    air
 }
 
 /// The height where the air at rest is as thick as the air is on average, metres.
-pub fn air_level(world: &World) -> f64 {
-    let hh = scale_height();
-    let mut mana = 0.0;
-    let mut shape = 0.0;
-    let mut cells = 0usize;
-    for i in 0..world.size {
-        if !world.solid_at(i as isize) {
-            mana += total(&world.air[i]);
-            shape += js::exp(-((world.coords(i)[1] as f64 + 0.5) * world.cell) / hh);
-            cells += 1;
-        }
-    }
-    if mana <= 0.0 || cells == 0 {
+pub fn air_level(world: &World, room: &Room) -> f64 {
+    if room.mean <= 0.0 {
         return 0.0;
     }
-    // At rest, M(y) = S·e^(−y/H) with S = mana / shape; it's mana/cells at y = H·ln(S·cells/mana).
-    hh * js::log(cells as f64 / shape)
+    let hh = scale_height(room.mean);
+    let mut space = 0.0;
+    let mut shape = 0.0;
+    for i in 0..world.size {
+        if room.open[i] {
+            space += room.air[i];
+            shape += room.air[i] * js::exp(-((world.coords(i)[1] as f64 + 0.5) * world.cell) / hh);
+        }
+    }
+    if space <= 0.0 || shape <= 0.0 {
+        return 0.0;
+    }
+    // At rest, n(y) = S·e^(−y/H), and on average it's S·shape/space: there, y = H·ln(space/shape).
+    hh * js::log(space / shape)
 }
 
-/// How much mana a cell of air holds, on average, among the cells open to it.
+/// How much free mana a cell of air holds, on average, among the cells open to it.
 pub fn usual_air(world: &World) -> f64 {
     let mut sum = 0.0;
     let mut cells = 0usize;

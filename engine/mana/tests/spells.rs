@@ -243,9 +243,10 @@ mod gust_ {
     use super::*;
 
     // A breath of mana weighs grams (D40): it can't shove a person by striking them. What it does is drive the air, and
-    // bodies feel the air with real air (PLAN step 3).
+    // bodies feel the air (PLAN step 3). A few grams of air mana a tick make a breeze of centimetres a second at the
+    // target; a person takes a gale (SPEC §11, How the spells do now).
     #[test]
-    #[ignore = "needs real air: PLAN step 3"]
+    #[ignore = "the Gust drives a breeze, not a gale: the spell is the author's (SPEC §11)"]
     fn pushes_someone_back_while_it_is_maintained() {
         let mut s = gust(2);
         let target = s.target.unwrap();
@@ -348,6 +349,6 @@ mod scenes {
         let p = on_ground(&s, 6.0);
         let w = &s.sim.world;
         assert_eq!(w.matter[w.cell_of(&p) as usize][EARTH], ground_amount(EARTH));
-        assert_eq!(total(&w.matter[w.cell_of(&[p[0], p[1] + 0.25, p[2]]) as usize]), 0.0);
+        assert_eq!(w.fill(w.cell_of(&[p[0], p[1] + 0.25, p[2]]) as usize), 0.0); // above it, only air
     }
 }

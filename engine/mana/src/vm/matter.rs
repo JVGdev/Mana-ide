@@ -538,6 +538,7 @@ pub fn step_matter(world: &mut World, grips: &[Grip]) {
         world.rasterize();
         return;
     }
+    let before: Vec<f64> = (0..world.size).map(|i| world.fill(i)).collect();
     let dims = if world.d == 1 { 2 } else { 3 };
     let dx = world.cell;
     // Mana in a cell wakes the matter there: it's being held, or could be.
@@ -572,6 +573,7 @@ pub fn step_matter(world: &mut World, grips: &[Grip]) {
     rest(world);
     world.points_moved();
     world.rasterize();
+    world.air_gives_way(&before);
 }
 
 /// The cell a point is in, clamped into the world.

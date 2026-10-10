@@ -14,7 +14,7 @@
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 
-use super::air::RAW_MASS;
+use super::air::{Nearest, Room, lift, nearest, room, still_air_mass};
 use super::parts::total;
 use super::physics::physics;
 use super::world::{EARTH, Particle, Vec3, WATER, World, mass_of, mass_of_parts, packed};
@@ -311,6 +311,9 @@ pub fn step_fluid(world: &mut World, hooks: &FluidHooks) {
     let near = if held.is_empty() { vec![] } else { within(world, &ps, &held) };
     let all: Vec<usize> = ps.iter().chain(near.iter()).copied().collect();
     let dt = 1.0 / ph.substeps as f64;
+    // How hard the air at rest holds up each M of mana in each cell, as it is when the tick begins (air.rs).
+    let room = room(world);
+    let lift = lift(world, &room);
     for _ in 0..ph.substeps {
         for &i in &all {
             let m = mass_of(&world.particles[i]);
@@ -318,40 +321,16 @@ pub fn step_fluid(world: &mut World, hooks: &FluidHooks) {
         }
         let pairs = find_pairs(world, &all);
         feel(world, &all, &pairs);
-        forces(world, &all, &pairs, dt, ps.len());
+        forces(world, &all, &pairs, dt, ps.len(), &room, &lift);
         super::matter::cling(world, hooks.grips, dt);
         ground(world, &ps, dt, hooks);
         drag(world, &all, dt);
         grip(world, &near, hooks);
+        let before: Vec<Nearest> = ps.iter().map(|&i| nearest(world, &room.open, &world.particles[i].pos)).collect();
         move_particles(world, &ps, dt, hooks);
+        make_room(world, &room.open, &ps, &before);
     }
     feel_all(world, &all);
-}
-
-/// How much of a parcel of mana (a particle's free mana) the air around it holds up, 0–1: all of it where its cell has
-/// more air than mana in parcels, and less where the parcels are most of what's there (they aren't surrounded by air).
-/// The air holds a parcel up by what the air it pushes aside weighs (Archimedes): free mana is a gas, all its parts
-/// alike, so a parcel pushes aside its own M's worth of air, and that weighs RAW_MASS a M. It's the pressure of the air at
-/// rest, thicker below than above, and the ground under the air takes it back.
-pub fn buoyed(world: &World, cell: isize, in_parcels: f64) -> f64 {
-    if cell < 0 || world.solid_at(cell) {
-        return 0.0;
-    }
-    let air = total(&world.air[cell as usize]);
-    if air > 0.0 { js::min(1.0, air / js::max(in_parcels, physics().epsilon)) } else { 0.0 }
-}
-
-/// The free mana in parcels in each cell of some particles.
-pub fn parcels(world: &World, ps: impl IntoIterator<Item = usize>) -> HashMap<isize, f64> {
-    let mut out = HashMap::new();
-    for i in ps {
-        let p = &world.particles[i];
-        let c = world.cell_of(&p.pos);
-        if c >= 0 {
-            *out.entry(c).or_insert(0.0) += total(&p.free);
-        }
-    }
-    out
 }
 
 /// The particles that move, and those a hand holds.
@@ -433,7 +412,8 @@ fn grip(world: &mut World, held: &[usize], hooks: &FluidHooks) {
 
 /// Weight, pressure, holding together and thickness. The first `free` of `ps` move; the rest are in a hand, which bears
 /// their weight, and they press only on what moves (what's in a hand doesn't press on itself: the hand holds it all).
-fn forces(world: &mut World, ps: &[usize], pairs: &Pairs, dt: f64, free: usize) {
+/// The air holds up the mana in it by `lift` a M, cell by cell (air.rs).
+fn forces(world: &mut World, ps: &[usize], pairs: &Pairs, dt: f64, free: usize, room: &Room, lift: &[f64]) {
     let ph = physics();
     let kk = kernels(dims(world));
     let h = ph.smoothing;
@@ -447,19 +427,19 @@ fn forces(world: &mut World, ps: &[usize], pairs: &Pairs, dt: f64, free: usize) 
     let mut coh = vec![0.0; n];
     let mut visc = vec![0.0; n];
     let mut rho = vec![0.0; n];
-    let in_cell = parcels(world, ps[..free].iter().copied());
-    let raw = RAW_MASS();
     for i in 0..n {
-        let c = world.cell_of(&world.particles[ps[i]].pos);
         let lift = if i < free {
-            g * free_mass(&world.particles[ps[i]]) * raw * buoyed(world, c, in_cell.get(&c).copied().unwrap_or(0.0))
+            let p = &world.particles[ps[i]];
+            let near = nearest(world, &room.open, &p.pos);
+            let per_m: f64 = near.at[..near.n].iter().map(|&(c, wt)| lift[c] * wt).sum();
+            free_mass(p) * per_m
         } else {
             0.0
         };
         let p = &mut world.particles[ps[i]];
         fm[i] = free_mass(p);
-        // Weight: its mass times g; less what the air holds up (buoyancy), which the ground under
-        // the air takes. What's in a hand, the hand bears.
+        // Weight: its mass times g; less what the air holds up (its share of the push the air at rest's pressure gives
+        // the room it takes: buoyancy), which the ground under the air gives. What's in a hand, the hand bears.
         if i < free {
             p.acc = [0.0, -g * p.mass + lift, 0.0];
             p.lifted = lift;
@@ -755,10 +735,11 @@ fn ground(world: &mut World, ps: &[usize], dt: f64, hooks: &FluidHooks) {
     world.warm("the ground", heat);
 }
 
-/// A particle and the air it's in pull each other's speeds together: what one loses, the other gains.
+/// A particle and the air it's in pull each other's speeds together: what one loses, the other gains. It's the drag of
+/// mana on the air it moves through, by part (`air_drag`).
 fn drag(world: &mut World, ps: &[usize], dt: f64) {
     let ph = physics();
-    let raw = RAW_MASS();
+    let still = still_air_mass();
     let mut heat = 0.0;
     for &i in ps {
         let m = world.particles[i].mass;
@@ -767,11 +748,12 @@ fn drag(world: &mut World, ps: &[usize], dt: f64) {
             continue;
         }
         let c = c as usize;
-        let big_m = mass_of_parts(&world.air[c]);
+        let big_m = world.air_mass(c);
         if big_m <= 0.0 {
             continue;
         }
-        let rate = (ph.air_drag * big_m) / (ph.air_mana * raw);
+        // Each part drags by its own amount, in air as thick as still air at the ground; thicker air drags harder.
+        let rate = (blend(&world.particles[i], &ph.air_drag) * big_m) / still;
         let mu = (m * big_m) / (m + big_m);
         let k = mu * (1.0 - js::exp(-rate * (1.0 + m / big_m) * dt));
         let mut rel2 = 0.0;
@@ -856,6 +838,50 @@ fn move_particles(world: &mut World, ps: &[usize], dt: f64, hooks: &FluidHooks) 
     }
     world.warm("striking", struck);
     world.warm("striking bodies", bodies);
+}
+
+/// Mana moving through the air takes room as it goes, and the air makes room for it: the air in the cells it comes into
+/// trades places with it, going to the cells it left, as much as the mana that moved. Sound crosses a cell far faster
+/// than mana does, so the air gives way as it comes, and is pressed no harder. What the air carries goes with it, and
+/// what evening out its speed with the air it joins takes is heat. (Mana that comes out of matter, or goes into it,
+/// has no air to trade with: the air around it is pressed, or drawn thin, and evens out by itself, air.rs.)
+fn make_room(world: &mut World, open: &[bool], ps: &[usize], before: &[Nearest]) {
+    for (n, &i) in ps.iter().enumerate() {
+        let m = total(&world.particles[i].free);
+        if m <= 0.0 {
+            continue;
+        }
+        let after = nearest(world, open, &world.particles[i].pos);
+        // How much more of the mana each cell holds now.
+        let mut change: Vec<(usize, f64)> = Vec::with_capacity(16);
+        let mut put = |c: usize, d: f64| match change.iter_mut().find(|x| x.0 == c) {
+            Some(x) => x.1 += d,
+            None => change.push((c, d)),
+        };
+        for &(c, wt) in &before[n].at[..before[n].n] {
+            put(c, -m * wt);
+        }
+        for &(c, wt) in &after.at[..after.n] {
+            put(c, m * wt);
+        }
+        let came: f64 = change.iter().filter(|x| x.1 > 0.0).map(|x| x.1).sum();
+        let left: f64 = change.iter().filter(|x| x.1 < 0.0).map(|x| -x.1).sum();
+        let traded = js::min(came, left);
+        if traded <= 0.0 {
+            continue;
+        }
+        for &(from, d) in &change {
+            if d <= 0.0 {
+                continue;
+            }
+            for &(to, e) in &change {
+                if e >= 0.0 {
+                    continue;
+                }
+                world.trade_air(from, to, traded * (d / came) * (-e / left));
+            }
+        }
+    }
 }
 
 /// Whether a cell is full enough of earth and water to stop mana.

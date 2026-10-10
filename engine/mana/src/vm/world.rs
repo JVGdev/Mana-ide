@@ -1,12 +1,12 @@
-//! The world: a grid of cells, each with free air mana, and matter: material points over the grid (matter.rs), and the
-//! gases (flame and air matter) in the cells. A 2D world is one cell deep.
+//! The world: a grid of cells, and matter: material points over the grid (matter.rs), and the gases in the cells. The air
+//! is a gas, air matter, with free mana in it (air.rs). A 2D world is one cell deep.
 
 use std::collections::HashMap;
 use std::sync::Arc;
 
 use indexmap::IndexMap;
 
-use super::air::scale_height;
+use super::air::{rest_mass, scale_height};
 use super::matter::{Point, settled};
 use super::parts::{Parts, add, dominant, share, take, total, zero};
 use super::physics::physics;
@@ -95,9 +95,10 @@ pub fn packed(k: usize) -> f64 {
     (ph.density[k] * js::pow(ph.cell, 3.0)) / ph.mana_mass[k]
 }
 
-/// The share of a cell's room some matter takes: each part's amount over what a full cell of it holds.
+/// The share of a cell's room some matter takes: its earth and water, each by its amount over what a full cell of it
+/// holds. Gases (flame, air matter) have no packing: they fill the room that's left (air.rs).
 pub fn fill_of(m: &Parts) -> f64 {
-    m[0] / packed(0) + m[1] / packed(1) + m[2] / packed(2) + m[3] / packed(3)
+    m[WATER] / packed(WATER) + m[EARTH] / packed(EARTH)
 }
 
 /// How many M of a part a cell of the world's ground holds: full.
@@ -108,12 +109,14 @@ pub fn ground_amount(k: usize) -> f64 {
 /// Momentum given to the world from outside it: weight, and the ground and walls, which hold up and stop what's against
 /// them, and take what's pushed off them; and sleeping matter, which holds still what rests on it. Pushes and
 /// kicks are inside it: what's pushed, and what it's pushed off (a caster's body, the air, the ground), take equal and
-/// opposite shares. `outside` is what's given by hand, from beyond the world: a test setting something moving.
+/// opposite shares. `outside` is what's given by hand, from beyond the world: a test setting something moving. `beyond` is
+/// what the air past the world's open edges gives and takes: its pressure there, and what air carries across.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Impulses {
     pub gravity: Vec3,
     pub walls: Vec3,
     pub outside: Vec3,
+    pub beyond: Vec3,
 }
 
 pub const FIRE: usize = 0;
@@ -128,16 +131,16 @@ pub struct World {
     pub h: usize,
     pub d: usize,
     pub size: usize,
-    /// Free mana floating in each cell.
+    /// Free mana in the air of each cell.
     pub air: Vec<Parts>,
     /// Where matter is, cell by cell: the points in it and its gases. Worked out from them (`rasterize`); change the points
     /// or the gases, not this.
     pub matter: Vec<Parts>,
     /// Matter: material points (matter.rs).
     pub points: Vec<Point>,
-    /// The gases condensed mana makes (flame and air matter), in each cell. *(They get a pressure in PLAN step 3.)*
+    /// The gases condensed mana makes, in each cell: air matter, which the open air is, and flame.
     pub gas: Vec<Parts>,
-    /// How the air in each cell moves: x, y, z, cell by cell.
+    /// How the air in each cell moves, its gases and the free mana in them alike: x, y, z, cell by cell.
     pub air_vel: Vec<f64>,
     /// The particles, in the order they came into the world. Add and take them away only through the world's own
     /// methods (pour, spawn, retain_particles), which keep `slots` up to date.
@@ -148,6 +151,11 @@ pub struct World {
     /// Energy that motion has turned into heat, by how: kg·(m/tick)², the kilogram being 1 M of free mana (one is 900 J).
     /// Counted where it happens, exactly: two things that even out their speeds lose what the evening out takes (D29).
     pub heat: IndexMap<String, f64>,
+    /// What has gone past the world's open edges, less what came in from beyond (air.rs): free mana, gases (M), and
+    /// Energy (as `heat` counts it). Nothing is lost: it's in the world beyond.
+    pub beyond: Parts,
+    pub beyond_gas: Parts,
+    pub beyond_energy: f64,
     next_body: u32,
     next_particle: u64,
     next_point: u64,
@@ -180,6 +188,9 @@ impl World {
             tick: 0,
             impulse: Impulses::default(),
             heat: IndexMap::new(),
+            beyond: zero(),
+            beyond_gas: zero(),
+            beyond_energy: 0.0,
             next_body: 1,
             next_particle: 1,
             next_point: 1,
@@ -232,9 +243,15 @@ impl World {
         self.index(clamp(p[0], self.w) as i64, clamp(p[1], self.h) as i64, clamp(p[2], self.d) as i64) as usize
     }
 
-    /// The mass of the air in a cell.
+    /// The mass of the air in a cell: its gases and the free mana in them.
     pub fn air_mass(&self, i: usize) -> f64 {
-        mass_of_parts(&self.air[i])
+        mass_of_parts(&self.air[i]) + mass_of_parts(&self.gas[i])
+    }
+
+    /// How much gas the air in a cell is, M: its gases and the free mana in them. Each M presses alike (the ideal gas
+    /// law counts it).
+    pub fn air_amount(&self, i: usize) -> f64 {
+        total(&self.air[i]) + total(&self.gas[i])
     }
 
     /// Earth and water, held or not: what blocks and what counts as a touch.
@@ -242,8 +259,7 @@ impl World {
         if i < 0 {
             return true;
         }
-        let m = &self.matter[i as usize];
-        m[EARTH] / packed(EARTH) + m[WATER] / packed(WATER) >= physics().solid
+        fill_of(&self.matter[i as usize]) >= physics().solid
     }
 
     /// The share of a cell's room its matter takes.
@@ -253,13 +269,13 @@ impl World {
 
     // Building worlds
 
-    /// Fills every cell below `top` (in cells) with matter, and the open air above with air mana, as thick as it settles
-    /// under its own weight: PHYSICS.air_mana a cell at the ground, thinning as it goes up. The ground is at rest, pressed
-    /// by its own weight as it would have settled, and asleep.
+    /// Fills every cell below `top` (in cells) with matter, and the open air above with air: air matter as dense as real
+    /// air, and PHYSICS.air_mana of free mana in it, at the ground, thinning as it goes up as the air settles under its own
+    /// weight. The ground is at rest, pressed by its own weight as it would have settled, and asleep.
     pub fn with_ground(w: usize, h: usize, d: usize, top: usize, part: usize) -> World {
         let mut world = World::new(w, h, d);
-        let hh = scale_height();
-        let air_mana = physics().air_mana;
+        let (mana, gas) = still_air();
+        let hh = scale_height(rest_mass(total(&mana) + total(&gas), mass_of_parts(&mana) + mass_of_parts(&gas)));
         for i in 0..world.size {
             let [x, y, z] = world.coords(i);
             if y < top as i64 {
@@ -267,12 +283,22 @@ impl World {
                 amount[part] = ground_amount(part);
                 world.lay(x, y, z, amount, Some(top as f64 * world.cell));
             } else {
-                let v = (air_mana / 4.0) * js::exp(-((y as f64 + 0.5 - top as f64) * world.cell) / hh);
-                world.air[i] = [v; 4];
+                let f = js::exp(-((y as f64 + 0.5 - top as f64) * world.cell) / hh);
+                world.air[i] = mana.map(|m| m * f);
+                world.gas[i] = gas.map(|m| m * f);
             }
         }
         world.rasterize();
         world
+    }
+
+    /// Takes the air out of the world: its gases and the mana in them, and how they moved. Nothing presses, drags or
+    /// holds up (tests).
+    pub fn empty_air(&mut self) {
+        self.air.fill(zero());
+        self.gas.fill(zero());
+        self.air_vel.fill(0.0);
+        self.rasterize();
     }
 
     /// Fills a box of cells (inclusive) with matter, where the air mana there was. For building a world, before it runs.
@@ -289,6 +315,7 @@ impl World {
                     parts[part] = amount;
                     self.lay(x, y, z, parts, None);
                     self.air[i as usize] = zero();
+                    self.gas[i as usize] = zero();
                 }
             }
         }
@@ -329,9 +356,9 @@ impl World {
         self.points_moved();
     }
 
-    /// Matter condensed out of mana at a point, moving as the mana did: earth and water become a material point, flame
-    /// and air matter a gas in the cell. It takes the room its parts take at their own density. Mass and momentum are
-    /// the mana's.
+    /// Matter condensed out of mana at a point, moving as the mana did: earth and water become a material point, taking
+    /// the room its parts take at their own density; flame and air matter a gas in the air of the cell. Mass and momentum
+    /// are the mana's.
     pub fn make_matter(&mut self, parts: Parts, at: Vec3, vel: Vec3) {
         if total(&parts) <= 0.0 {
             return;
@@ -339,13 +366,9 @@ impl World {
         let c = self.clamped_cell_of(&at);
         add(&mut self.matter[c], &parts);
         if dominant(&parts) == FIRE || dominant(&parts) == AIR {
-            add(&mut self.gas[c], &parts);
-            // A gas in a cell is at rest: the ground takes its motion. *(Gases move in PLAN step 3.)*
             let m = mass_of_parts(&parts);
-            for a in 0..3 {
-                self.impulse.walls[a] -= m * vel[a];
-            }
-            self.warm("condensing", 0.5 * m * (vel[0] * vel[0] + vel[1] * vel[1] + vel[2] * vel[2]));
+            self.join_air(c, m, [m * vel[0], m * vel[1], m * vel[2]]);
+            add(&mut self.gas[c], &parts);
             return;
         }
         let id = self.next_point;
@@ -415,7 +438,45 @@ impl World {
         let id = self.next_body;
         self.next_body += 1;
         self.bodies.push(Body { id, name: name.to_string(), pos, vel: [0.0; 3], mass, half });
+        self.make_room_for(self.bodies.len() - 1);
         self.bodies.len() - 1
+    }
+
+    /// A body put into the world takes room in the air, and the air it takes the place of goes out over all the rest of
+    /// the open air, each cell taking a share by how much it holds: so the air is pressed no harder anywhere, as if it had
+    /// made way for the body as the body came, and every M of it is kept.
+    fn make_room_for(&mut self, b: usize) {
+        let mut moved_mana = zero();
+        let mut moved_gas = zero();
+        let mut taken: Vec<usize> = Vec::new();
+        for (i, room, _) in super::air::body_room(self, b) {
+            if self.solid_at(i as isize) {
+                continue;
+            }
+            add(&mut moved_mana, &share(&mut self.air[i], room));
+            add(&mut moved_gas, &share(&mut self.gas[i], room));
+            taken.push(i);
+        }
+        let mut rest = 0.0;
+        for i in 0..self.size {
+            if !self.solid_at(i as isize) && !taken.contains(&i) {
+                rest += self.air_amount(i);
+            }
+        }
+        if rest <= 0.0 {
+            return;
+        }
+        for i in 0..self.size {
+            if self.solid_at(i as isize) || taken.contains(&i) {
+                continue;
+            }
+            let f = self.air_amount(i) / rest;
+            for k in 0..4 {
+                self.air[i][k] += moved_mana[k] * f;
+                self.gas[i][k] += moved_gas[k] * f;
+            }
+        }
+        self.rasterize();
     }
 
     /// A person: 60, and 0.5 by 1.8 by 0.5 m.
@@ -540,8 +601,14 @@ impl World {
             return;
         }
         let i = i as usize;
+        self.join_air(i, mass_of_parts(parts), momentum);
+        add(&mut self.air[i], parts);
+    }
+
+    /// Mass `m` joins the air of cell `i`, carrying `momentum`: the air there comes to one speed with it, and what that
+    /// evening out takes from their motion is heat. (The caller adds what joined.)
+    pub fn join_air(&mut self, i: usize, m: f64, momentum: Vec3) {
         let before = self.air_mass(i);
-        let m = mass_of_parts(parts);
         let after = before + m;
         if after <= 0.0 {
             return;
@@ -555,7 +622,105 @@ impl World {
             self.air_vel[i * 3 + k] = next;
         }
         self.warm("mixing", lost);
-        add(&mut self.air[i], parts);
+    }
+
+    /// Moves `amount` M of the air of cell `from` into cell `to`: its gases and the free mana in them alike, with their
+    /// momentum. What evening out its speed with the air it joins takes is heat.
+    pub fn trade_air(&mut self, from: usize, to: usize, amount: f64) {
+        let there = self.air_amount(from);
+        if there <= 0.0 || amount <= 0.0 {
+            return;
+        }
+        let f = js::min(1.0, amount / there);
+        let mana = share(&mut self.air[from], f);
+        let gas = share(&mut self.gas[from], f);
+        let mass = mass_of_parts(&mana) + mass_of_parts(&gas);
+        let v = [self.air_vel[from * 3], self.air_vel[from * 3 + 1], self.air_vel[from * 3 + 2]];
+        self.join_air(to, mass, [mass * v[0], mass * v[1], mass * v[2]]);
+        for k in 0..4 {
+            self.air[to][k] += mana[k];
+            self.gas[to][k] += gas[k];
+        }
+    }
+
+    /// Matter moved, and the air makes room for it: each cell whose matter changed comes to as much air as its room
+    /// holds at rest, the air in the cells matter came into going to the nearest cells it left. Sound is far faster than
+    /// matter: the air gives way as it comes, so rising earth pushes the air above it down into the hole it leaves, and
+    /// no hole is ever empty. What finds no match, and hollows sealed in the ground, seep to and from the air beyond
+    /// (a stand-in, SPEC §0). `before` is each cell's fill before the matter moved.
+    pub fn air_gives_way(&mut self, before: &[f64]) {
+        let room = super::air::room(self);
+        let volume = js::pow(self.cell, 3.0);
+        let row = |w: &World, i: usize| (i / w.w) % w.h;
+        // Cells the matter came into (air out of them), and cells it left (room for air): each comes to as much air as
+        // its room holds at rest's thickness.
+        let mut out: Vec<(usize, f64)> = Vec::new();
+        let mut room_for: Vec<(usize, f64)> = Vec::new();
+        for i in 0..self.size {
+            let now = self.fill(i);
+            if now == before[i] {
+                continue;
+            }
+            let at_rest = if room.open[i] {
+                room.at_rest(self, i)
+            } else {
+                room.rest[row(self, i)] * volume * js::max(0.0, 1.0 - now)
+            };
+            let have = self.air_amount(i);
+            if have > at_rest {
+                out.push((i, have - at_rest));
+            } else if have < at_rest {
+                room_for.push((i, at_rest - have));
+            }
+        }
+        for k in 0..out.len() {
+            let (from, mut m) = out[k];
+            let at = self.coords(from);
+            let mut near: Vec<(i64, usize)> = room_for
+                .iter()
+                .enumerate()
+                .filter(|(_, r)| r.1 > 0.0)
+                .map(|(k, r)| {
+                    let c = self.coords(r.0);
+                    ((c[0] - at[0]).pow(2) + (c[1] - at[1]).pow(2) + (c[2] - at[2]).pow(2), k)
+                })
+                .collect();
+            near.sort_unstable();
+            for (_, k) in near {
+                if m <= 0.0 {
+                    break;
+                }
+                let give = js::min(m, room_for[k].1);
+                self.trade_air(from, room_for[k].0, give);
+                room_for[k].1 -= give;
+                m -= give;
+            }
+            out[k].1 = m;
+        }
+        // What found no match seeps through the ground, to and from the air beyond the world, at rest. *(A stand-in for
+        // air seeping through soil, SPEC §0: matter holds no air of its own yet.)*
+        // (The air beyond is as the world's is on average, before any of it seeps.)
+        let avg = super::air::average(self, &room);
+        for (to, want) in room_for {
+            super::air::from_beyond(self, &room, &avg, to, want);
+        }
+        for (from, m) in out {
+            super::air::to_beyond(self, &room, &avg, from, m);
+        }
+        // A hollow sealed in the ground, with no way through the open air to the world's open edges, holds air at the
+        // air's pressure all the same: air seeps through the ground into it, or out of it. *(The same stand-in.)*
+        let sealed = super::air::sealed(self, &room);
+        for i in 0..self.size {
+            if !sealed[i] {
+                continue;
+            }
+            let (have, want) = (self.air_amount(i), room.at_rest(self, i));
+            if want > have {
+                super::air::from_beyond(self, &room, &avg, i, want - have);
+            } else if have > want {
+                super::air::to_beyond(self, &room, &avg, i, have - want);
+            }
+        }
     }
 
     /// Mana drawn out of the air of a cell. Returns it, and the momentum it takes with it.
@@ -569,7 +734,8 @@ impl World {
 
     /// Bodies stand on the ground, which holds them up, and slide along it when they're pushed, until friction stops
     /// them: the ground takes from their speed, each tick, as much as their weight pressing on it lets it
-    /// (PHYSICS.friction × g). What it takes is heat. A body that runs into something solid stops.
+    /// (PHYSICS.friction × g), before they move, so a push it can hold against moves them not at all. What it takes is
+    /// heat. A body that runs into something solid stops.
     pub fn move_bodies(&mut self) {
         let ph = physics();
         let grip = ph.friction * ph.gravity;
@@ -580,6 +746,11 @@ impl World {
             let ke = 0.5 * b.mass * (js::pow(b.vel[0], 2.0) + js::pow(b.vel[2], 2.0));
             let speed = js::hypot2(b.vel[0], b.vel[2]);
             if speed > 0.0 {
+                // The ground holds it first: a push it can hold against moves it not at all.
+                let slow = js::min(1.0, grip / speed);
+                let b = &mut self.bodies[bi];
+                b.vel[0] -= b.vel[0] * slow;
+                b.vel[2] -= b.vel[2] * slow;
                 let next = [b.pos[0] + b.vel[0], b.pos[1], b.pos[2] + b.vel[2]];
                 let i = self.cell_of(&next);
                 let open = i >= 0 && !self.solid_at(i);
@@ -589,9 +760,6 @@ impl World {
                 } else {
                     b.vel = [0.0; 3];
                 }
-                let slow = js::min(1.0, grip / speed);
-                b.vel[0] -= b.vel[0] * slow;
-                b.vel[2] -= b.vel[2] * slow;
             }
             let b = &mut self.bodies[bi];
             heat += ke - 0.5 * b.mass * (js::pow(b.vel[0], 2.0) + js::pow(b.vel[2], 2.0));
@@ -605,99 +773,77 @@ impl World {
         self.warm("friction", heat);
     }
 
-    /// The gases follow their nature, cell by cell: air matter and flame rise, and flame spreads, thinning into warmth.
-    /// The room the points take, they can't go into. *(Earth and water are points, matter.rs; the gases get a pressure in
-    /// PLAN step 3.)*
-    pub fn settle_gas(&mut self) {
-        // The room matter that isn't gas takes, cell by cell.
-        let carried: Vec<f64> = (0..self.size).map(|i| js::max(0.0, fill_of(&self.gas[i]) - fill_of(&self.gas[i]))).collect();
+    /// Flame spreads into the air around it as any gas does: from where there's more of it to where there's less, evening
+    /// out with its neighbours by a share of the difference each tick (Fick's law), swapped for as much of the gas there,
+    /// so that what each cell holds, and so its pressure, stays as it was. What moves carries its momentum, and what
+    /// evening out the speeds takes is heat. *(A stand-in: real gases spread far slower, by themselves; a flame thins
+    /// by its heat, which has no place yet, PLAN step 4.)* How gases rise and flow is the air's (air.rs).
+    pub fn spread_flame(&mut self) {
         let ph = physics();
-        let mut moved = vec![false; self.size];
-        // How much of a cell's room each M of a cell's matter takes.
-        let each = |m: &Parts| if total(m) > 0.0 { fill_of(m) / total(m) } else { 0.0 };
-        let flip: i64 = if self.tick % 2 == 0 { 1 } else { -1 };
-        let sides: Vec<(i64, i64)> =
-            if self.d > 1 { vec![(flip, 0), (-flip, 0), (0, flip), (0, -flip)] } else { vec![(flip, 0), (-flip, 0)] };
-
-        let room = |w: &World, j: usize| 1.0 - fill_of(&w.gas[j]) - carried[j];
-        let try_move = |w: &mut World, moved: &mut Vec<bool>, i: usize, j: isize, amount: f64| -> f64 {
-            if j < 0 {
-                return 0.0;
+        let n = self.size;
+        let axes = if self.d == 1 { 2 } else { 3 };
+        let (w, h) = (self.w, self.h);
+        let step = [1, w, w * h];
+        let limit = [w, h, self.d];
+        // From a snapshot, so the order cells are visited in doesn't matter.
+        let fire: Vec<f64> = self.gas.iter().map(|g| g[FIRE]).collect();
+        let mut moves: Vec<(usize, usize, f64)> = Vec::new();
+        for i in 0..n {
+            if fire[i] <= ph.epsilon || self.solid_at(i as isize) {
+                continue;
             }
-            let j = j as usize;
-            let r = room(w, j);
-            if r <= ph.epsilon {
-                return 0.0;
-            }
-            let e = each(&w.gas[i]);
-            let moving = take(&mut w.gas[i], js::min(amount, r / e));
-            add(&mut w.gas[j], &moving);
-            moved[j] = true;
-            total(&moving)
-        };
-
-        for y in 0..self.h as i64 {
-            for z in 0..self.d as i64 {
-                for x in 0..self.w as i64 {
-                    let i = self.index(x, y, z) as usize;
-                    if moved[i] || total(&self.gas[i]) <= ph.epsilon {
+            let at = self.coords(i);
+            for ax in 0..axes {
+                for dir in [-1i64, 1] {
+                    let c = at[ax] + dir;
+                    if c < 0 || c >= limit[ax] as i64 {
                         continue;
                     }
-                    let kind = dominant(&self.gas[i]);
-                    let falls = kind == EARTH || kind == WATER;
-                    let dy = if falls { -1 } else { 1 };
-                    let here = |w: &World| total(&w.gas[i]);
-                    let amount = here(self);
-                    let below = self.index(x, y + dy, z);
-                    try_move(self, &mut moved, i, below, amount);
-                    for &(sx, sz) in &sides {
-                        if here(self) <= ph.epsilon {
-                            break;
-                        }
-                        let amount = here(self);
-                        let j = self.index(x + sx, y + dy, z + sz);
-                        try_move(self, &mut moved, i, j, amount);
-                    }
-                    if here(self) <= ph.epsilon {
+                    let j = if dir > 0 { i + step[ax] } else { i - step[ax] };
+                    let diff = fire[i] - fire[j];
+                    if diff <= 0.0 || self.solid_at(j as isize) {
                         continue;
                     }
-                    // What couldn't fall or rise: water and air spread to the sides, flame thins into warmth.
-                    if kind == WATER || kind == AIR {
-                        for &(sx, sz) in &sides {
-                            let j = self.index(x + sx, y, z + sz);
-                            let fj = if j >= 0 { fill_of(&self.gas[j as usize]) + carried[j as usize] } else { 1.0 };
-                            let fi = fill_of(&self.gas[i]);
-                            if fj < fi {
-                                let amount = (fi - fj) / 2.0 / each(&self.gas[i]);
-                                try_move(self, &mut moved, i, j, amount);
-                            }
-                        }
-                    } else if kind == FIRE {
-                        // Flame spreads as any gas does: from where there's more of it to where there's less, evening out
-                        // with its neighbours by a share of the difference (Fick's law), and no further once they're even.
-                        for &(sx, sz) in &sides {
-                            let j = self.index(x + sx, y, z + sz);
-                            if j < 0 || room(self, j as usize) <= 0.0 {
-                                continue;
-                            }
-                            let j = j as usize;
-                            let diff = self.gas[i][FIRE] - self.gas[j][FIRE];
-                            if diff <= 0.0 {
-                                continue;
-                            }
-                            let m = &self.gas[i];
-                            let f = js::min(
-                                room(self, j) / each(m),
-                                ((ph.flame_spread * diff) / (sides.len() as f64 + 1.0)) * (total(m) / m[FIRE]),
-                            );
-                            let taken = take(&mut self.gas[i], f);
-                            add(&mut self.gas[j], &taken);
-                            moved[j] = true;
-                        }
-                    }
+                    moves.push((i, j, (ph.flame_spread * diff) / (2.0 * axes as f64 + 1.0)));
                 }
             }
         }
+        let mut heat = 0.0;
+        for (i, j, f) in moves {
+            // Flame from i to j, and as much of j's other gas back.
+            let f = js::min(f, self.gas[i][FIRE]);
+            let mut back = self.gas[j];
+            back[FIRE] = 0.0;
+            let back = take(&mut back, f);
+            if total(&back) <= 0.0 {
+                continue;
+            }
+            let mut flame = zero();
+            flame[FIRE] = f;
+            let (mf, mb) = (mass_of_parts(&flame), mass_of_parts(&back));
+            let (mi, mj) = (self.air_mass(i), self.air_mass(j));
+            let ui = [self.air_vel[i * 3], self.air_vel[i * 3 + 1], self.air_vel[i * 3 + 2]];
+            let uj = [self.air_vel[j * 3], self.air_vel[j * 3 + 1], self.air_vel[j * 3 + 2]];
+            let ke = |m: f64, u: &Vec3| 0.5 * m * (u[0] * u[0] + u[1] * u[1] + u[2] * u[2]);
+            let before = ke(mi, &ui) + ke(mj, &uj);
+            self.gas[i][FIRE] -= f;
+            add(&mut self.gas[j], &flame);
+            for k in 0..4 {
+                self.gas[j][k] -= back[k];
+            }
+            add(&mut self.gas[i], &back);
+            let (ni, nj) = (mi - mf + mb, mj + mf - mb);
+            let mut vi = [0.0; 3];
+            let mut vj = [0.0; 3];
+            for k in 0..3 {
+                vi[k] = (mi * ui[k] - mf * ui[k] + mb * uj[k]) / ni;
+                vj[k] = (mj * uj[k] + mf * ui[k] - mb * uj[k]) / nj;
+                self.air_vel[i * 3 + k] = vi[k];
+                self.air_vel[j * 3 + k] = vj[k];
+            }
+            heat += before - ke(ni, &vi) - ke(nj, &vj);
+        }
+        self.warm("mixing", heat);
         self.rasterize();
     }
 
@@ -716,7 +862,7 @@ impl World {
                 loose += total(&p.free);
             }
         }
-        WorldMana { air, matter, loose }
+        WorldMana { air, matter, loose, beyond: total(&self.beyond) + total(&self.beyond_gas) }
     }
 
     /// Momentum in the world (particles, air, bodies) less what came from outside: zero, when nothing is lost.
@@ -746,7 +892,7 @@ impl World {
                 m[k] += p.mass * p.vel[k];
             }
         }
-        for j in [self.impulse.gravity, self.impulse.walls, self.impulse.outside] {
+        for j in [self.impulse.gravity, self.impulse.walls, self.impulse.outside, self.impulse.beyond] {
             for k in 0..3 {
                 m[k] -= j[k];
             }
@@ -760,10 +906,21 @@ pub struct WorldMana {
     pub air: f64,
     pub matter: f64,
     pub loose: f64,
+    /// Gone past the world's open edges, less what came in.
+    pub beyond: f64,
 }
 
 fn frac(x: f64) -> f64 {
     x - x.floor()
+}
+
+/// The air in a cell of open air at the ground, when a world is made: the free mana in it, raw, and its gases (air
+/// matter as dense as real air, PHYSICS.density).
+pub fn still_air() -> (Parts, Parts) {
+    let mana = physics().air_mana / 4.0;
+    let mut gas = zero();
+    gas[AIR] = packed(AIR);
+    ([mana; 4], gas)
 }
 
 /// `Math.floor`, as a cell coordinate.

@@ -10,9 +10,7 @@ use mana::vm::world::{EARTH, World, ground_amount};
 /// Open ground 2 m deep, with no air.
 fn ground() -> World {
     let mut w = World::with_ground(40, 24, 1, 8, EARTH);
-    for a in w.air.iter_mut() {
-        *a = [0.0; 4];
-    }
+    w.empty_air();
     w
 }
 
@@ -75,7 +73,7 @@ mod spells {
         s.sim.cast(s.caster, Code::new(spell(name)), None).unwrap();
         s.sim.run(ticks);
         let e = s.sim.energy_now();
-        assert!(close(e.total + e.heat, e.start + e.outside + e.error_total, 6)); // the ledger's own sums
+        assert!(close(e.total + e.heat + e.beyond, e.start + e.outside + e.error_total, 6)); // the ledger's own sums
         assert!(e.outside > 0.0); // the caster put energy in
         assert!(e.heat > 0.0);
         // What the numbers get wrong is small beside what moved through.

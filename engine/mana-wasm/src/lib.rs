@@ -394,7 +394,7 @@ impl Machine {
     fn ledger_json(&self) -> Value {
         let l = self.scene.sim.ledger();
         json!({ "air": l.air, "matter": l.matter, "loose": l.loose, "weaves": l.weaves, "carried": l.carried, "casters": l.casters,
-                "free": l.free, "condensed": l.condensed, "total": l.total })
+                "free": l.free, "condensed": l.condensed, "beyond": l.beyond, "total": l.total })
     }
 
     pub fn ledger_total(&self) -> f64 {
@@ -411,6 +411,7 @@ impl Machine {
         json!({
             "held": { "motion": h.motion, "height": h.height, "gas": h.gas, "strain": h.strain, "cohesion": h.cohesion, "air": h.air, "bodies": h.bodies },
             "total": e.total, "heat": e.heat, "start": e.start, "outside": e.outside, "minds": e.minds, "bodies": e.bodies,
+            "beyond": e.beyond,
             "error": e.error.iter().map(|(k, v)| json!([k, v])).collect::<Vec<_>>(), "errorTotal": e.error_total,
             "heatBy": self.scene.sim.world.heat.iter().map(|(k, v)| json!([k, v])).collect::<Vec<_>>(),
         })

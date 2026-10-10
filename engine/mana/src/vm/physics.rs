@@ -12,14 +12,22 @@ use std::cell::Cell;
 pub struct Physics {
     /// Metres per cell.
     pub cell: f64,
-    /// How dense each part's matter is, packed full, in kg/m³: flame (a hot gas), water, air (the gas we breathe), earth
-    /// (as packed soil). Matter is condensed mana, so this is how much mana a cell holds condensed: a full cell of earth is
-    /// (0.25 m)³ × 1,600 kg/m³ = 25 kg, which at 0.7 g a M is 35,700 M. How full a cell is, is the room its matter takes:
-    /// each part's mass over its density, summed. *(Flame and air are gases, and get a pressure of their own in PLAN step
-    /// 3; soil that packs into rock, 2,600 kg/m³, comes with step 2. Until then they take room at these densities.)*
+    /// How dense each part's matter is, in kg/m³: water and earth packed full (earth as packed soil; packed denser, it's
+    /// rock, D42). Matter is condensed mana, so this is how much mana a cell holds condensed: a full cell of earth is
+    /// (0.25 m)³ × 1,600 kg/m³ = 25 kg, which at 0.7 g a M is 35,700 M. How full a cell is, is the room its earth and
+    /// water take: each one's mass over its density, summed. Flame and air are gases: they have no packing, and fill the
+    /// room that's left at the pressure their amount makes. For them this is how dense they are in the open air at the
+    /// ground when a world is made: air as real air (1.2 kg/m³, 41.7 M a cell), flame as thin as a hot gas.
     pub density: [f64; 4],
-    /// Free mana in each cell of open air at the ground, when a world is made: 20 g, as heavy as real air (1.3 kg/m³).
+    /// Free mana in each cell of open air at the ground, when a world is made, in the air matter there: 20 g. The air
+    /// weighs both (2.5 kg/m³), the author's answer: the air is condensed air mana, and the mana in it weighs too.
     pub air_mana: f64,
+    /// How hot the world is, kelvin: everything, until heat has a place (PLAN step 4). A gas presses by it.
+    pub temperature: f64,
+    /// How many moles of gas 1 M is, of any part, free or condensed: as many as 0.45 g of real air holds (29 g a mole),
+    /// so that air matter is real air. The ideal gas law counts M: a gas presses p = n·R·T, n its moles a m³, whatever
+    /// it's made of, so the lighter parts make a lighter gas at the same pressure, and rise (Avogadro).
+    pub moles_per_m: f64,
     /// How much matter 1 M of free mana can hold up (influence), in kilograms: mana pulls the matter of its own parts in
     /// its cell toward its own speed, at most as hard as that much matter weighs at the standard 9.81 m/s² (its `grip`,
     /// a force, whatever the world's gravity is). Pulled harder, the matter slips.
@@ -114,11 +122,14 @@ pub struct Physics {
     /// The most Energy an order can transform out of its particle's mana in one tick, for each M it holds: a bigger
     /// particle's order pushes harder. In kg·(m/tick)² per M.
     pub order_power: f64,
-    /// How fast a particle's speed comes to the speed of the air around it, per tick, in air as thick as the world's.
-    pub air_drag: f64,
-    /// How fast a push travels through the air, m/tick (18 m/s). Real air carries one at 340 m/s; this is slower, to keep
-    /// the steps few, and still fast beside its winds, so that it flows around things rather than piling up against them.
-    pub air_sound: f64,
+    /// How fast a particle's speed comes to the speed of the air around it, per tick, in air as thick as the world's at
+    /// the ground, by part: air mana slips through the air most easily (the author's guess, C1).
+    pub air_drag: [f64; 4],
+    /// How hard the air pushes on something blunt it flows past (a person, a lump of earth): its drag coefficient, in
+    /// ½·ρ·C·A·u². About 1 for a person standing.
+    pub drag_coefficient: f64,
+    /// How dense a body is, kg/m³: how much room it takes in the air, out of its box. A person's 60 kg take 0.06 m³.
+    pub body_density: f64,
     /// Share of the difference in speed between neighbouring cells of air that evens out each tick.
     pub air_viscosity: f64,
     /// Slower than this against the air around it (m/tick), mana that belongs to no weave settles into the air.
@@ -136,6 +147,8 @@ pub const PHYSICS: Physics = Physics {
     cell: 0.25,
     density: [0.3, 1000.0, 1.2, 1600.0],
     air_mana: 40.0,
+    temperature: 293.15,
+    moles_per_m: 0.45 / 28.97,
     bind: 20.0,
     solid: 0.3,
     gather_radius: 2.0,
@@ -172,8 +185,9 @@ pub const PHYSICS: Physics = Physics {
     pour: 0.125,
     push_energy: 1.0,
     order_power: 0.05,
-    air_drag: 0.01,
-    air_sound: 0.6,
+    air_drag: [0.01, 0.01, 0.005, 0.01],
+    drag_coefficient: 1.0,
+    body_density: 985.0,
     air_viscosity: 0.2,
     loose_rest: 0.02,
     order_burn: 0.00002,
@@ -215,6 +229,16 @@ pub fn tuned<T>(f: impl FnOnce(&mut Physics), run: impl FnOnce() -> T) -> T {
     let _restore = Restore(physics());
     tune(f);
     run()
+}
+
+/// The gas constant: R, J/(mol·K).
+pub const GAS_CONSTANT: f64 = 8.314462618;
+
+/// How hard a gas presses for each M of it in each m³, p = this × n, in the engine's units (kg·(m/tick)² a M): R·T
+/// times the moles in a M (the ideal gas law). 38 J a M at 20 °C.
+pub fn gas_energy() -> f64 {
+    let ph = physics();
+    GAS_CONSTANT * ph.temperature * ph.moles_per_m / 900.0
 }
 
 /// How hard 1 M of free mana grips matter, kg·m/tick²: as hard as `bind` kilograms weigh at the standard 9.81 m/s².

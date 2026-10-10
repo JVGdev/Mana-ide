@@ -66,10 +66,11 @@ export function dominant(p: ArrayLike<number>): number {
   return best
 }
 
-/** The share of a cell's room some matter takes: each part's amount over what a full cell of it holds. */
+/** The share of a cell's room some matter takes: its water and earth, each by its amount over what a full cell of it holds.
+ * Gases (flame, air matter) have no packing: they fill the room that's left. */
 export function fillOf(m: ArrayLike<number>): number {
   let f = 0
-  for (let k = 0; k < 4; k++) f += m[k] / ((PHYSICS.density[k] * PHYSICS.cell ** 3) / PHYSICS.manaMass[k])
+  for (const k of [1, 3]) f += m[k] / ((PHYSICS.density[k] * PHYSICS.cell ** 3) / PHYSICS.manaMass[k])
   return f
 }
 
@@ -195,7 +196,7 @@ export type WeaveView = {
   regs: number[]
 }
 export type SimEvent = { tick: number; kind: string; caster: string | null; weave: number | null; detail: string | null }
-export type Ledger = { air: number; matter: number; loose: number; weaves: number; carried: number; casters: number; free: number; condensed: number; total: number }
+export type Ledger = { air: number; matter: number; loose: number; weaves: number; carried: number; casters: number; free: number; condensed: number; beyond: number; total: number }
 export type Stored = { motion: number; height: number; gas: number; strain: number; cohesion: number; air: number; bodies: number }
 export type EnergyView = {
   held: Stored
@@ -205,6 +206,7 @@ export type EnergyView = {
   outside: number
   minds: number
   bodies: number
+  beyond: number
   error: [string, number][]
   errorTotal: number
   heatBy: [string, number][]

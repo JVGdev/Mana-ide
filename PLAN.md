@@ -39,6 +39,8 @@ on it: real air is a gas made of matter, and heat lives in matter, mana and air 
 | C2 | Can a mind make light directly? | It could, but then it has to follow light's own rules. | Light is built as real light (step 4), and a mind can turn mana into it like any other Energy. |
 | D1 | How does a probe's knowledge get back? | At the mana's speed: the probe has to come back. An order that speeds it up, paying mana, brings it back sooner. | Knowledge rides in mana. A probe's particles keep what they felt in their registers, and the caster reads it when they touch the aura again (step 5). |
 | D2 | Can a far point be worked out wrong? | Yes. Fine-tuning and cross-checking a position is a good mage's work. | Past the aura, what the caster senses is off, more the further it is. Looking again, or checking against something known, narrows it (step 5). |
+| H | How much of the air is free mana? (9 October) | Ikozu's air is condensed air mana; compute the weight in full: all the air, plus the mana in its space. | The open air is air matter as dense as real air, with 40 M of free mana a cell in it as before, and it weighs both: 2.5 kg/m³, about 2 atm (D47). |
+| I | What is past the world's edge, for the air? (9 October) | More air, at rest. | The world's sides and sky are open: sound and wind leave, still air comes in, and the ledgers count what crossed as gone beyond (D48). |
 
 ---
 
@@ -223,7 +225,23 @@ rules (`settle_matter`, "earth holds together") and the rigid "carried" matter g
   - a fireball stops against held rock;
   - mass, momentum and Energy balance every tick.
 
-## 3. Real air *(large)*
+## 3. Real air *(done: SPEC D47–D50)*
+
+*Built as below, with these differences. Sound crosses at the isothermal 280 m/s, not 340: real air's 343 comes from
+air warming as it's pressed, which needs heat (step 4). Your answers H and I shaped it: the air weighs its air matter
+and its mana, and the world's edges open onto more air. Mana doesn't press as gas in a cell: a parcel takes the room of
+as many M of the air, and is pushed by the air's pressure on that room (D49). What it found, and hands on:*
+
+- *to you: the Gust drives a breeze, 6 cm/s at its target, where a person's feet hold against a wind of some 40 m/s. Its
+  knock-back test waits, ignored, for the spell. A question that bears on it: should a weave's air mana grip the air in
+  its cells, as earth mana grips earth (D43)? The air is air matter now, so by D43 it would, and pushing such a weave
+  would push its air (SPEC §0);*
+- *to step 4: one temperature everywhere; heat would make sound 343 m/s, and a flame rise by its heat;*
+- *to step 6: with real air, gathering and pouring send real pressure waves, and `bodies` is most of the Energy the
+  small spells put in (a fireball's pour, about 400 J);*
+- *still to build, named in SPEC §0: air seeping through matter (a stand-in, at once, for now); the air's thickness (a
+  stand-in 25,000 times real air's); ripples fainter than about 10 Pa aren't followed;*
+- *the bench is 6× slower and the tests 1.5×: the air steps 70–140 times a tick to carry sound.*
 
 - **The atmosphere is air matter, a gas, with free mana in it**, both on the grid. Every gas obeys the ideal gas law,
   `p = ρ·R·T` for each part (isothermal until 4).

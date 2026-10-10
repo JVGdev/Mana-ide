@@ -40,8 +40,9 @@ back; pick the particle by number or click it in the world. A breakpoint in orde
 
 The world runs on real physics, as near as it can (SPEC §0, §11). Things weigh, and fall at 9.8 m/s² (a tick is 1/30
 s). Mass is mana: each part of it weighs its own (fire 0.3 g a M, then air, water, earth 0.7 g), free or condensed, and
-matter is heavy because it's packed. The air weighs too, as much as real air, and holds up a parcel of mana by what the
-air it pushes aside weighs, so fire rises. Every push
+matter is heavy because it's packed. The air is real air, air matter with free mana in it: it presses by the ideal gas
+law, carries sound at 280 m/s, and goes on past the world's edges. Everything in it feels its pressure by the room it
+takes, so a parcel of fire mana rises, and its drag, so a gale blows a person back. Every push
 pushes something back: a caster's push goes off their body, through their reach, and an order's kick goes off the air
 it's in or the ground it's against. Its Energy is transformed out of mana by a mind (the Law of Transformation): the
 mana isn't used up, but the mind strains, as hard as its power allows, and past its capacity it's harmed. Earth held by
@@ -135,7 +136,7 @@ The engine is in `engine/mana/src/`:
 - `vm/sim.rs`: the machine. What each instruction does, and what happens each tick.
 - `vm/physics.rs`: the numbers the world runs on, to be tuned.
 - `vm/fluid.rs`: mana as a fluid of particles: weight, pressure, cohesion, rock, the ground, merging and splitting.
-- `vm/air.rs`: the air, a gas that flows.
+- `vm/air.rs`: the air, real air: a gas that flows, presses and drags, open past the world's edges.
 - `vm/energy.rs`: the Energy ledger.
 - `profile.rs`: where a cast's beats went.
 - `js/`: JavaScript's numbers (V8's math, its rounding, how it writes a number), which the engine kept when it was

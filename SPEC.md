@@ -106,16 +106,29 @@ what's left.
 - **Thin matter doesn't touch mana.** Free mana strikes matter that fills its cell (D46), but passes through a cell
   that's less than a third full as if it were empty: a film of water doesn't turn the mana going through it (PLAN step 2
   asked for it).
-- **Bodies don't feel the air.** Mana strikes them, but the air doesn't push them: a Gust of a few grams of mana can't
-  blow anyone over until bodies feel the wind it drives (PLAN step 3).
 - **What bodies do to the air comes from outside.** Gathering thins the air around the body, and pouring mana into a
   point presses it together. That Energy is booked as `bodies` in the ledger, not drawn from the mind. It's small: a few
-  kJ a cast.
-- **Wind pushes particles by drag only.** Buoyancy comes from the air at rest (Archimedes), not from the pressure of
-  the air as it moves. A push of air pushes particles by dragging them, not by its pressure.
+  kJ a cast. With real air it's a real pressure wave too: gathering 100 M sends the air rushing back in at about 1.7 m/s
+  (PLAN step 6).
+- **Air seeps through the ground at once.** Matter holds no air of its own. Where matter moves and leaves room no nearby
+  air can fill (a hollow it leaves sealed in the ground), air comes in from the world beyond as if through the soil's
+  pores, at once, and air it squeezes out with nowhere to go seeps away the same way (D49). Real soil lets air through by
+  how permeable it is (Darcy's law): sand in a second, clay far slower, rock hardly at all. *Organic:* air in matter's
+  pores, flowing through them.
+- **Mana doesn't grip gases.** Mana grips the matter of its own part (D43), and the open air is air matter now (D47), but
+  a weave's air mana doesn't take hold of the air in its cells, nor fire mana of flame: only earth and water are gripped.
+  Gripped, a weave of air mana would carry its air along with it.
+- **The air is far thicker than real air.** How the air evens out its speed with its neighbours (`air_viscosity`, a
+  fifth of the difference a tick) is some 25,000 times real air's viscosity at this size: a stand-in for the eddies
+  smaller than a cell. It slows a rising parcel of warm gas, a jet and a wake.
+- **Faint ripples aren't followed.** Air slower than 1.5 cm/s and within half a percent of rest's thickness counts as at
+  rest, and is skipped (D47): a sound fainter than about 10 Pa goes no further. It's a change of how the air is kept, like
+  matter that sleeps (D44), but it isn't exact: what a faint ripple carried stays where it was.
 - **The hand's grip has no limit.** It holds any weave in it still, however hard the world pushes on it. *Organic:* a
   limit on what the body can hold.
-- **Heat isn't anywhere.** It's counted, by how it came about, but it doesn't warm a place, and nothing feels it.
+- **Heat isn't anywhere.** It's counted, by how it came about, but it doesn't warm a place, and nothing feels it. So the
+  air keeps one temperature (`temperature`, 20 °C), and sound crosses it at the isothermal 280 m/s, not the 343 m/s of
+  air that warms as it's pressed (PLAN step 4).
 
 ---
 
@@ -168,6 +181,10 @@ what's left.
 | D44 | **Matter at rest sleeps.** Points that have barely moved for half a second (15 ticks) sleep: they're not stepped, and they hold up what's on them as the ground does, taking its momentum. Anything that would move one faster than 2 mm a tick wakes it, as does mana in its cell. It's a way of not computing what doesn't change, exact in mass and momentum. |
 | D45 | **Matter's Energy is counted where it goes.** What its stretching stores is Energy (`strain`). What it loses as heat: giving way (plastic work: the stress it gave way at, times how far), and striking (each step changes motion at once, and loses half the mass times the change squared, as an impact does; the motion lost moving it to the grid and back too). What a step gets wrong is left as the ledger's error: under 3% of what moves through a spell. |
 | D46 | **Mana strikes matter as it moves.** Free mana moving into a cell full of matter faster than that matter moves strikes it: the two come to one speed along the way it was going, the matter takes the impulse (sleeping matter, as the ground), and what the impact loses is heat. Matter moving away as fast stops nothing: mana inside matter moves along with it, and mana at its face waits there. A fireball shoves the wall it hits, and a Stone Wall's mana rises inside its rising earth. Water holds together where mana holds it, not by its own surface tension, which is too weak to matter at this size (the author's answer: a spell keeps its water together). |
+| D47 | **The air is real air.** The open air is air matter, a gas: condensed air mana as dense as real air (1.2 kg/m³), with free mana in it, 40 M a cell as before. It weighs both, the author's answer: the air is condensed air mana, and the mana in its space weighs too, so it's 2.5 kg/m³ at about 2 atm. Every gas presses by the ideal gas law, p = n·R·T, counting M: every M of any part is as many moles (`moles_per_m`, as many as 0.45 g of real air holds), at the world's one temperature (`temperature`, 20 °C) until heat has a place. So the lighter parts make a lighter gas at the same pressure, and rise. A cell's air (its gases and the free mana in them) moves as one, and sound crosses it at √(R·T/M), 280 m/s: `air_sound` is gone. Faces carry the air as sound meeting there would (a pressure difference drives air through), and the air steps finely enough not to overshoot. |
+| D48 | **Past the world's edge there's more air, at rest.** The world is a window onto a bigger world (the author's answer): its sides and its sky are open, its floor isn't. Sound and wind go out through them, and still air, as the world's air is on average, comes in where it's drawn. What crosses, mana, momentum and Energy, is counted as gone beyond the world, so both ledgers still balance: `ManaLedger::beyond`, `EnergyNow::beyond`, `Impulses::beyond`. Mana blown off the edge is gone from the scene; a gather's hole fills back from beyond. |
+| D49 | **Everything in a cell feels the air's pressure, by the room it takes.** Earth and water take their room, a body its own volume (its mass over `body_density`), and a parcel of free mana as much as as many M of the air there (Dalton). The air presses by its own M over the room left to it, and each thing in the cell is pushed by its share of what the cell's faces push: −V∇p. The push of the air at rest, its weight's worth, is buoyancy, for mana (its `lift`, replacing Archimedes in air at rest, D38) and matter alike; what's different from rest is a wind's pressure. Closed faces push the matter beyond them. As mana and matter move, the air gives way at once (sound is far faster): the air where they come in goes where they left, and what can't trade places nearby seeps through the ground to and from beyond (a stand-in, §0). Sleeping matter holds still against a push no harder than its friction (μ·m·g). |
+| D50 | **The air drags what it flows past.** Bodies and matter in the air feel ½·ρ·C·A·u² (`drag_coefficient`, about 1 for a person), equally and oppositely, step by step within the air's own steps: a body by its box's face, a lump of matter by about the square of its size. A body stands, so the ground takes what's up and down, and its friction holds it before it moves: a wind it can hold against moves it not at all. Free mana drags by its own amount, by part (`air_drag`): air mana slips through the air most easily (the author's guess, C1). |
 | D27 | **Knowing costs.** An order is ingrained one particle at a time, at a beat for every instruction it could run, and every beat it thinks burns its particle's mana. A short order is cheap to ingrain and cheap to keep; an order that senses more costs more. |
 
 ---
@@ -257,8 +274,9 @@ These rules belong to the world, not to the machine:
    flaw in condensing (§5, *The flaw*).
 4. **Free mana is a fluid of particles** (§11), a gas. It presses on itself and spreads, drags the air it moves through
    and is dragged by it (**wind**), and strikes the bodies it runs into, its maker's as much as anyone's. It weighs its
-   mass, and the air holds it up by what the air it pushes aside weighs (D38): fire mana, the lightest, rises. Loose mana
-   that has slowed to the speed of the air around it settles into it.
+   mass, and takes room in the air, as much as as many M of the air: the air's pressure pushes it by that room, and at
+   rest holds it up by what the air in that room weighs (D49): fire mana, the lightest, rises. Loose mana that has
+   slowed to the speed of the air around it settles into it.
 5. **Matter blocks matter, held or not.** All matter is one material on one grid (D42): what's in the way pushes back.
    Free mana strikes solid matter it runs into, and pushes it (D46), unless it's matter its own weave holds. What rests on the ground is held up by it,
    and its friction keeps it from sliding. Being stopped or struck by matter, or a body, is a **touch** (D35).
@@ -269,6 +287,9 @@ These rules belong to the world, not to the machine:
 7. **Holding costs.** A weave doesn't leak by itself any more. What holds it together is its caster's pushes or its own
    order, and an order burns its mana as it thinks (D27). Less mana grips less hard, so a Stone Wall's mana lets go of
    its earth as it burns.
+8. **The air is real air** (D47): air matter, with free mana in it, a gas that presses by the ideal gas law and weighs
+   both. Past the world's edges there's more of it, at rest (D48). Everything in a cell feels its pressure by the room it
+   takes, and what it flows past feels its drag (D49, D50): a gale blows a person back.
 
 Every rule has numbers to tune: how much matter 1 M binds, how hard each part presses, what a push costs, how much an order
 burns, and so on. They live in one table (`engine/mana/src/vm/physics.rs`).
@@ -1608,8 +1629,9 @@ spell Gust(Metadata data) {
 
 Each pass keeps the residue and adds a fresh gather. If the body drains slower than the caster gathers, its load climbs, and a
 long Gust overcharges. It needs only two streams. Its speed is transformed out of a share of what it sends (D32). A breath
-of it is a few grams of mana: it drives the air, but it can't blow anyone over by striking them, and bodies don't feel the
-air yet (PLAN step 3).
+of it is a few grams of mana: it can't blow anyone over by striking them, and the wind it drives is a breeze. Bodies feel
+the air (D50), but at its target the Gust's air moves 6 cm/s, where it takes a gale, some 40 m/s, to slide a person
+whose feet are on the ground (§11, *How the spells do now*).
 
 ### Water Shield
 
@@ -1862,29 +1884,29 @@ The machine keeps two more ledgers that physics needs.
 and air, air and air, particle and body), so the world's momentum changes only by what comes from outside it, and the tests
 check that every tick (`World::momentum_error`).
 
-**Energy** (`engine/mana/src/vm/energy.rs`, `Sim::keep_energy`). The world holds Energy as motion (of particles, the air and bodies), as
-height (weight lifted, of particles, the air and the ground's matter, less what the air holds up of a parcel of mana), and
-stored: in mana's gas pressed together, in matter packed past full, in what coheres pulled apart, in the air pressed or
-drawn thin, and in mana held in bodies. Each is measured from the air at rest, so mana that moves into or out of the air,
-or into or out of a body, as dense as the air is, brings nothing with it: at rest, mana in the air is worth the same at
-every height, its weight and its pressure trading off, and a parcel of mana is held up from the height where the air is
-as thick as it is on average. Motion becomes **heat** wherever two things even out their speeds: in the mana's thickness,
-the air dragging and its own thickness, landing on the ground and sliding on it, a body's feet, a hand holding still what
-the world pushes on, rock keeping its shape, particles merging, mana let into the air, a push that slows. That heat is
-counted where it happens, to the joule, and kept by how it was made (`World::heat`). Minds put Energy in with every push
-and kick, counted push by push (`minds`); bodies change it a little by gathering mana and pouring it (`bodies`). So, every
-tick:
+**Energy** (`engine/mana/src/vm/energy.rs`, `Sim::keep_energy`). The world holds Energy as motion (of particles, the air,
+bodies and matter), as height (weight lifted, of all of it), and stored: in mana's gas pressed together, in matter
+stretched, in what coheres pulled apart, in the air pressed or drawn thin, and in mana held in bodies. The air's is
+R·T·(N·ln(n/n̄) + n̄·V − N) for each cell holding N M in the room V its air has, against how thick the air is on average:
+so gas let into the air or drawn from it as thick as it is brings nothing with it, and the air at rest, thicker below
+than above, is what holds things up. A parcel of mana rising takes the room of air that comes down; that's its buoyancy,
+and the ledger counts it in the air's height and in how thick the air is where each is. Motion becomes **heat** wherever
+two things even out their speeds: in the mana's thickness, the air's drag and its own thickness, landing on the ground
+and sliding on it, a body's feet, a hand holding still what the world pushes on, matter giving way and striking,
+particles merging, mana or air let into air moving otherwise, a push that slows. That heat is counted where it happens, to
+the joule, and kept by how it was made (`World::heat`). Minds put Energy in with every push and kick, counted push by
+push (`minds`); bodies change it by gathering mana and pouring it (`bodies`). What the air carries past the world's open
+edges, or seeps in and out through the ground, is counted as gone beyond (`beyond`, D48). So, every tick:
 
 ```
-held now + heat  =  held at the start + what minds and bodies put in + what the numbers got wrong
+held now + heat + gone beyond  =  held at the start + what minds and bodies put in + what the numbers got wrong
 ```
 
 The last term is real, and is counted, not hidden in the heat: each step that should keep Energy is measured before and
 after, and what it got wrong is kept by step. It's the price of stepping time rather than flowing it. For a Fireball, a
-Gust or a Water Shield it's under 2% of the Energy that moves through. A Stone Wall, gathering 500 M at once, thins the air
-around its caster so hard that the air's refilling gets about 9% wrong. Most of what a Stone Wall's `bodies` puts in (about
-200 kJ) is the air rushing into the cells its earth was bound out of, while the earth is still in them: matter held by
-mana doesn't block the air yet (§0).
+Gust or a Water Shield it's under 0.4% of the Energy that moves through; for a Stone Wall, 1.8%, most of it in the matter
+step. With real air, `bodies` is most of what the small spells put in: pouring a fireball's 18 M into one point presses
+the air there, and the air rushing out carries about 400 J (§0). A Stone Wall, gathering 500 M at once, takes 30 kJ out.
 
 The density mana's pressure works from is summed with the same kernel its pushes follow (the spiky kernel), so that its
 pressure is exactly the pull of the energy its gas stores, and the ledger can count it.
@@ -1905,24 +1927,32 @@ Each particle has:
 Particles push on their neighbours with **pressure**: mana packed denser than it rests spreads out. Every push between two
 particles is equal and opposite, so momentum is conserved. Mana is conserved because particles are counted.
 
-**Air mana** stays a grid. A particle that slows down and belongs to no weave settles into the grid and loses its order;
-`GATH` draws from the grid. A particle moving through the air drags on the air mana around it and is dragged by it, both
-ways. That drag is wind.
+**The air** is a grid of cells (`engine/mana/src/vm/air.rs`, D47). Each holds air matter (condensed air mana, as dense as
+real air) and the free mana in it, and moves as one. A particle that slows down and belongs to no weave settles into the
+air and loses its order; `GATH` draws free mana from it. A particle moving through the air drags on it and is dragged by
+it, both ways, each part by its own amount (`air_drag`). That drag is wind.
 
-The air is a gas (`engine/mana/src/vm/air.rs`). It presses from dense to thin, at its own speed of sound (`air_sound`, 18 m/s: slower
-than real air's 340, to keep the steps few, and still fast beside its winds). It carries itself along, and its mana and its
-momentum with it, from cell to cell. Solid cells and the world's edge are closed: it flows around them, and what it pushes
-on them is momentum given to the world. Its thickness (`air_viscosity`) evens out its speed between neighbours and holds it
-still against the ground. It weighs: at rest it's thicker low down than high up (by e every `airSound²/g` metres, 33 m),
-its weight and its pressure in balance. So a gust travels on as a jet once it's let go, a fireball leaves a wake and pushes
-air ahead of it, wind turns up and over a pillar, and the hole a caster gathers from fills back in from around it. Air
-that has all but stopped stops, and air at rest, as thick as rest would have it, costs nothing to run.
+The air is a real gas. It presses by the ideal gas law, every M alike (`moles_per_m`, at `temperature`), so a cell's air
+presses by its M over the room it has, and sound crosses it at 280 m/s. It carries itself along, and its gases, its mana
+and its momentum with it, from cell to cell, stepping finely enough for sound to cross a fraction of a cell a step. At
+each face the air moves as sound meeting there would have it: a difference in pressure drives it through. Solid cells
+are closed: it flows around them, and what it pushes on them goes to the matter there. The world's sides and sky are
+open, onto more air at rest (D48): what reaches them goes on, as a wave going out does, and still air comes in where it's
+drawn. Its thickness (`air_viscosity`, a stand-in, §0) evens out its speed between neighbours and holds it still against
+the ground. It weighs: at rest it's thicker low down than high up (by e every 8 km), its weight and its pressure in
+balance, and that balance is kept exactly: only what differs from rest pushes or falls. So a gust travels on as a jet once
+it's let go, a fireball pushes air ahead of it, wind turns up and over a pillar, and the hole a caster gathers from fills
+back in, at once, with a pressure wave that leaves the world in a few ticks. Air that has all but stopped stops, and air
+at rest, as thick as rest would have it, costs nothing to run.
 
-The air holds up what's in it (D38). A parcel of free mana is a gas like the air, so it pushes aside its own M's worth of
-air, and the air at rest holds it up by what that weighs: `RAW_MASS` (half a gram) a M, the weight of raw mana. Free
-mana of each part has its own mass (`mana_mass`, D40): fire 0.3 g a M, so it rises at about two-thirds of g; air 0.45 g, so
-it rises a little; water 0.55 g, so it sinks a little; earth 0.7 g, so it sinks at about a third of g. Matter isn't held
-up: it's what's heavy. Where there's no air, everything falls alike.
+Everything in a cell feels the air by the room it takes (D49): earth and water by theirs, a body by its own volume, a
+parcel of free mana by as much as as many M of the air there. The push of the air at rest, its weight's worth, holds them
+up by what the air in their room weighs: free mana of each part has its own mass (`mana_mass`, D40), and the air's M weigh
+0.47 g each on average, so fire mana (0.3 g) rises at about 0.6 g, air mana (0.45 g) floats up slowly, water mana (0.55 g)
+sinks at about 0.14 g, and earth mana (0.7 g) at a third of g. Matter feels it too, by a thousandth of its weight. Where
+there's no air, everything falls alike. What's different from rest, a wind's pressure, pushes the same way. As mana and
+matter move, the air gives way: what's where they come in goes where they left. And what the air flows past, it drags
+(D50): a person in a 45 m/s gale is pushed with 560 N, and slides once that's more than their feet hold.
 
 When particles come to rest beside each other, they merge, to keep their number down: closer than `merge_range`, moving
 within `merge_speed` of each other, and together no more than `max_mote`. The new particle sits at their centre of mass with
@@ -2076,6 +2106,9 @@ Like the first flaw, it isn't an instruction, nothing in the libraries uses it, 
     that holds by force, buoyancy and an air that weighs, friction under bodies, flame that diffuses.
 11. One matter (D42–D45, `engine/mana/src/vm/matter.rs`): matter as material points, earth that bends, gives way, cracks
     and packs, water that flows, mana that grips matter by force, and matter at rest that sleeps.
+12. Real air (D47–D50, `engine/mana/src/vm/air.rs`): air matter with mana in it, pressing by the ideal gas law, sound at
+    280 m/s, open edges onto more air, everything feeling the air's pressure by the room it takes, and drag on bodies and
+    matter.
 
 Things the machine found that the sandbox couldn't:
 
@@ -2095,7 +2128,7 @@ Things the machine found that the sandbox couldn't:
   the ground's support climbs a 2 m wall too slowly, and it sags. Solved lowest first, with the ground in the same passes,
   it stands in one.
 - **Air that's too soft piles up.** With mana's own gas stiffness, the air's speed of sound was 1 m/s, and wind piled up
-  against a pillar instead of going over it. The air has its own, faster (`air_sound`).
+  against a pillar instead of going over it. The air has its own, faster (`air_sound`, until real air made it real, D47).
 - **Stepping waves the wrong way makes them grow.** Moving the air with its old speeds while the pressure pushed it made
   every disturbance grow into a storm. Pushed first, then moved, they die away.
 - **Holding is thinking, not mana.** With pushes priced by energy, pushing a straying particle back in mostly slows it:
@@ -2170,30 +2203,65 @@ What making it organic found (D32–D39):
   that moved with its mana, overshoots and sheds it: after 7 s its mana holds a sixth of the earth it took. Steering a
   wall made of matter is the spell's work (§7).
 
+**What real air found (D47–D50):**
+
+- **A closed world rings.** With its edges as walls, the air a caster gathers from rushes back in as a pressure wave of
+  about 1.7 m/s, and echoed for seconds: a wind every spell had to fight. Open onto more air (the author's answer, D48),
+  it leaves the world in a few ticks.
+- **Mana pressing as a gas in the cell pushes itself.** Counted as gas that presses, a lone parcel's own pressure,
+  shared over the cells around it, threw it at 170 m/tick in empty space. A parcel takes room at the air's pressure
+  instead (Dalton), and feels only the air's.
+- **The air has to give way as things move.** The fluid moves a fireball two cells a tick before the air steps: had the
+  air waited, it would have been packed by several percent at once, and thrown the ball back. Sound is twenty times
+  faster than a fireball, so the air makes way as it comes. The same went for matter: the Stone Wall's trench opened as
+  empty hollows that sucked the soil into them at 2 atm, making 27 kJ a tick from nothing, until the air gave way there
+  too, and through the ground where it couldn't get round (a stand-in, §0).
+- **Cells pressing harder and softer by turns push on nothing.** With each face pressing by the average of its two cells,
+  a pattern alternating cell by cell, ±1 kPa, filled the air around a caster and never evened out; it pushed a held
+  fireball apart. Air moving through a face as sound meeting there would (a pressure difference drives it) ends it.
+  Stepped too coarsely in 3D, that same evening out overshot and grew to ±100 kPa: the air steps more finely in 3D.
+- **A placed body bangs.** A body put into air takes room at once, and its cells are pressed 15%. The air it displaces
+  goes out over the rest of the open air as it's placed.
+- **Drag is per step, not per tick.** At 45 m/s the air through a body's cells is replaced six times a tick; dragged once
+  a tick, a gale pushed a person with a sixth of its force.
+- **The ground isn't blown about.** Sleeping matter woke at a gather's 1 kPa wave, the whole 3D ground with it. It
+  holds still, as resting things do, against a push no harder than its friction.
+- **Faint ripples kept the whole world busy.** Counting only air standing exactly still as at rest, the faintest ripple
+  made every cell active within a tick, a hundred times over. Air slower than air that stops counts as at rest (§0).
+- **A Gust is a breeze.** Its few grams of air mana a tick set the air at its target moving at 6 cm/s. A person's feet
+  hold against about 350 N, which takes a wind of some 40 m/s.
+- **The ledger's buoyancy term is gone.** Counting the air's Energy as what it really holds (its thickness at each
+  height, and the room parcels take), a parcel's buoyancy is in the air's Energy already.
+
 ### How the spells do now
 
 The targets, and where the four spells stand against them (2D), with ticks of 1/30 s:
 
 | Spell | Target | Now |
 |---|---|---|
-| Fireball | Leaves the hand within a second, reaches a pillar 9 m away with most of its mana | Let go after 0.5 s, hits after 0.73 s more, 98% of its mana together, having risen 1.2 m on the way |
+| Fireball | Leaves the hand within a second, reaches a pillar 9 m away with most of its mana | Let go after 0.73 s, hits 0.5 s later, 99% of its mana together, having risen 0.96 m on the way |
 | Stone Wall | Rises in seconds, stands on its own for half a minute or more | Its earth comes out of the trench in 2 s, but the spell's heave doesn't steer it, and sheds most of it (§11, *What one matter found*) |
-| Water Shield | Holds its water around its caster for several seconds | Makes 11.5 M of water mana into 6 g of water, holds half of it for 42 s |
-| Gust | Knocks someone back | Drives the air, but can't move a body until bodies feel the air (PLAN step 3) |
+| Water Shield | Holds its water around its caster for several seconds | Makes 11.5 M of water mana into 6 g of water, holds half of it for 42 s (measured before real air) |
+| Gust | Knocks someone back | Drives a breeze of 6 cm/s at its target; a person's feet hold against a wind of some 40 m/s |
 
-Two spells miss their targets. The Gust waits for step 3. The Stone Wall waits for the author: its heave has to steer
-a wall of matter, not a rigid one.
+Two spells miss their targets, and both wait for the author. The Stone Wall's heave has to steer a wall of matter, not a
+rigid one. The Gust drives the air, and bodies feel it (D50), but a few grams of mana a tick make a breeze, not a gale.
 
 ### The numbers, and what they come from
 
 | Number | Value | From |
 |---|---|---|
 | `mana_mass` | fire 0.3 g, water 0.55 g, air 0.45 g, earth 0.7 g a M | The author's order; raw mana as heavy, at 40 M a cell, as real air |
-| `air_mana` | 40 M a cell of air, at the ground | 20 g in (0.25 m)³: 1.3 kg/m³, real air |
-| `density` | flame 0.3, water 1,000, air 1.2, earth 1,600 kg/m³ | Hot gas, water, air, packed soil |
+| `air_mana` | 40 M a cell of air, at the ground | 20 g in (0.25 m)³, in air matter as dense as real air: the air weighs both, 2.5 kg/m³ (the author's) |
+| `density` | water 1,000, earth 1,600 kg/m³; air 1.2, flame 0.3 kg/m³ in the open air when a world is made | Water, packed soil; real air, a hot gas |
+| `temperature` | 293.15 K | 20 °C, everywhere, until heat has a place (PLAN step 4) |
+| `moles_per_m` | 0.45 g of real air's worth: 0.0155 mol | So that air matter is real air (29 g a mole); every M of any part alike |
 | `bind` | 20 kg of matter a M of free mana, weighed at 9.81 m/s² | The author's: hard enough for a Stone Wall's mana to tear its earth out of the ground |
 | `gravity` | 9.81 m/s², a tick 1/30 s | Real |
-| `air_sound` | 0.6 m/tick (18 m/s) | Slowed from 340 m/s to keep steps few; real in step 3 |
+| `air_drag` | fire, water, earth 0.01; air 0.005 a tick | How fast free mana comes to the air's speed; air mana slips through it most easily (the author's guess, C1) |
+| `drag_coefficient` | 1 | A person standing, a blunt lump |
+| `body_density` | 985 kg/m³ | A person: 60 kg take 0.06 m³ |
+| `air_viscosity` | a fifth of the difference a tick | A stand-in for eddies smaller than a cell, some 25,000 times real air's (§0) |
 | `push_energy` | 900 J a M poured | A guess, kept |
 | `stiffness` | fire 0.0009, water 0.0001, air 0.002, earth 0 (m/tick)² | How fast each part's free mana spreads: kept |
 | `cohesion` | free water 0.037, free earth 0.15 a kg | Rescaled so free mana pulls as it did, now it's lighter |
@@ -2269,6 +2337,18 @@ that's within 1 m of its middle (twice the ball's radius), and a throw arrives w
 - **Thrown, an order still holds it.** `cling` gets 98–99% of a thrown ball to the pillar together, with 95% of its mana
   still in it; `cohere` 87–93%. `steer` is still the fastest, in 17 ticks, all of it together, having spent 15% of its
   mana flying itself; `heading` gets there, but as a scatter (35–37% together).
+
+**Since real air** (D47–D50, 2D, nothing tuned; against the same bench just before):
+
+- **Thrown, nothing much changes.** Every ball held by its order reaches the pillar as before, `cling` and `steer` with
+  98–100% together, in the same ticks. A fireball weighs 5 g and the air it pushes aside a little more: real air's
+  pressure and drag don't change its flight much.
+- **Held still, balls spread a little further.** By their order, 0.30–0.38 m against 0.21–0.30 before; by nothing, 1.0–1.3 m
+  against 0.7–1.0. A parcel of fire is pushed by the air's pressure, and moves more than the air does for it, being
+  lighter: every wobble in the air shakes it.
+- **Held by hand, they stay in the weave, and spread.** A master holding every particle, every other one or the surface
+  keeps 66–70% in the weave where it kept 8–9%, spread over 0.36–0.37 m against 0.19–0.20.
+- **It's slower.** The bench takes 30 s where it took 5: the air steps 70 times a tick in 2D to carry sound.
 
 The sandbox's findings (2D, its own physics). The first group follows from the physics, and should hold whatever the
 numbers are tuned to:

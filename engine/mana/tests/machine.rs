@@ -448,11 +448,13 @@ unmake: CNDS  #{}
                 }
             }
             let before = s.sim.ledger();
+            let earth = mana::vm::matter::mana_in(&s.sim.world.points);
             s.sim.run(2); // it's set loose, and its order runs, in the first tick
             let after = s.sim.ledger();
             assert!(close(after.total, before.total, 6));
             let free = s.weave().mana(&s.sim.world) - 6.0; // 40 raw: 6 M of earth
-            (free, before.condensed - after.condensed)
+            // What it unmade of the ground (the air, matter too, comes and goes past the world's edge).
+            (free, earth - mana::vm::matter::mana_in(&s.sim.world.points))
         };
         let (free, condensed) = freed(-10.0);
         assert!(free > 9.0);
@@ -773,9 +775,7 @@ mod what_pushing_costs {
     fn kicked(src: &str, air: bool) -> (Sim, u64) {
         let mut world = World::with_ground(32, 24, 1, 8, EARTH);
         if !air {
-            for a in world.air.iter_mut() {
-                *a = [0.0; 4];
-            }
+            world.empty_air();
         }
         let mut sim = Sim::new(world);
         let caster = sim.add_caster("Mage", [2.0, 2.9, 0.125], None);
@@ -839,11 +839,15 @@ kick:   {src}",
         RET",
             true,
         );
+        // The air its caster gathered from rushes back in first, and passes on past the world's edge: holding still
+        // against that wind costs. Then the air is still.
+        sim.run(10);
+        let before = sim.spent.kick;
         sim.run(20);
         let q = sim.world.particle(p).unwrap();
         // Holding itself up, it pushes the air it's in down, a little more each tick: that downdraft is all it pays for,
         // less than lifting itself a centimetre would cost.
-        assert!(sim.spent.kick < (mass_of(q) * physics().gravity * 0.01) / physics().push_energy);
+        assert!(sim.spent.kick - before < (mass_of(q) * physics().gravity * 0.01) / physics().push_energy);
         assert!(q.vel[1].abs() <= physics().gravity + 1e-9); // it holds itself up, a tick's fall at most
     }
 

@@ -204,6 +204,8 @@ pub struct ManaLedger {
     pub casters: f64,
     pub free: f64,
     pub condensed: f64,
+    /// Gone past the world's open edges with the air, less what came in from beyond: still mana, beyond the world.
+    pub beyond: f64,
     pub total: f64,
 }
 
@@ -217,6 +219,8 @@ pub struct EnergyNow {
     pub outside: f64,
     pub minds: f64,
     pub bodies: f64,
+    /// Energy gone past the world's open edges, less what came in: total + heat + beyond = start + outside + error.
+    pub beyond: f64,
     pub error: IndexMap<String, f64>,
     pub error_total: f64,
 }
@@ -496,22 +500,23 @@ impl Sim {
 
     /// What the Energy ledger measures as a step begins, when it's kept: the world's Energy, its heat, and what minds
     /// have transformed so far.
-    fn ledger_begin(&mut self) -> (f64, f64) {
+    fn ledger_begin(&mut self) -> (f64, f64, f64) {
         if !self.track_energy {
-            return (0.0, 0.0);
+            return (0.0, 0.0, 0.0);
         }
-        (heat_of(&self.world), self.transformed)
+        (heat_of(&self.world), self.transformed, self.world.beyond_energy)
     }
 
     /// The Energy ledger after a step: it put energy in from outside (minds and orders), turned it into heat (counted
     /// where it happens, or measured for the steps that only lose it), or got it wrong, which is counted too.
-    fn ledger_end(&mut self, kind: &str, name: &str, e: &mut f64, begin: (f64, f64)) {
+    fn ledger_end(&mut self, kind: &str, name: &str, e: &mut f64, begin: (f64, f64, f64)) {
         if !self.track_energy {
             return;
         }
-        let (heat, minds) = begin;
+        let (heat, minds, beyond) = begin;
         let now = self.measure();
-        let appeared = now - *e + (heat_of(&self.world) - heat);
+        // What went past the world's edge left it: it didn't vanish.
+        let appeared = now - *e + (heat_of(&self.world) - heat) + (self.world.beyond_energy - beyond);
         if kind == "outside" {
             // What minds transformed out of mana is counted exactly, where it happened. The rest is what bodies did by
             // gathering, pouring and letting mana out.
@@ -582,7 +587,11 @@ impl Sim {
         self.ledger_end("exact", "the fluid", &mut e, begin);
 
         let begin = self.ledger_begin();
-        step_air(&mut self.world);
+        {
+            let in_hand: HashMap<u32, usize> =
+                self.weaves.values().filter(|w| w.in_hand).map(|w| (w.id, self.casters[w.maker].body)).collect();
+            step_air(&mut self.world, &|p| if p.weave != 0 { in_hand.get(&p.weave).copied() } else { None });
+        }
         self.ledger_end("loses", "the air flowing", &mut e, begin);
 
         // Particles at rest together merge, and big ones spread thin split.
@@ -609,7 +618,7 @@ impl Sim {
         }
         self.settle_loose();
         self.world.move_bodies();
-        self.world.settle_gas();
+        self.world.spread_flame();
         self.ledger_end("loses", "settling", &mut e, begin);
         self.world.tick += 1;
     }
@@ -630,6 +639,7 @@ impl Sim {
     pub fn keep_energy(&mut self) {
         self.track_energy = true;
         self.world.heat = IndexMap::new();
+        self.world.beyond_energy = 0.0;
         let start = self.measure();
         self.energy = Ledger { start, ..Ledger::default() };
     }
@@ -648,6 +658,7 @@ impl Sim {
             outside: self.energy.outside,
             minds: self.energy.minds,
             bodies: self.energy.bodies,
+            beyond: self.world.beyond_energy,
             error: self.energy.error.clone(),
             error_total,
         }
@@ -655,7 +666,7 @@ impl Sim {
 
     /// Every M of mana in the world, wherever it is. Conservation says `total` never changes.
     pub fn ledger(&self) -> ManaLedger {
-        let WorldMana { air, matter, loose } = self.world.mana();
+        let WorldMana { air, matter, loose, beyond } = self.world.mana();
         let mut weaves = 0.0;
         let mut carried = 0.0;
         for wv in self.weaves.values() {
@@ -676,7 +687,8 @@ impl Sim {
             casters,
             free: air + loose + weaves + casters,
             condensed: matter + carried,
-            total: air + matter + loose + weaves + carried + casters,
+            beyond,
+            total: air + matter + loose + weaves + carried + casters + beyond,
         }
     }
 
